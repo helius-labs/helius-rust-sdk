@@ -11,7 +11,7 @@ pub enum HeliusError {
     InternalError { code: StatusCode, text: String},
 
     #[error("Too many requests made to {path}")]
-    TooManyRequests { path: String },
+    RateLimitExceeded { path: String },
 
     #[error("Unauthorized access to {path}: {text}")]
     Unauthorized { path: String, text: String },
