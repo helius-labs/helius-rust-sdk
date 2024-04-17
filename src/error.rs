@@ -10,6 +10,9 @@ pub enum HeliusError {
     #[error("Internal server error: {code} - {text}")]
     InternalError { code: StatusCode, text: String},
 
+    #[error("Invalid input: {0}")]
+    InvalidInput(String),
+
     #[error("Too many requests made to {path}")]
     RateLimitExceeded { path: String },
 
