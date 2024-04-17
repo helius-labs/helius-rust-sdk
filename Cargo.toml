@@ -1,0 +1,16 @@
+[package]
+name = "helius-rust-sdk"
+version = "0.1.0"
+edition = "2021"
+description ="An asynchronous Helius Rust SDK for building the future of Solana"
+repository = "https://github.com/0xIchigo/helius-rust-sdk"
+license = "MIT"
+authors = ["0xIchigo <0xIchigo@protonmail.com>"]
+documentation = "https://docs.rs/helius-sdk"
+readme = "README.md"
+
+[dependencies]
+reqwest = "0.12.3"
+serde = "1.0.198"
+serde_json = "1.0.116"
+tokio = { version = "1.37.0", features = ["macros", "rt-multi-thread", "net"] }
