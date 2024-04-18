@@ -1,6 +1,6 @@
-use helius_rust_sdk::config::Config;
-use helius_rust_sdk::types::Cluster;
-use helius_rust_sdk::error::HeliusError;
+use helius_sdk::config::Config;
+use helius_sdk::types::Cluster;
+use helius_sdk::error::HeliusError;
 
 #[test]
 fn test_config_new_with_empty_api_key() {
