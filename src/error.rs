@@ -22,7 +22,6 @@ pub enum HeliusError {
     #[error("Unknown error has occurred: HTTP {code} - {text}")]
     Unknown { code: StatusCode, text: String },
 }
-
     
 // Handy type alias
 pub type Result<T> = std::result::Result<T, HeliusError>;

@@ -7,8 +7,8 @@ use crate::types::Cluster;
 use reqwest::Client;
 
 pub struct Helius {
-    config: Config,
-    client: Client,
+    pub config: Config,
+    pub client: Client,
 }
 
 impl Helius {

@@ -13,7 +13,6 @@ impl Config {
             return Err(HeliusError::InvalidInput("API key must not be empty".to_string()));
         }
 
-
         let endpoints: HeliusEndpoints = match cluster {
             Cluster::Devnet => HeliusEndpoints {
                 api: "https://api-devnet.helius-rpc.com".to_string(),
