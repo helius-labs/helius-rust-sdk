@@ -16,6 +16,6 @@ impl Helius {
         let config: Config = Config::new(api_key, cluster)?;
         let client: Client = Client::new();
 
-        Ok(Helius {config, client})
+        Ok(Helius { config, client })
     }
 }

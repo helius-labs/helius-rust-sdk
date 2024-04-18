@@ -1,4 +1,4 @@
-use reqwest::{ Error as ReqwestError, StatusCode };
+use reqwest::{Error as ReqwestError, StatusCode};
 use serde_json::Error as SerdeError;
 use thiserror::Error;
 
@@ -8,7 +8,7 @@ pub enum HeliusError {
     BadRequest { path: String, text: String },
 
     #[error("Internal server error: {code} - {text}")]
-    InternalError { code: StatusCode, text: String},
+    InternalError { code: StatusCode, text: String },
 
     #[error("Invalid input: {0}")]
     InvalidInput(String),
@@ -22,6 +22,6 @@ pub enum HeliusError {
     #[error("Unknown error has occurred: HTTP {code} - {text}")]
     Unknown { code: StatusCode, text: String },
 }
-    
+
 // Handy type alias
 pub type Result<T> = std::result::Result<T, HeliusError>;

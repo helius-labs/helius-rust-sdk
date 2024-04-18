@@ -1,5 +1,5 @@
-use crate::error::{ HeliusError, Result };
-use crate::types::{ Cluster, HeliusEndpoints };
+use crate::error::{HeliusError, Result};
+use crate::types::{Cluster, HeliusEndpoints};
 
 pub struct Config {
     pub api_key: String,
