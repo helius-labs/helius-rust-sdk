@@ -1,6 +1,7 @@
 use crate::error::{HeliusError, Result};
 use crate::types::{Cluster, HeliusEndpoints};
 
+#[derive(Clone)]
 pub struct Config {
     pub api_key: String,
     pub cluster: Cluster,
