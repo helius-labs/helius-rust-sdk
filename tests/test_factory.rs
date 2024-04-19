@@ -1,5 +1,5 @@
-use helius_sdk::{ Helius, HeliusFactory };
 use helius_sdk::types::Cluster;
+use helius_sdk::{Helius, HeliusFactory};
 
 #[test]
 fn test_factory_create_devnet_instance() {

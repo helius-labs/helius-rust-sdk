@@ -1,7 +1,10 @@
+use std::sync::Arc;
+
 use crate::client::Helius;
 use crate::config::Config;
-use crate::types::Cluster;
 use crate::error::Result;
+use crate::rpc_client::RpcClient;
+use crate::types::Cluster;
 
 use reqwest::Client;
 
@@ -17,10 +20,15 @@ impl HeliusFactory {
     }
 
     pub fn create(&self, cluster: Cluster) -> Result<Helius> {
-        let config = Config::new(&self.api_key, cluster)?;
-        let client = Client::new();
+        let config: Config = Config::new(&self.api_key, cluster)?;
+        let client: Client = Client::new();
+        let rpc_client = RpcClient::new(Arc::new(client), Arc::new(config.clone()))?;
 
-        Ok(Helius { config, client })
+        Ok(Helius {
+            config,
+            client,
+            rpc_client,
+        })
     }
 }
 
