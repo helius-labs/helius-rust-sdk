@@ -9,16 +9,16 @@ use crate::types::Cluster;
 use reqwest::Client;
 
 pub struct Helius {
-    pub config: Config,
+    pub config: Arc<Config>,
     pub client: Client,
     pub rpc_client: Arc<RpcClient>,
 }
 
 impl Helius {
     pub fn new(api_key: &str, cluster: Cluster) -> Result<Self> {
-        let config: Config = Config::new(api_key, cluster)?;
+        let config: Arc<Config> = Arc::new(Config::new(api_key, cluster)?);
         let client: Client = Client::new();
-        let rpc_client: RpcClient = Arc::new(RpcClient::new(Arc::new(client.clone()), config.clone()));
+        let rpc_client: Arc<RpcClient> = Arc::new(RpcClient::new(Arc::new(client.clone()), config.clone())?);
 
         Ok(Helius {
             config,

@@ -20,9 +20,9 @@ impl HeliusFactory {
     }
 
     pub fn create(&self, cluster: Cluster) -> Result<Helius> {
-        let config: Config = Config::new(&self.api_key, cluster)?;
+        let config: Arc<Config> = Arc::new(Config::new(&self.api_key, cluster)?);
         let client: Client = Client::new();
-        let rpc_client = RpcClient::new(Arc::new(client), Arc::new(config.clone()))?;
+        let rpc_client: Arc<RpcClient> = Arc::new(RpcClient::new(Arc::new(client.clone()), config.clone())?);
 
         Ok(Helius {
             config,
