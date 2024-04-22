@@ -38,11 +38,12 @@ impl RequestHandler {
     async fn handle_response<T: for<'de> Deserialize<'de>>(&self, path: String, response: Response) -> Result<T> {
         let status: StatusCode = response.status();
 
-        if status == StatusCode::OK || status == StatusCode::CREATED {
-            response.json::<T>().await.map_err(HeliusError::SerdeJson)
-        } else {
-            let error_text: String = response.text().await.unwrap_or_default();
-            Err(HeliusError::from_response_status(status, path, error_text))
+        match status {
+            StatusCode::OK | StatusCode::CREATED => response.json::<T>().await.map_err(HeliusError::SerdeJson),
+            _ => {
+                let error_text = response.text().await.unwrap_or_else(|_| "Failed to read response body".to_string());
+                Err(HeliusError::from_response_status(status, path, error_text))
+            }
         }
     }
 }
