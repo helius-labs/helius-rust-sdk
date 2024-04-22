@@ -40,10 +40,7 @@ impl RequestHandler {
 
         match status {
             StatusCode::OK | StatusCode::CREATED => response.json::<T>().await.map_err(HeliusError::SerdeJson),
-            _ => {
-                let error_text = response.text().await.unwrap_or_else(|_| "Failed to read response body".to_string());
-                Err(HeliusError::from_response_status(status, path, error_text))
-            }
+            _ => Err(HeliusError::from_response_status(status, path, response).await),
         }
     }
 }

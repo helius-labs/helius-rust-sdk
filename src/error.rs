@@ -1,4 +1,5 @@
-use reqwest::{Error as ReqwestError, StatusCode};
+use reqwest::{Error as ReqwestError, Response, StatusCode};
+use serde_json::Value;
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -32,7 +33,13 @@ pub enum HeliusError {
 }
 
 impl HeliusError {
-    pub fn from_response_status(status: StatusCode, path: String, text: String) -> Self {
+    pub async fn from_response_status(status: StatusCode, path: String, response: Response) -> Self {
+        let body: String = response.text().await.unwrap_or_default();
+        let v: Value = serde_json::from_str(&body).unwrap_or_default();
+
+        // Extract only the message part of the JSON
+        let text: String = v["message"].as_str().unwrap_or("").to_string();
+
         match status {
             StatusCode::BAD_REQUEST => HeliusError::BadRequest { path, text },
             StatusCode::UNAUTHORIZED | StatusCode::FORBIDDEN => HeliusError::Unauthorized { path, text },
