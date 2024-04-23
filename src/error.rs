@@ -1,5 +1,5 @@
-use reqwest::{Error as ReqwestError, Response, StatusCode};
-use serde_json::Value;
+use reqwest::{Error as ReqwestError, StatusCode};
+use serde_json::Error as SerdeJsonError;
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -22,8 +22,11 @@ pub enum HeliusError {
     #[error("Too many requests made to {path}")]
     RateLimitExceeded { path: String },
 
+    #[error("Request error: {0}")]
+    ReqwestError(ReqwestError),
+
     #[error("Serialization / Deserialization error: {0}")]
-    SerdeJson(ReqwestError),
+    SerdeJson(SerdeJsonError),
 
     #[error("Unauthorized access to {path}: {text}")]
     Unauthorized { path: String, text: String },
@@ -33,13 +36,7 @@ pub enum HeliusError {
 }
 
 impl HeliusError {
-    pub async fn from_response_status(status: StatusCode, path: String, response: Response) -> Self {
-        let body: String = response.text().await.unwrap_or_default();
-        let v: Value = serde_json::from_str(&body).unwrap_or_default();
-
-        // Extract only the message part of the JSON
-        let text: String = v["message"].as_str().unwrap_or("").to_string();
-
+    pub fn from_response_status(status: StatusCode, path: String, text: String) -> Self {
         match status {
             StatusCode::BAD_REQUEST => HeliusError::BadRequest { path, text },
             StatusCode::UNAUTHORIZED | StatusCode::FORBIDDEN => HeliusError::Unauthorized { path, text },
@@ -48,6 +45,12 @@ impl HeliusError {
             StatusCode::TOO_MANY_REQUESTS => HeliusError::RateLimitExceeded { path },
             _ => HeliusError::Unknown { code: status, text },
         }
+    }
+}
+
+impl From<SerdeJsonError> for HeliusError {
+    fn from(err: SerdeJsonError) -> HeliusError {
+        HeliusError::SerdeJson(err)
     }
 }
 

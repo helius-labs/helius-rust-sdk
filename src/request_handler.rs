@@ -15,8 +15,7 @@ impl RequestHandler {
     }
 
     async fn send_request(&self, request_builder: RequestBuilder) -> Result<Response> {
-        let response: Response = request_builder.send().await.map_err(|e| HeliusError::Network(e))?;
-        Ok(response)
+        request_builder.send().await.map_err(HeliusError::Network)
     }
 
     pub async fn send<R, T>(&self, method: Method, url: Url, body: Option<&R>) -> Result<T>
@@ -24,23 +23,63 @@ impl RequestHandler {
         R: Serialize + ?Sized + Send + Sync + Debug,
         T: for<'de> Deserialize<'de> + Default,
     {
-        let mut request_builder: RequestBuilder = self.http_client.request(method, url.clone());
+        let mut request_builder: RequestBuilder = self.http_client.request(method, url);
 
         if let Some(body) = body {
             request_builder = request_builder.json(body);
         }
 
         let response: Response = self.send_request(request_builder).await?;
-        let path: String = url.path().to_string();
-        self.handle_response(path, response).await
+        self.handle_response(response).await
     }
 
-    async fn handle_response<T: for<'de> Deserialize<'de>>(&self, path: String, response: Response) -> Result<T> {
-        let status: StatusCode = response.status();
+    // async fn handle_response<T: for<'de> Deserialize<'de>>(&self, response: Response) -> Result<T> {
+    //     let status: StatusCode = response.status();
+    //     let path: String = response.url().path().to_string();
+    //     let body_text = response.text().await.unwrap_or_default();
 
-        match status {
-            StatusCode::OK | StatusCode::CREATED => response.json::<T>().await.map_err(HeliusError::SerdeJson),
-            _ => Err(HeliusError::from_response_status(status, path, response).await),
+    //     println!("Response status: {}, Body: {}", status, body_text);
+
+    //     if status.is_success() {
+    //         serde_json::from_str::<T>(&body_text).map_err(|e| HeliusError::from(e))
+    //     } else {
+    //         Err(HeliusError::from_response_status(status, path, body_text))
+    //     }
+    // }
+    // async fn handle_response<T: for<'de> Deserialize<'de>>(&self, response: Response) -> Result<T> {
+    //     let status: StatusCode = response.status();
+    //     let path: String = response.url().path().to_string();
+    //     let body_text: String = response.text().await.unwrap_or_default();
+    
+    //     println!("Response status: {}, Body: {}", status, body_text);
+    
+    //     if status.is_success() {
+    //         serde_json::from_str::<T>(&body_text).map_err(|e| {
+    //             eprintln!("Failed to deserialize response: {}", e);
+    //             HeliusError::from(e)
+    //         })
+    //     } else {
+    //         Err(HeliusError::from_response_status(status, path, body_text))
+    //     }
+    // }
+    async fn handle_response<T: for<'de> Deserialize<'de>>(&self, response: Response) -> Result<T> {
+        let status: StatusCode = response.status();
+        let path: String = response.url().path().to_string();
+        let body_text: String = response.text().await.unwrap_or_default();
+    
+        println!("Response status: {}, Body: {}", status, body_text);
+    
+        if status.is_success() {
+            match serde_json::from_str::<T>(&body_text) {
+                Ok(data) => Ok(data),
+                Err(e) => {
+                    println!("Deserialization error: {}", e);
+                    println!("Raw JSON: {}", body_text);
+                    Err(HeliusError::from(e))
+                }
+            }
+        } else {
+            Err(HeliusError::from_response_status(status, path.clone(), body_text))
         }
     }
 }

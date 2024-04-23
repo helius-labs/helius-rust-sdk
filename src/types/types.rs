@@ -1,4 +1,6 @@
-use super::enums::{AssetSortBy, AssetSortDirection, Interface, OwnershipModel, RoyaltyModel, Scope, UseMethods, Context };
+use super::enums::{
+    AssetSortBy, AssetSortDirection, Context, Interface, OwnershipModel, RoyaltyModel, Scope, UseMethods,
+};
 use serde::{Deserialize, Serialize};
 
 /// Defines the available clusters supported by Helius
@@ -15,15 +17,51 @@ pub struct HeliusEndpoints {
     pub rpc: String,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+impl HeliusEndpoints {
+    pub fn for_cluster(cluster: &Cluster) -> Self {
+        match cluster {
+            Cluster::Devnet => HeliusEndpoints {
+                api: "https://api-devnet.helius-rpc.com/".to_string(),
+                rpc: "https://devnet.helius-rpc.com/".to_string(),
+            },
+            Cluster::MainnetBeta => HeliusEndpoints {
+                api: "https://api-mainnet.helius-rpc.com/".to_string(),
+                rpc: "https://mainnet.helius-rpc.com/".to_string(),
+            },
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize)]
 pub struct AssetsByOwnerRequest {
+    #[serde(rename = "ownerAddress")]
     pub owner_address: String,
-    pub page: i32,
+    #[serde(rename = "page")]
+    pub page: Option<i32>,
+    #[serde(rename = "limit")]
     pub limit: Option<i32>,
+    #[serde(rename = "before")]
     pub before: Option<String>,
+    #[serde(rename = "after")]
     pub after: Option<String>,
+    #[serde(rename = "displayOptions")]
     pub display_options: Option<DisplayOptions>,
+    #[serde(rename = "sortBy")]
     pub sort_by: Option<AssetSortingRequest>,
+}
+
+impl Default for AssetsByOwnerRequest {
+    fn default() -> Self {
+        AssetsByOwnerRequest {
+            owner_address: Default::default(),
+            page: None,
+            limit: None,
+            before: None,
+            after: None,
+            display_options: None,
+            sort_by: None,
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -39,13 +77,15 @@ pub struct AssetSortingRequest {
     pub sort_direction: AssetSortDirection,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Default)]
 pub struct GetAssetResponseList {
-    pub grand_total: Option<bool>,
-    pub total: i32,
-    pub limit: i32,
-    pub page: i32,
-    pub items: Vec<GetAssetResponse>,
+    #[serde(rename = "grandTotal")]
+    pub grand_total: Option<i32>,
+    pub total: Option<i32>,
+    pub limit: Option<i32>,
+    pub page: Option<i32>,
+    #[serde(rename = "items")]
+    pub items: Option<Vec<GetAssetResponse>>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
