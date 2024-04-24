@@ -78,9 +78,22 @@ pub struct AssetSortingRequest {
 }
 
 #[derive(Serialize, Deserialize, Debug, Default)]
+pub struct ApiResponse {
+    pub jsonrpc: String,
+    pub result: ResponseType, // Serde will automatically deserialize the response into the appropriate type
+    pub id: u8,
+}
+
+#[derive(Serialize, Deserialize, Debug, Default)]
+#[serde(untagged)]
+pub enum ResponseType {
+    #[default]
+    DefaultResponse,   // This is a placeholder for the default response type. TODO: Replace this an appropriate type
+    GetAssetResponseList(GetAssetResponseList),
+}
+
+#[derive(Serialize, Deserialize, Debug, Default)]
 pub struct GetAssetResponseList {
-    #[serde(rename = "grandTotal")]
-    pub grand_total: Option<i32>,
     pub total: Option<i32>,
     pub limit: Option<i32>,
     pub page: Option<i32>,
@@ -107,6 +120,7 @@ pub struct GetAssetResponse {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Content {
+    #[serde(rename = "$schema")]
     pub schema: String,
     pub json_uri: String,
     pub files: Option<Vec<File>>,
@@ -131,9 +145,9 @@ pub struct FileQuality {
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Metadata {
     pub attributes: Option<Vec<Attribute>>,
-    pub description: String,
+    pub description: Option<String>,
     pub name: String,
-    pub symbole: String,
+    pub symbol: String,
 }
 
 #[derive(Serialize, Deserialize, Debug)]

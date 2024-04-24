@@ -3,7 +3,8 @@ use std::sync::Arc;
 use crate::config::Config;
 use crate::error::Result;
 use crate::request_handler::RequestHandler;
-use crate::types::{AssetsByOwnerRequest, GetAssetResponseList};
+use crate::types::types::ApiResponse;
+use crate::types::AssetsByOwnerRequest;
 
 use reqwest::{Client, Method, Url};
 use serde_json::{json, Value};
@@ -19,7 +20,7 @@ impl RpcClient {
         Ok(RpcClient { handler, config })
     }
 
-    pub async fn get_assets_by_owner(&self, request: AssetsByOwnerRequest) -> Result<GetAssetResponseList> {
+    pub async fn get_assets_by_owner(&self, request: AssetsByOwnerRequest) -> Result<ApiResponse> {
         let url: String = format!("{}?api-key={}", self.config.endpoints.rpc, self.config.api_key);
         let url: Url = Url::parse(&url).expect("Failed to parse URL");
 
