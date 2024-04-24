@@ -88,7 +88,7 @@ pub struct ApiResponse {
 #[serde(untagged)]
 pub enum ResponseType {
     #[default]
-    DefaultResponse,   // This is a placeholder for the default response type. TODO: Replace this an appropriate type
+    DefaultResponse, // This is a placeholder for the default response type. TODO: Replace this an appropriate type
     GetAssetResponseList(GetAssetResponseList),
 }
 

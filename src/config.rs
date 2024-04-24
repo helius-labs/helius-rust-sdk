@@ -1,4 +1,4 @@
-use crate::error::{ HeliusError, Result };
+use crate::error::{HeliusError, Result};
 use crate::types::{Cluster, HeliusEndpoints};
 
 #[derive(Clone)]
