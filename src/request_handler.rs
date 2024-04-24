@@ -32,7 +32,7 @@ impl RequestHandler {
         let response: Response = self.send_request(request_builder).await?;
         self.handle_response(response).await
     }
-    
+
     async fn handle_response<T: for<'de> Deserialize<'de>>(&self, response: Response) -> Result<T> {
         let status: StatusCode = response.status();
         let path: String = response.url().path().to_string();
@@ -50,7 +50,14 @@ impl RequestHandler {
                 }
             }
         } else {
-            Err(HeliusError::from_response_status(status, path.clone(), body_text))
+            let body_json: serde_json::Result<serde_json::Value> = serde_json::from_str(&body_text);
+        match body_json {
+            Ok(body) => {
+                let error_message: String = body["message"].as_str().unwrap_or("Unknown error").to_string();
+                Err(HeliusError::from_response_status(status, path, error_message))
+            },
+            Err(_) => Err(HeliusError::from_response_status(status, path, body_text)),
+        }
         }
     }
 }
