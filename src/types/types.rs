@@ -2,6 +2,7 @@ use super::enums::{
     AssetSortBy, AssetSortDirection, Context, Interface, OwnershipModel, RoyaltyModel, Scope, UseMethods,
 };
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
 /// Defines the available clusters supported by Helius
 #[derive(Debug, Clone, PartialEq)]
@@ -90,6 +91,7 @@ pub enum ResponseType {
     #[default]
     DefaultResponse, // This is a placeholder for the default response type. TODO: Replace this an appropriate type
     GetAssetResponseList(GetAssetResponseList),
+    Other(Value),
 }
 
 #[derive(Serialize, Deserialize, Debug, Default)]
@@ -120,7 +122,8 @@ pub struct GetAssetResponse {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Content {
-    #[serde(rename = "$schema")]
+    #[serde(rename = "schema", default)]
+    #[serde(alias = "$schema")]
     pub schema: String,
     pub json_uri: String,
     pub files: Option<Vec<File>>,

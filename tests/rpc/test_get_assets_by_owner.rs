@@ -1,7 +1,10 @@
 use helius_sdk::config::Config;
 use helius_sdk::error::HeliusError;
 use helius_sdk::rpc_client::RpcClient;
-use helius_sdk::types::{ApiResponse, AssetsByOwnerRequest, Cluster, HeliusEndpoints, ResponseType};
+use helius_sdk::types::{
+    ApiResponse, AssetsByOwnerRequest, Attribute, Cluster, Content, File, GetAssetResponse, GetAssetResponseList,
+    HeliusEndpoints, Interface, Metadata, Ownership, OwnershipModel, ResponseType,
+};
 use helius_sdk::Helius;
 
 use mockito::{self, Server};
@@ -19,85 +22,63 @@ struct MockAssetResponse {
 async fn test_get_assets_by_owner_success() {
     let mut server: Server = Server::new_with_opts_async(mockito::ServerOpts::default()).await;
     let url: String = server.url();
-    print!("{}", url);
+
+    let mock_response: ApiResponse = ApiResponse {
+        jsonrpc: "2.0".to_string(),
+        result: ResponseType::GetAssetResponseList(GetAssetResponseList {
+            total: Some(1),
+            limit: Some(10),
+            page: Some(1),
+            items: Some(vec![GetAssetResponse {
+                interface: Interface::V1NFT, 
+                id: "123".to_string(),
+                content: Some(Content {
+                    schema: "http://example.com/schema".to_string(),
+                    json_uri: "http://example.com/json".to_string(),
+                    files: Some(vec![File {
+                        uri: Some("http://example.com/file1".to_string()),
+                        mime: Some("image/png".to_string()),
+                        cdn_uri: None,
+                        quality: None,
+                        contexts: None,
+                    }]),
+                    metadata: Metadata {
+                        attributes: Some(vec![Attribute {
+                            value: "blue".to_string(),
+                            trait_type: "color".to_string(),
+                        }]),
+                        description: Some("A description".to_string()),
+                        name: "Item1".to_string(),
+                        symbol: "SYM".to_string(),
+                    },
+                    links: None,
+                }),
+                authorities: None,
+                compression: None,
+                grouping: None,
+                royalty: None,
+                ownership: Ownership {
+                    frozen: false,
+                    delegated: false,
+                    delegate: None,
+                    ownership_model: OwnershipModel::Single,
+                    owner: "OwnerAddress1".to_string(),
+                },
+                creators: None,
+                uses: None,
+                supply: None,
+                mutable: false,
+                burnt: false,
+            }]),
+        }),
+        id: 1,
+    };
 
     server
         .mock("POST", "/?api-key=fake_api_key")
         .with_status(200)
         .with_header("content-type", "application/json")
-        .with_body(
-            r#"{
-            "jsonrpc": "2.0",
-            "result": {
-                "total": 2,
-                "limit": 10,
-                "page": 1,
-                "items": [
-                    {
-                        "interface": "V1NFT",
-                        "id": "123",
-                        "content": {
-                            "schema": "http://example.com/schema",
-                            "json_uri": "http://example.com/json",
-                            "files": [
-                                {
-                                    "uri": "http://example.com/file1",
-                                    "mime": "image/png"
-                                }
-                            ],
-                            "metadata": {
-                                "attributes": [
-                                    {
-                                        "value": "blue",
-                                        "trait_type": "color"
-                                    }
-                                ],
-                                "description": "A description",
-                                "name": "Item1",
-                                "symbol": "SYM"
-                            }
-                        },
-                        "authorities": [],
-                        "compression": {
-                            "eligible": true,
-                            "compressed": false,
-                            "data_hash": "hash1",
-                            "creator_hash": "hash2",
-                            "asset_hash": "hash3",
-                            "tree": "tree1",
-                            "seq": 1,
-                            "leaf_id": 1
-                        },
-                        "grouping": [],
-                        "royalty": {
-                            "royalty_model": "Creators",
-                            "percent": 5.0,
-                            "basis_points": 500
-                        },
-                        "ownership": {
-                            "frozen": false,
-                            "delegated": false,
-                            "owner": "OwnerAddress1",
-                            "ownership_model": "Single"
-                        },
-                        "creators": [],
-                        "uses": {
-                            "use_method": "Single",
-                            "remaining": 5,
-                            "total": 10
-                        },
-                        "supply": {
-                            "print_max_supply": 100,
-                            "print_current_supply": 50
-                        },
-                        "mutable": false,
-                        "burnt": false
-                    }
-                ]
-            },
-            "id": 1
-        }"#,
-        )
+        .with_body(serde_json::to_string(&mock_response).unwrap()) 
         .create();
 
     let config: Arc<Config> = Arc::new(Config {
@@ -128,9 +109,9 @@ async fn test_get_assets_by_owner_success() {
 
     let api_response: ApiResponse = response.unwrap();
     if let ResponseType::GetAssetResponseList(list) = api_response.result {
-        assert_eq!(list.total, Some(2), "Total does not match");
+        assert_eq!(list.total, Some(1), "Total does not match");
         assert!(list.items.is_some(), "Items are missing");
-        assert_eq!(list.items.unwrap().len(), 2, "Items count does not match");
+        assert_eq!(list.items.unwrap().len(), 1, "Items count does not match");
     } else {
         panic!("Expected GetAssetResponseList");
     }

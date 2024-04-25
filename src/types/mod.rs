@@ -1,7 +1,10 @@
 pub mod enums;
 pub mod types;
 
-pub use self::enums::{AssetSortBy, AssetSortDirection};
+pub use self::enums::{
+    AssetSortBy, AssetSortDirection, Context, Interface, OwnershipModel, RoyaltyModel, Scope, UseMethods,
+};
 pub use self::types::{
-    ApiResponse, AssetsByOwnerRequest, Cluster, GetAssetResponseList, HeliusEndpoints, ResponseType,
+    ApiResponse, AssetsByOwnerRequest, Attribute, Cluster, CollectionMetadata, Content, File, GetAssetResponse,
+    GetAssetResponseList, HeliusEndpoints, Metadata, Ownership, ResponseType,
 };
