@@ -116,3 +116,43 @@ async fn test_get_assets_by_owner_success() {
         panic!("Expected GetAssetResponseList");
     }
 }
+
+#[tokio::test]
+async fn test_get_assets_by_owner_failure() {
+    let mut server: Server = Server::new_with_opts_async(mockito::ServerOpts::default()).await;
+    let url: String = server.url();
+
+    // Simulate an API failure with status code 500
+    server
+        .mock("POST", "/?api-key=fake_api_key")
+        .with_status(500)
+        .with_header("content-type", "application/json")
+        .with_body(r#"{"error": "Internal Server Error"}"#) 
+        .create();
+
+    let config: Arc<Config> = Arc::new(Config {
+        api_key: "fake_api_key".to_string(),
+        cluster: Cluster::Devnet,
+        endpoints: HeliusEndpoints {
+            api: url.to_string(),
+            rpc: url.to_string(),
+        },
+    });
+
+    let client: Client = Client::new();
+    let rpc_client: Arc<RpcClient> = Arc::new(RpcClient::new(Arc::new(client.clone()), Arc::clone(&config)).unwrap());
+    let helius: Helius = Helius {
+        config,
+        client,
+        rpc_client,
+    };
+
+    let request: AssetsByOwnerRequest = AssetsByOwnerRequest {
+        owner_address: "GNPwr9fk9RJbfy9nSKbNiz5NPfc69KVwnizverx6fNze".to_string(),
+        page: Some(1),
+        ..Default::default()
+    };
+
+    let response: Result<ApiResponse, HeliusError> = helius.rpc().get_assets_by_owner(request).await;
+    assert!(response.is_err(), "Expected an error due to server failure");
+}
