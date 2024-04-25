@@ -38,7 +38,7 @@ impl RequestHandler {
         let path: String = response.url().path().to_string();
         let body_text: String = response.text().await.unwrap_or_default();
 
-        println!("Response status: {}, Body: {}", status, body_text);
+        //println!("Response status: {}, Body: {}", status, body_text);
 
         if status.is_success() {
             match serde_json::from_str::<T>(&body_text) {
