@@ -2,8 +2,8 @@ use helius_sdk::config::Config;
 use helius_sdk::error::HeliusError;
 use helius_sdk::rpc_client::RpcClient;
 use helius_sdk::types::{
-    ApiResponse, AssetsByOwnerRequest, Attribute, Cluster, Content, File, GetAssetResponse, GetAssetResponseList,
-    HeliusEndpoints, Interface, Metadata, Ownership, OwnershipModel, ResponseType,
+    ApiResponse, AssetsByOwnerRequest, Attribute, Cluster, Content, File, GetAssetResponseForOwnerCall,
+    GetAssetResponseList, HeliusEndpoints, Interface, Metadata, Ownership, OwnershipModel, ResponseType,
 };
 use helius_sdk::Helius;
 
@@ -29,8 +29,8 @@ async fn test_get_assets_by_owner_success() {
             total: Some(1),
             limit: Some(10),
             page: Some(1),
-            items: Some(vec![GetAssetResponse {
-                interface: Interface::V1NFT, 
+            items: Some(vec![GetAssetResponseForOwnerCall {
+                interface: Interface::V1NFT,
                 id: "123".to_string(),
                 content: Some(Content {
                     schema: "http://example.com/schema".to_string(),
@@ -78,7 +78,7 @@ async fn test_get_assets_by_owner_success() {
         .mock("POST", "/?api-key=fake_api_key")
         .with_status(200)
         .with_header("content-type", "application/json")
-        .with_body(serde_json::to_string(&mock_response).unwrap()) 
+        .with_body(serde_json::to_string(&mock_response).unwrap())
         .create();
 
     let config: Arc<Config> = Arc::new(Config {
@@ -101,7 +101,11 @@ async fn test_get_assets_by_owner_success() {
     let request: AssetsByOwnerRequest = AssetsByOwnerRequest {
         owner_address: "GNPwr9fk9RJbfy9nSKbNiz5NPfc69KVwnizverx6fNze".to_string(),
         page: Some(1),
-        ..Default::default()
+        limit: None,
+        before: None,
+        after: None,
+        display_options: None,
+        sort_by: None,
     };
 
     let response: Result<ApiResponse, HeliusError> = helius.rpc().get_assets_by_owner(request).await;
@@ -127,7 +131,7 @@ async fn test_get_assets_by_owner_failure() {
         .mock("POST", "/?api-key=fake_api_key")
         .with_status(500)
         .with_header("content-type", "application/json")
-        .with_body(r#"{"error": "Internal Server Error"}"#) 
+        .with_body(r#"{"error": "Internal Server Error"}"#)
         .create();
 
     let config: Arc<Config> = Arc::new(Config {
@@ -150,7 +154,11 @@ async fn test_get_assets_by_owner_failure() {
     let request: AssetsByOwnerRequest = AssetsByOwnerRequest {
         owner_address: "GNPwr9fk9RJbfy9nSKbNiz5NPfc69KVwnizverx6fNze".to_string(),
         page: Some(1),
-        ..Default::default()
+        limit: None,
+        before: None,
+        after: None,
+        display_options: None,
+        sort_by: None,
     };
 
     let response: Result<ApiResponse, HeliusError> = helius.rpc().get_assets_by_owner(request).await;
