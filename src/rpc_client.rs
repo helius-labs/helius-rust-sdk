@@ -4,7 +4,7 @@ use crate::config::Config;
 use crate::error::Result;
 use crate::request_handler::RequestHandler;
 use crate::types::types::ApiResponse;
-use crate::types::{AssetsByOwnerRequest, GetAssetRequest, AssetsByAuthorityRequest};
+use crate::types::{AssetsByAuthorityRequest, AssetsByOwnerRequest, GetAssetRequest};
 
 use reqwest::{Client, Method, Url};
 use serde_json::{json, Value};

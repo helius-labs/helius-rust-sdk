@@ -2,8 +2,8 @@ use helius_sdk::config::Config;
 use helius_sdk::error::HeliusError;
 use helius_sdk::rpc_client::RpcClient;
 use helius_sdk::types::{
-    ApiResponse, AssetsByOwnerRequest, Attribute, Cluster, Content, File, GetAssetResponse,
-    GetAssetResponseList, HeliusEndpoints, Interface, Metadata, Ownership, OwnershipModel, ResponseType,
+    ApiResponse, AssetsByOwnerRequest, Attribute, Cluster, Content, File, GetAssetResponse, GetAssetResponseList,
+    HeliusEndpoints, Interface, Metadata, Ownership, OwnershipModel, ResponseType,
 };
 use helius_sdk::Helius;
 

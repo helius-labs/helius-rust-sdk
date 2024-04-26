@@ -23,7 +23,7 @@ async fn test_get_assets_by_authority_success() {
             limit: Some(10),
             page: Some(1),
             items: Some(vec![GetAssetResponse {
-                interface: Interface::V1NFT, 
+                interface: Interface::V1NFT,
                 id: "123".to_string(),
                 content: Some(Content {
                     schema: "http://example.com/schema".to_string(),
@@ -71,7 +71,7 @@ async fn test_get_assets_by_authority_success() {
         .mock("POST", "/?api-key=fake_api_key")
         .with_status(200)
         .with_header("content-type", "application/json")
-        .with_body(serde_json::to_string(&mock_response).unwrap()) 
+        .with_body(serde_json::to_string(&mock_response).unwrap())
         .create();
 
     let config: Arc<Config> = Arc::new(Config {
@@ -122,7 +122,7 @@ async fn test_get_assets_by_authority_failure() {
         .mock("POST", "/?api-key=fake_api_key")
         .with_status(500)
         .with_header("content-type", "application/json")
-        .with_body(r#"{"error": "Internal Server Error"}"#) 
+        .with_body(r#"{"error": "Internal Server Error"}"#)
         .create();
 
     let config: Arc<Config> = Arc::new(Config {

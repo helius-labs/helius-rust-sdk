@@ -52,7 +52,7 @@ pub struct AssetsByOwnerRequest {
 }
 
 #[derive(Serialize, Deserialize, Default)]
-pub struct AssetsByAuthorityRequest{
+pub struct AssetsByAuthorityRequest {
     #[serde(rename = "authorityAddress")]
     pub authority_address: String,
     pub page: u32,
@@ -62,7 +62,7 @@ pub struct AssetsByAuthorityRequest{
     #[serde(rename = "displayOptions")]
     pub display_options: Option<DisplayOptions>,
     #[serde(rename = "sortBy")]
-    pub sort_by: Option<AssetSortingRequest>
+    pub sort_by: Option<AssetSortingRequest>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
