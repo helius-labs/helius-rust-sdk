@@ -2,7 +2,7 @@ use helius_sdk::config::Config;
 use helius_sdk::error::HeliusError;
 use helius_sdk::rpc_client::RpcClient;
 use helius_sdk::types::{
-    ApiResponse, AssetsByOwnerRequest, Attribute, Cluster, Content, File, GetAssetResponse, GetAssetResponseList,
+    ApiResponse, AssetsByAuthorityRequest, Attribute, Cluster, Content, File, GetAssetResponse, GetAssetResponseList,
     HeliusEndpoints, Interface, Metadata, Ownership, OwnershipModel, ResponseType,
 };
 use helius_sdk::Helius;
@@ -12,7 +12,7 @@ use reqwest::Client;
 use std::sync::Arc;
 
 #[tokio::test]
-async fn test_get_assets_by_owner_success() {
+async fn test_get_assets_by_authority_success() {
     let mut server: Server = Server::new_with_opts_async(mockito::ServerOpts::default()).await;
     let url: String = server.url();
 
@@ -91,16 +91,18 @@ async fn test_get_assets_by_owner_success() {
         rpc_client,
     };
 
-    let request: AssetsByOwnerRequest = AssetsByOwnerRequest {
-        owner_address: "GNPwr9fk9RJbfy9nSKbNiz5NPfc69KVwnizverx6fNze".to_string(),
+    let request: AssetsByAuthorityRequest = AssetsByAuthorityRequest {
+        authority_address: "GNPwr9fk9RJbfy9nSKbNiz5NPfc69KVwnizverx6fNze".to_string(),
         page: 1,
+        limit: Some(1),
         ..Default::default()
     };
 
-    let response: Result<ApiResponse, HeliusError> = helius.rpc().get_assets_by_owner(request).await;
+    let response: Result<ApiResponse, HeliusError> = helius.rpc().get_assets_by_authority(request).await;
     assert!(response.is_ok(), "The API call failed: {:?}", response.err());
 
     let api_response: ApiResponse = response.unwrap();
+
     if let ResponseType::GetAssetResponseList(list) = api_response.result {
         assert_eq!(list.total, Some(1), "Total does not match");
         assert!(list.items.is_some(), "Items are missing");
@@ -111,7 +113,7 @@ async fn test_get_assets_by_owner_success() {
 }
 
 #[tokio::test]
-async fn test_get_assets_by_owner_failure() {
+async fn test_get_assets_by_authority_failure() {
     let mut server: Server = Server::new_with_opts_async(mockito::ServerOpts::default()).await;
     let url: String = server.url();
 
@@ -140,12 +142,12 @@ async fn test_get_assets_by_owner_failure() {
         rpc_client,
     };
 
-    let request: AssetsByOwnerRequest = AssetsByOwnerRequest {
-        owner_address: "GNPwr9fk9RJbfy9nSKbNiz5NPfc69KVwnizverx6fNze".to_string(),
+    let request: AssetsByAuthorityRequest = AssetsByAuthorityRequest {
+        authority_address: "GNPwr9fk9RJbfy9nSKbNiz5NPfc69KVwnizverx6fNze".to_string(),
         page: 1,
         ..Default::default()
     };
 
-    let response: Result<ApiResponse, HeliusError> = helius.rpc().get_assets_by_owner(request).await;
+    let response: Result<ApiResponse, HeliusError> = helius.rpc().get_assets_by_authority(request).await;
     assert!(response.is_err(), "Expected an error due to server failure");
 }

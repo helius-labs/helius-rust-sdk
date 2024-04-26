@@ -33,12 +33,12 @@ impl HeliusEndpoints {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Default)]
 pub struct AssetsByOwnerRequest {
     #[serde(rename = "ownerAddress")]
     pub owner_address: String,
     #[serde(rename = "page")]
-    pub page: Option<i32>,
+    pub page: u32,
     #[serde(rename = "limit")]
     pub limit: Option<i32>,
     #[serde(rename = "before")]
@@ -51,30 +51,35 @@ pub struct AssetsByOwnerRequest {
     pub sort_by: Option<AssetSortingRequest>,
 }
 
-impl Default for AssetsByOwnerRequest {
-    fn default() -> Self {
-        AssetsByOwnerRequest {
-            owner_address: Default::default(),
-            page: None,
-            limit: None,
-            before: None,
-            after: None,
-            display_options: None,
-            sort_by: None,
-        }
-    }
+#[derive(Serialize, Deserialize, Default)]
+pub struct AssetsByAuthorityRequest{
+    #[serde(rename = "authorityAddress")]
+    pub authority_address: String,
+    pub page: u32,
+    pub limit: Option<u32>,
+    pub before: Option<String>,
+    pub after: Option<String>,
+    #[serde(rename = "displayOptions")]
+    pub display_options: Option<DisplayOptions>,
+    #[serde(rename = "sortBy")]
+    pub sort_by: Option<AssetSortingRequest>
 }
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct DisplayOptions {
+    #[serde(rename = "showUnverifiedCollections")]
     pub show_unverified_collections: Option<bool>,
+    #[serde(rename = "showCollectionMetadata")]
     pub show_collection_metadata: Option<bool>,
+    #[serde(rename = "showGrandTotal")]
     pub show_grand_total: Option<bool>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct AssetSortingRequest {
+    #[serde(rename = "sortBy")]
     pub sort_by: AssetSortBy,
+    #[serde(rename = "sortDirection")]
     pub sort_direction: AssetSortDirection,
 }
 
