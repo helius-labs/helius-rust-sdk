@@ -9,6 +9,7 @@ pub struct Config {
 }
 
 impl Config {
+    /// Initializes a new Config instance
     pub fn new(api_key: &str, cluster: Cluster) -> Result<Self> {
         if api_key.is_empty() {
             return Err(HeliusError::InvalidInput("API key cannot be empty".to_string()));

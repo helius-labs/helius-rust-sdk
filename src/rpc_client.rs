@@ -15,11 +15,13 @@ pub struct RpcClient {
 }
 
 impl RpcClient {
+    /// Initializes a new RpcClient instance
     pub fn new(client: Arc<Client>, config: Arc<Config>) -> Result<Self> {
         let handler: RequestHandler = RequestHandler::new(client)?;
         Ok(RpcClient { handler, config })
     }
 
+    /// Gets a list of assets owned by a given address
     pub async fn get_assets_by_owner(&self, request: AssetsByOwnerRequest) -> Result<ApiResponse> {
         let url: String = format!("{}?api-key={}", self.config.endpoints.rpc, self.config.api_key);
         let url: Url = Url::parse(&url).expect("Failed to parse URL");

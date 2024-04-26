@@ -13,12 +13,14 @@ pub struct HeliusFactory {
 }
 
 impl HeliusFactory {
+    /// Initializes a new HeliusFactory instance
     pub fn new(api_key: &str) -> Self {
         HeliusFactory {
             api_key: api_key.to_string(),
         }
     }
 
+    /// Provides a way to create multiple Helius instances in a thread-safe manner
     pub fn create(&self, cluster: Cluster) -> Result<Helius> {
         let config: Arc<Config> = Arc::new(Config::new(&self.api_key, cluster)?);
         let client: Client = Client::new();

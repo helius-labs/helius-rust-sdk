@@ -15,6 +15,7 @@ pub struct Helius {
 }
 
 impl Helius {
+    /// Initializes a new instance of Helius
     pub fn new(api_key: &str, cluster: Cluster) -> Result<Self> {
         let config: Arc<Config> = Arc::new(Config::new(api_key, cluster)?);
         let client: Client = Client::new();
