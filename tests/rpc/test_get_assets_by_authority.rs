@@ -2,8 +2,8 @@ use helius_sdk::config::Config;
 use helius_sdk::error::HeliusError;
 use helius_sdk::rpc_client::RpcClient;
 use helius_sdk::types::{
-    ApiResponse, AssetsByOwnerRequest, Attribute, Cluster, Content, File, GetAssetResponse,
-    GetAssetResponseList, HeliusEndpoints, Interface, Metadata, Ownership, OwnershipModel, ResponseType,
+    ApiResponse, AssetsByAuthorityRequest, Attribute, Cluster, Content, File, GetAssetResponse, GetAssetResponseList,
+    HeliusEndpoints, Interface, Metadata, Ownership, OwnershipModel, ResponseType,
 };
 use helius_sdk::Helius;
 
@@ -12,7 +12,7 @@ use reqwest::Client;
 use std::sync::Arc;
 
 #[tokio::test]
-async fn test_get_assets_by_owner_success() {
+async fn test_get_assets_by_authority_success() {
     let mut server: Server = Server::new_with_opts_async(mockito::ServerOpts::default()).await;
     let url: String = server.url();
 
@@ -23,7 +23,7 @@ async fn test_get_assets_by_owner_success() {
             limit: Some(10),
             page: Some(1),
             items: Some(vec![GetAssetResponse {
-                interface: Interface::V1NFT,
+                interface: Interface::V1NFT, 
                 id: "123".to_string(),
                 content: Some(Content {
                     schema: "http://example.com/schema".to_string(),
@@ -71,7 +71,7 @@ async fn test_get_assets_by_owner_success() {
         .mock("POST", "/?api-key=fake_api_key")
         .with_status(200)
         .with_header("content-type", "application/json")
-        .with_body(serde_json::to_string(&mock_response).unwrap())
+        .with_body(serde_json::to_string(&mock_response).unwrap()) 
         .create();
 
     let config: Arc<Config> = Arc::new(Config {
@@ -91,20 +91,18 @@ async fn test_get_assets_by_owner_success() {
         rpc_client,
     };
 
-    let request: AssetsByOwnerRequest = AssetsByOwnerRequest {
-        owner_address: "GNPwr9fk9RJbfy9nSKbNiz5NPfc69KVwnizverx6fNze".to_string(),
+    let request: AssetsByAuthorityRequest = AssetsByAuthorityRequest {
+        authority_address: "GNPwr9fk9RJbfy9nSKbNiz5NPfc69KVwnizverx6fNze".to_string(),
         page: 1,
-        limit: None,
-        before: None,
-        after: None,
-        display_options: None,
-        sort_by: None,
+        limit: Some(1),
+        ..Default::default()
     };
 
-    let response: Result<ApiResponse, HeliusError> = helius.rpc().get_assets_by_owner(request).await;
+    let response: Result<ApiResponse, HeliusError> = helius.rpc().get_assets_by_authority(request).await;
     assert!(response.is_ok(), "The API call failed: {:?}", response.err());
 
     let api_response: ApiResponse = response.unwrap();
+
     if let ResponseType::GetAssetResponseList(list) = api_response.result {
         assert_eq!(list.total, Some(1), "Total does not match");
         assert!(list.items.is_some(), "Items are missing");
@@ -115,7 +113,7 @@ async fn test_get_assets_by_owner_success() {
 }
 
 #[tokio::test]
-async fn test_get_assets_by_owner_failure() {
+async fn test_get_assets_by_authority_failure() {
     let mut server: Server = Server::new_with_opts_async(mockito::ServerOpts::default()).await;
     let url: String = server.url();
 
@@ -124,7 +122,7 @@ async fn test_get_assets_by_owner_failure() {
         .mock("POST", "/?api-key=fake_api_key")
         .with_status(500)
         .with_header("content-type", "application/json")
-        .with_body(r#"{"error": "Internal Server Error"}"#)
+        .with_body(r#"{"error": "Internal Server Error"}"#) 
         .create();
 
     let config: Arc<Config> = Arc::new(Config {
@@ -144,16 +142,12 @@ async fn test_get_assets_by_owner_failure() {
         rpc_client,
     };
 
-    let request: AssetsByOwnerRequest = AssetsByOwnerRequest {
-        owner_address: "GNPwr9fk9RJbfy9nSKbNiz5NPfc69KVwnizverx6fNze".to_string(),
+    let request: AssetsByAuthorityRequest = AssetsByAuthorityRequest {
+        authority_address: "GNPwr9fk9RJbfy9nSKbNiz5NPfc69KVwnizverx6fNze".to_string(),
         page: 1,
-        limit: None,
-        before: None,
-        after: None,
-        display_options: None,
-        sort_by: None,
+        ..Default::default()
     };
 
-    let response: Result<ApiResponse, HeliusError> = helius.rpc().get_assets_by_owner(request).await;
+    let response: Result<ApiResponse, HeliusError> = helius.rpc().get_assets_by_authority(request).await;
     assert!(response.is_err(), "Expected an error due to server failure");
 }

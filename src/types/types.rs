@@ -33,12 +33,12 @@ impl HeliusEndpoints {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Default)]
 pub struct AssetsByOwnerRequest {
     #[serde(rename = "ownerAddress")]
     pub owner_address: String,
     #[serde(rename = "page")]
-    pub page: Option<i32>,
+    pub page: u32,
     #[serde(rename = "limit")]
     pub limit: Option<i32>,
     #[serde(rename = "before")]
@@ -49,6 +49,20 @@ pub struct AssetsByOwnerRequest {
     pub display_options: Option<DisplayOptions>,
     #[serde(rename = "sortBy")]
     pub sort_by: Option<AssetSortingRequest>,
+}
+
+#[derive(Serialize, Deserialize, Default)]
+pub struct AssetsByAuthorityRequest{
+    #[serde(rename = "authorityAddress")]
+    pub authority_address: String,
+    pub page: u32,
+    pub limit: Option<u32>,
+    pub before: Option<String>,
+    pub after: Option<String>,
+    #[serde(rename = "displayOptions")]
+    pub display_options: Option<DisplayOptions>,
+    #[serde(rename = "sortBy")]
+    pub sort_by: Option<AssetSortingRequest>
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -74,7 +88,9 @@ pub struct DisplayOptions {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct AssetSortingRequest {
+    #[serde(rename = "sortBy")]
     pub sort_by: AssetSortBy,
+    #[serde(rename = "sortDirection")]
     pub sort_direction: AssetSortDirection,
 }
 
@@ -101,11 +117,11 @@ pub struct GetAssetResponseList {
     pub limit: Option<i32>,
     pub page: Option<i32>,
     #[serde(rename = "items")]
-    pub items: Option<Vec<GetAssetResponseForOwnerCall>>,
+    pub items: Option<Vec<GetAssetResponse>>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-pub struct GetAssetResponseForOwnerCall {
+pub struct GetAssetResponse {
     pub interface: Interface,
     pub id: String,
     pub content: Option<Content>,
@@ -122,7 +138,7 @@ pub struct GetAssetResponseForOwnerCall {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-pub struct GetAssetResponse {
+pub struct GetAssetResponseForAsset {
     pub interface: Interface,
     pub id: String,
     pub content: Option<Content>,
