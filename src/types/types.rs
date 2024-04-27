@@ -96,7 +96,7 @@ pub struct AssetsByAuthorityRequest {
 #[derive(Serialize, Deserialize, Debug)]
 pub struct GetAssetRequest {
     pub id: String,
-    #[serde(flatten, rename = "displayOptions")]
+    #[serde(rename = "displayOptions")]
     pub display_options: Option<DisplayOptions>,
 }
 
