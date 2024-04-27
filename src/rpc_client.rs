@@ -5,7 +5,7 @@ use crate::config::Config;
 use crate::error::Result;
 use crate::request_handler::RequestHandler;
 use crate::types::types::{ApiResponse, RpcRequest, RpcResponse};
-use crate::types::{AssetsByAuthorityRequest, AssetsByOwnerRequest, GetAssetRequest};
+use crate::types::{AssetsByAuthorityRequest, AssetsByOwnerRequest, GetAssetRequest, GetAssetResponseForAsset};
 
 use reqwest::{Client, Method, Url};
 use serde::de::DeserializeOwned;
@@ -37,17 +37,15 @@ impl RpcClient {
         print!("{}", url);
 
         let rpc_request: RpcRequest<R> = RpcRequest::new(method, request);
-
-        
-        print!("{:?}", rpc_request);
+        println!("Serialized Request: {:?}", serde_json::to_string(&rpc_request));
 
         let rpc_response: RpcResponse<T> = self.handler.send(Method::POST, url, Some(&rpc_request)).await?;
-        print!("{:?}", rpc_response);
+        print!("RPCRESPONSE {:?}", rpc_response.result);
         Ok(rpc_response.result)
     }
 
     /// Gets an asset by its ID
-    pub async fn get_asset(&self, request: GetAssetRequest) -> Result<ApiResponse> {
+    pub async fn get_asset(&self, request: GetAssetRequest) -> Result<Option<GetAssetResponseForAsset>> {
         self.post_rpc_request("getAsset".to_string(), request).await
     }
 

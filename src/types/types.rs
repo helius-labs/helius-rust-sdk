@@ -38,6 +38,7 @@ pub struct RpcRequest<T> {
     pub jsonrpc: String,
     pub id: String,
     pub method: String,
+    #[serde(rename ="params")]
     pub parameters: T,
 }
 
@@ -95,27 +96,23 @@ pub struct AssetsByAuthorityRequest {
 #[derive(Serialize, Deserialize, Debug)]
 pub struct GetAssetRequest {
     pub id: String,
-    #[serde(flatten)]
+    #[serde(flatten, rename = "displayOptions")]
     pub display_options: Option<DisplayOptions>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
 pub struct DisplayOptions {
-    #[serde(rename = "showUnverifiedCollections")]
     pub show_unverified_collections: bool,
-    #[serde(rename = "showCollectionMetadata")]
     pub show_collection_metadata: bool,
-    #[serde(rename = "showFungible")]
     pub show_fungible: bool,
-    #[serde(rename = "showInscription")]
     pub show_inscription: bool,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
 pub struct AssetSortingRequest {
-    #[serde(rename = "sortBy")]
     pub sort_by: AssetSortBy,
-    #[serde(rename = "sortDirection")]
     pub sort_direction: AssetSortDirection,
 }
 
@@ -141,7 +138,6 @@ pub struct GetAssetResponseList {
     pub total: Option<i32>,
     pub limit: Option<i32>,
     pub page: Option<i32>,
-    #[serde(rename = "items")]
     pub items: Option<Vec<GetAssetResponse>>,
 }
 
@@ -162,7 +158,7 @@ pub struct GetAssetResponse {
     pub burnt: bool,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Default)]
 pub struct GetAssetResponseForAsset {
     pub interface: Interface,
     pub id: String,
@@ -182,70 +178,53 @@ pub struct GetAssetResponseForAsset {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
 pub struct MintExtensions {
-    #[serde(rename = "confidentialTransferMint")]
     pub confidential_transfer_mint: Option<ConfidentialTransferMint>,
-    #[serde(rename = "confidentialTransferFeeConfig")]
     pub confidential_transfer_fee_config: Option<ConfidentialTransferFeeConfig>,
-    #[serde(rename = "transferFeeConfig")]
     pub transfer_fee_config: Option<TransferFeeConfig>,
-    #[serde(rename = "metadataPointer")]
     pub metadata_pointer: MetadataPointer,
-    #[serde(rename = "mintCloseAuthority")]
     pub mint_close_authority: MintCloseAuthority,
-    #[serde(rename = "permanentDelegate")]
     pub permanent_delegate: PermanentDelegate,
-    #[serde(rename = "transferHook")]
     pub transfer_hook: TransferHook,
-    #[serde(rename = "interestBearingConfig")]
     pub interest_bearing_config: InterestBearingConfig,
-    #[serde(rename = "defaultAccountState")]
     pub default_account_state: DefaultAccountState,
-    #[serde(rename = "confidentialTransferAccount")]
     pub confidential_transfer_account: ConfidentialTransferAccount,
     pub metadata: MintExtensionMetadata,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
 pub struct ConfidentialTransferMint {
     pub authority: String,
-    #[serde(rename = "autoApproveNewAccounts")]
     pub auto_approve_new_accounts: bool,
-    #[serde(rename = "auditorElgamalPubkey")]
     pub auditor_elgamal_pubkey: String,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
 pub struct ConfidentialTransferFeeConfig {
     pub authority: String,
-    #[serde(rename = "withdrawWithheldAuthorityElgamalPubkey")]
     pub withdraw_withheld_authority_elgamal_pubkey: String,
-    #[serde(rename = "harvestToMintEnabled")]
     pub harvest_to_mint_enabled: bool,
-    #[serde(rename = "withheldAmount")]
     pub withheld_amount: String,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
 pub struct TransferFeeConfig {
-    #[serde(rename = "transferFeeConfigAuthority")]
     pub transfer_fee_config_authority: String,
-    #[serde(rename = "withdrawWithheldAuthority")]
     pub withdraw_withheld_authority: String,
-    #[serde(rename = "withheldAmount")]
     pub withheld_amount: i32,
-    #[serde(rename = "olderTransferFee")]
     pub older_transfer_fee: OlderTransferFee,
-    #[serde(rename = "newTransferFee")]
     pub new_trasfer_fee: NewTransferFee,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
 pub struct OlderTransferFee {
     pub epoch: String,
-    #[serde(rename = "maximumFee")]
     pub maximum_fee: String,
-    #[serde(rename = "transferFeeBasisPoints")]
     pub transfer_fee_basis_points: String,
 }
 
@@ -262,8 +241,8 @@ pub struct MetadataPointer {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
 pub struct MintCloseAuthority {
-    #[serde(rename = "closeAuthority")]
     pub close_authority: String,
 }
 
@@ -280,16 +259,12 @@ pub struct TransferHook {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
 pub struct InterestBearingConfig {
-    #[serde(rename = "rateAuthority")]
     pub rate_authority: String,
-    #[serde(rename = "initializationTimestamp")]
     pub initialization_timestamp: i32,
-    #[serde(rename = "preUpdateAverageRate")]
     pub pre_update_average_rate: i32,
-    #[serde(rename = "lastUpdateTimestamp")]
     pub last_update_timestamp: i32,
-    #[serde(rename = "currentRate")]
     pub current_rate: i32,
 }
 
@@ -299,29 +274,19 @@ pub struct DefaultAccountState {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
 pub struct ConfidentialTransferAccount {
     pub approved: bool,
-    #[serde(rename = "elgamalPubkey")]
     pub elgamal_pubkey: String,
-    #[serde(rename = "pendingBalanceLo")]
     pub pending_balance_lo: String,
-    #[serde(rename = "pendingBalanceHi")]
     pub pending_balance_hi: String,
-    #[serde(rename = "availableBalance")]
     pub available_balance: String,
-    #[serde(rename = "decryptableAvailableBalance")]
     pub decryptable_available_balance: String,
-    #[serde(rename = "allowConfidentialCredits")]
     pub allow_confidential_credits: bool,
-    #[serde(rename = "allowNonConfidentialCredits")]
     pub allow_non_confidential_credits: bool,
-    #[serde(rename = "pendingBalanceCreditCounter")]
     pub pending_balance_credit_counter: i32,
-    #[serde(rename = "maximumPendingBalanceCreditCounter")]
     pub maximum_pending_balance_credit_counter: i32,
-    #[serde(rename = "expectedPendingBalanceCreditCounter")]
     pub expected_pending_balance_credit_counter: i32,
-    #[serde(rename = "actualPendingBalanceCreditCounter")]
     pub actual_pending_balance_credit_counter: i32,
 }
 
@@ -477,7 +442,7 @@ pub struct Royalty {
     pub locked: bool,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Default)]
 pub struct Ownership {
     pub frozen: bool,
     pub delegated: bool,
@@ -493,16 +458,13 @@ pub struct Uses {
     pub total: u32,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Default)]
+#[serde(rename_all = "camelCase")]
 pub struct Supply {
-    #[serde(rename = "printMaxSupply")]
+    #[serde(default)]
     pub print_max_supply: u32,
-    #[serde(rename = "printCurrentSupply")]
     pub print_current_supply: u32,
-    #[serde(rename = "editionNonce")]
     pub edition_nonce: Option<i32>,
-    #[serde(rename = "editionNumber")]
     pub edition_number: Option<i32>,
-    #[serde(rename = "masterEditionMint")]
     pub master_edition_mint: Option<String>,
 }

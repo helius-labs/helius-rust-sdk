@@ -1,9 +1,10 @@
 use serde::{Deserialize, Serialize};
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default)]
 pub enum Interface {
     #[serde(rename = "V1_NFT")]
     V1NFT,
+    #[default]
     #[serde(rename = "Custom")]
     Custom,
     #[serde(rename = "V1_PRINT")]
@@ -24,8 +25,9 @@ pub enum Interface {
     FungibleToken,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Default, Clone, PartialEq)]
 pub enum OwnershipModel {
+    #[default]
     #[serde(rename = "single")]
     Single,
     #[serde(rename = "token")]

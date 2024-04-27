@@ -34,7 +34,7 @@ impl RequestHandler {
 
         let response: Response = self.send_request(request_builder).await?;
 
-        print!("{:?}", response);
+        print!("RESPONSE {:?}", response);
 
         self.handle_response(response).await
     }
