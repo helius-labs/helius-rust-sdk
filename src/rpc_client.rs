@@ -1,12 +1,15 @@
+use std::fmt::Debug;
 use std::sync::Arc;
 
 use crate::config::Config;
 use crate::error::Result;
 use crate::request_handler::RequestHandler;
-use crate::types::types::ApiResponse;
+use crate::types::types::{ApiResponse, RpcRequest, RpcResponse};
 use crate::types::{AssetsByAuthorityRequest, AssetsByOwnerRequest, GetAssetRequest};
 
 use reqwest::{Client, Method, Url};
+use serde::de::DeserializeOwned;
+use serde::Serialize;
 use serde_json::{json, Value};
 
 pub struct RpcClient {
@@ -21,19 +24,31 @@ impl RpcClient {
         Ok(RpcClient { handler, config })
     }
 
-    /// Gets an asset by its ID
-    pub async fn get_asset(&self, request: GetAssetRequest) -> Result<ApiResponse> {
+    /// Streamlines an RPC POST request
+    pub async fn post_rpc_request<R, T>(&self, method: String, request: R) -> Result<T>
+    where
+        R: Debug + Serialize + Debug + Send + Sync,
+        T: Debug +DeserializeOwned + Default,
+    {
         let base_url: String = format!("{}?api-key={}", self.config.endpoints.rpc, self.config.api_key);
         let url: Url = Url::parse(&base_url).expect("Failed to parse URL");
 
-        let request_body: Value = json!({
-            "jsonrpc": "2.0",
-            "id": 1,
-            "method": "getAsset",
-            "params": request
-        });
+        print!("{}", base_url);
+        print!("{}", url);
 
-        self.handler.send(Method::POST, url, Some(&request_body)).await
+        let rpc_request: RpcRequest<R> = RpcRequest::new(method, request);
+
+        
+        print!("{:?}", rpc_request);
+
+        let rpc_response: RpcResponse<T> = self.handler.send(Method::POST, url, Some(&rpc_request)).await?;
+        print!("{:?}", rpc_response);
+        Ok(rpc_response.result)
+    }
+
+    /// Gets an asset by its ID
+    pub async fn get_asset(&self, request: GetAssetRequest) -> Result<ApiResponse> {
+        self.post_rpc_request("getAsset".to_string(), request).await
     }
 
     /// Gets a list of assets owned by a given address

@@ -33,6 +33,33 @@ impl HeliusEndpoints {
     }
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq)]
+pub struct RpcRequest<T> {
+    pub jsonrpc: String,
+    pub id: String,
+    pub method: String,
+    pub parameters: T,
+}
+
+impl<T> RpcRequest<T> {
+    pub fn new(method: String, parameters: T) -> Self {
+        Self {
+            jsonrpc: "2.0".to_string(),
+            id: "1".to_string(),
+            method,
+            parameters,
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq)]
+pub struct RpcResponse<T> {
+    pub jsonrpc: String,
+    pub id: String,
+    pub result: T,
+
+}
+
 #[derive(Serialize, Deserialize, Default)]
 pub struct AssetsByOwnerRequest {
     #[serde(rename = "ownerAddress")]
@@ -68,22 +95,20 @@ pub struct AssetsByAuthorityRequest {
 #[derive(Serialize, Deserialize, Debug)]
 pub struct GetAssetRequest {
     pub id: String,
-    #[serde(rename = "displayOptions")]
+    #[serde(flatten)]
     pub display_options: Option<DisplayOptions>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct DisplayOptions {
     #[serde(rename = "showUnverifiedCollections")]
-    pub show_unverified_collections: Option<bool>,
+    pub show_unverified_collections: bool,
     #[serde(rename = "showCollectionMetadata")]
-    pub show_collection_metadata: Option<bool>,
-    #[serde(rename = "showGrandTotal")]
-    pub show_grand_total: Option<bool>,
+    pub show_collection_metadata: bool,
     #[serde(rename = "showFungible")]
-    pub show_fungible: Option<bool>,
+    pub show_fungible: bool,
     #[serde(rename = "showInscription")]
-    pub show_inscription: Option<bool>,
+    pub show_inscription: bool,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -107,7 +132,7 @@ pub enum ResponseType {
     #[default]
     DefaultResponse, // This is a placeholder for the default response type. TODO: Replace this an appropriate type
     GetAssetResponseList(GetAssetResponseList),
-    GetAssetResponse(GetAssetResponse),
+    GetAssetResponseForAsset(GetAssetResponseForAsset),
     Other(Value),
 }
 
