@@ -38,7 +38,7 @@ pub struct RpcRequest<T> {
     pub jsonrpc: String,
     pub id: String,
     pub method: String,
-    #[serde(rename ="params")]
+    #[serde(rename = "params")]
     pub parameters: T,
 }
 
@@ -58,7 +58,6 @@ pub struct RpcResponse<T> {
     pub jsonrpc: String,
     pub id: String,
     pub result: T,
-
 }
 
 #[derive(Serialize, Deserialize, Default)]
@@ -462,8 +461,8 @@ pub struct Uses {
 #[serde(rename_all = "camelCase")]
 pub struct Supply {
     #[serde(default)]
-    pub print_max_supply: u32,
-    pub print_current_supply: u32,
+    pub print_max_supply: Option<u32>,
+    pub print_current_supply: Option<u32>,
     pub edition_nonce: Option<i32>,
     pub edition_number: Option<i32>,
     pub master_edition_mint: Option<String>,

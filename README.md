@@ -6,7 +6,47 @@ An asynchronous Helius Rust SDK for building the future of Solana
 ## Installation
 
 ## Usage
-The SDK needs to be configured with your account's API key, which can be found on the [Helius Developer Dashboard](https://dev.helius.xyz/dashboard/app)
+The SDK needs to be configured with your account's API key, which can be found on the [Helius Developer Dashboard](https://dev.helius.xyz/dashboard/app). The following code is an example of how to use the SDK to fetch info on [Mad Lad #8420](https://xray.helius.xyz/token/F9Lw3ki3hJ7PF9HQXsBzoY8GyE6sPoEZZdXJBsTTD2rk?network=mainnet):
+```rust
+use helius_sdk::config::Config;
+use helius_sdk::error::HeliusError;
+use helius_sdk::rpc_client::RpcClient;
+use helius_sdk::types::types::{GetAssetResponseForAsset, DisplayOptions};
+use helius_sdk::types::{Cluster, GetAssetRequest};
+use std::sync::Arc;
+
+#[tokio::main]
+async fn main() -> Result<(), HeliusError> {
+    let api_key: &str = "YOUR_API_KEY";
+    let cluster: Cluster = Cluster::MainnetBeta;
+
+    let config: Config = Config::new(api_key, cluster)?;
+    let client: reqwest::Client = reqwest::Client::new();
+    let rpc_client: RpcClient = RpcClient::new(Arc::new(client), Arc::new(config))?;
+
+    let request: GetAssetRequest = GetAssetRequest {
+        id: "F9Lw3ki3hJ7PF9HQXsBzoY8GyE6sPoEZZdXJBsTTD2rk".to_string(),
+        display_options: Some(DisplayOptions {
+            show_unverified_collections: false,
+            show_collection_metadata: false,
+            show_fungible: false,
+            show_inscription: false,
+        }),
+    };
+
+    let response: Result<Option<GetAssetResponseForAsset>, HeliusError> = rpc_client.get_asset(request).await;
+
+    match response {
+        Ok(Some(asset)) => {
+            println!("Asset: {:?}", asset);
+        },
+        Ok(None) => println!("No asset found."),
+        Err(e) => println!("Error retrieving asset: {:?}", e),
+    }
+
+    Ok(())
+}
+```
 
 ## Error Handling
 

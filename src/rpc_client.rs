@@ -28,19 +28,19 @@ impl RpcClient {
     pub async fn post_rpc_request<R, T>(&self, method: String, request: R) -> Result<T>
     where
         R: Debug + Serialize + Debug + Send + Sync,
-        T: Debug +DeserializeOwned + Default,
+        T: Debug + DeserializeOwned + Default,
     {
         let base_url: String = format!("{}?api-key={}", self.config.endpoints.rpc, self.config.api_key);
         let url: Url = Url::parse(&base_url).expect("Failed to parse URL");
 
-        print!("{}", base_url);
-        print!("{}", url);
+        //print!("{}", base_url);
+        //print!("{}", url);
 
         let rpc_request: RpcRequest<R> = RpcRequest::new(method, request);
-        println!("Serialized Request: {:?}", serde_json::to_string(&rpc_request));
+        //println!("Serialized Request: {:?}", serde_json::to_string(&rpc_request));
 
         let rpc_response: RpcResponse<T> = self.handler.send(Method::POST, url, Some(&rpc_request)).await?;
-        print!("RPCRESPONSE {:?}", rpc_response.result);
+        //print!("RPCRESPONSE {:?}", rpc_response.result);
         Ok(rpc_response.result)
     }
 
