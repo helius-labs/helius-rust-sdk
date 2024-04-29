@@ -2,8 +2,8 @@ use helius_sdk::config::Config;
 use helius_sdk::error::HeliusError;
 use helius_sdk::rpc_client::RpcClient;
 use helius_sdk::types::{
-    ApiResponse, Asset, AssetList, AssetsByOwnerRequest, Attribute, Authorities, Cluster, Compression, Content,
-    Creator, File, Group, HeliusEndpoints, Interface, Links, Metadata, Ownership, OwnershipModel, ResponseType,
+    ApiResponse, Asset, AssetList, Attribute, Authorities, Cluster, Compression, Content, Creator, File,
+    GetAssetsByOwner, Group, HeliusEndpoints, Interface, Links, Metadata, Ownership, OwnershipModel, ResponseType,
     Royalty, RoyaltyModel, Scope, Supply,
 };
 use helius_sdk::Helius;
@@ -161,7 +161,7 @@ async fn test_get_assets_by_owner_success() {
         rpc_client,
     };
 
-    let request: AssetsByOwnerRequest = AssetsByOwnerRequest {
+    let request: GetAssetsByOwner = GetAssetsByOwner {
         owner_address: "GNPwr9fk9RJbfy9nSKbNiz5NPfc69KVwnizverx6fNze".to_string(),
         page: 1,
         limit: None,
@@ -210,7 +210,7 @@ async fn test_get_assets_by_owner_failure() {
         rpc_client,
     };
 
-    let request: AssetsByOwnerRequest = AssetsByOwnerRequest {
+    let request: GetAssetsByOwner = GetAssetsByOwner {
         owner_address: "GNPwr9fk9RJbfy9nSKbNiz5NPfc69KVwnizverx6fNze".to_string(),
         page: 1,
         limit: None,

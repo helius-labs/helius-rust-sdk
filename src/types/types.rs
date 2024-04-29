@@ -63,7 +63,7 @@ pub struct RpcResponse<T> {
 }
 
 #[derive(Serialize, Deserialize, Default, Debug)]
-pub struct AssetsByOwnerRequest {
+pub struct GetAssetsByOwner {
     #[serde(rename = "ownerAddress")]
     pub owner_address: String,
     pub page: u32,
@@ -73,13 +73,13 @@ pub struct AssetsByOwnerRequest {
     #[serde(rename = "displayOptions")]
     pub display_options: Option<DisplayOptions>,
     #[serde(rename = "sortBy")]
-    pub sort_by: Option<AssetSortingRequest>,
+    pub sort_by: Option<AssetSorting>,
     #[serde(default)]
     pub cursor: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Default, Debug)]
-pub struct AssetsByAuthorityRequest {
+pub struct GetAssetsByAuthority {
     #[serde(rename = "authorityAddress")]
     pub authority_address: String,
     pub page: u32,
@@ -89,21 +89,37 @@ pub struct AssetsByAuthorityRequest {
     #[serde(rename = "displayOptions")]
     pub display_options: Option<DisplayOptions>,
     #[serde(rename = "sortBy")]
-    pub sort_by: Option<AssetSortingRequest>,
+    pub sort_by: Option<AssetSorting>,
     #[serde(default)]
     pub cursor: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Default)]
-pub struct GetAssetRequest {
+pub struct GetAsset {
     pub id: String,
     #[serde(rename = "displayOptions")]
     pub display_options: Option<GetAssetOptions>,
 }
 
+#[derive(Debug, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct GetAssetsByCreator {
+    pub creator_address: String,
+    pub only_verified: Option<bool>,
+    pub sort_by: Option<AssetSorting>,
+    pub limit: Option<u32>,
+    pub page: Option<u32>,
+    pub before: Option<String>,
+    pub after: Option<String>,
+    #[serde(default, alias = "displayOptions")]
+    pub options: Option<DisplayOptions>,
+    #[serde(default)]
+    pub cursor: Option<String>,
+}
+
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
-pub struct AssetSortingRequest {
+pub struct AssetSorting {
     pub sort_by: AssetSortBy,
     pub sort_direction: Option<AssetSortDirection>,
 }

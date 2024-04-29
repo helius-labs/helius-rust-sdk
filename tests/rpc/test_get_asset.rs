@@ -174,7 +174,7 @@ async fn test_get_asset_success() {
         rpc_client,
     };
 
-    let request: GetAssetRequest = GetAssetRequest {
+    let request: GetAsset = GetAsset {
         id: "JE9mLqmTRZnUYoMJofSmZp8nZT4pzgARtAJS8crtgVWV".to_string(),
         display_options: Some(GetAssetOptions {
             show_unverified_collections: true,
@@ -229,7 +229,7 @@ async fn test_get_asset_failure() {
         rpc_client,
     };
 
-    let request: GetAssetRequest = GetAssetRequest {
+    let request: GetAsset = GetAsset {
         id: "F9Lw3ki3hJ7PF9HQXsBzoY8GyE6sPoEZZdXJBsTTD2rk".to_string(),
         display_options: Some(GetAssetOptions {
             show_collection_metadata: true,

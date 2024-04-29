@@ -2,8 +2,8 @@ use helius_sdk::config::Config;
 use helius_sdk::error::Result;
 use helius_sdk::rpc_client::RpcClient;
 use helius_sdk::types::{
-    ApiResponse, Asset, AssetList, Attribute, Authorities, Cluster, Compression, Content, Creator, File,
-    GetAssetsByAuthority, Group, HeliusEndpoints, Interface, Links, Metadata, Ownership, OwnershipModel, ResponseType,
+    ApiResponse, Asset, AssetList, AssetsByAuthorityRequest, Attribute, Authorities, Cluster, Compression, Content,
+    Creator, File, Group, HeliusEndpoints, Interface, Links, Metadata, Ownership, OwnershipModel, ResponseType,
     Royalty, RoyaltyModel, Scope, Supply,
 };
 use helius_sdk::Helius;
@@ -13,7 +13,7 @@ use reqwest::Client;
 use std::sync::Arc;
 
 #[tokio::test]
-async fn test_get_assets_by_authority_success() {
+async fn test_get_assets_by_creator_success() {
     let mut server: Server = Server::new_with_opts_async(mockito::ServerOpts::default()).await;
     let url: String = server.url();
 
@@ -231,14 +231,14 @@ async fn test_get_assets_by_authority_success() {
         rpc_client,
     };
 
-    let request: GetAssetsByAuthority = GetAssetsByAuthority {
-        authority_address: "2RtGg6fsFiiF1EQzHqbd66AhW7R5bWeQGpTbv2UMkCdW".to_string(),
+    let request: GetAssetsByCreator = GetAssetsByCreator {
+        creator_address: "2RtGg6fsFiiF1EQzHqbd66AhW7R5bWeQGpTbv2UMkCdW".to_string(),
         page: 1,
         limit: Some(1),
         ..Default::default()
     };
 
-    let response: Result<AssetList> = helius.rpc().get_assets_by_authority(request).await;
+    let response: Result<AssetList> = helius.rpc().get_assets_by_creator(request).await;
     assert!(response.is_ok(), "The API call failed: {:?}", response.err());
 
     let api_response: AssetList = response.unwrap();
@@ -247,7 +247,7 @@ async fn test_get_assets_by_authority_success() {
 }
 
 #[tokio::test]
-async fn test_get_assets_by_authority_failure() {
+async fn test_get_assets_by_creator_failure() {
     let mut server: Server = Server::new_with_opts_async(mockito::ServerOpts::default()).await;
     let url: String = server.url();
 
@@ -276,12 +276,12 @@ async fn test_get_assets_by_authority_failure() {
         rpc_client,
     };
 
-    let request: GetAssetsByAuthority = GetAssetsByAuthority {
-        authority_address: "2RtGg6fsFiiF1EQzHqbd66AhW7R5bWeQGpTbv2UMkCdW".to_string(),
+    let request: GetAssetsByCreator = GetAssetsByCreator {
+        creator_address: "2RtGg6fsFiiF1EQzHqbd66AhW7R5bWeQGpTbv2UMkCdW".to_string(),
         page: 1,
         ..Default::default()
     };
 
-    let response: Result<AssetList> = helius.rpc().get_assets_by_authority(request).await;
+    let response: Result<AssetList> = helius.rpc().get_assets_by_creator(request).await;
     assert!(response.is_err(), "Expected an error due to server failure");
 }
