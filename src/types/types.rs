@@ -2,7 +2,7 @@ use super::enums::{
     AssetSortBy, AssetSortDirection, Context, Interface, OwnershipModel, RoyaltyModel, Scope, UseMethod,
 };
 use crate::types::{DisplayOptions, GetAssetOptions};
-use chrono::{DateTime, Utc};
+// use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -74,6 +74,8 @@ pub struct AssetsByOwnerRequest {
     pub display_options: Option<DisplayOptions>,
     #[serde(rename = "sortBy")]
     pub sort_by: Option<AssetSortingRequest>,
+    #[serde(default)]
+    pub cursor: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Default, Debug)]
@@ -88,6 +90,8 @@ pub struct AssetsByAuthorityRequest {
     pub display_options: Option<DisplayOptions>,
     #[serde(rename = "sortBy")]
     pub sort_by: Option<AssetSortingRequest>,
+    #[serde(default)]
+    pub cursor: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Default)]
@@ -116,17 +120,35 @@ pub struct ApiResponse {
 pub enum ResponseType {
     #[default]
     DefaultResponse, // This is a placeholder for the default response type. TODO: Replace this an appropriate type
-    GetAssetResponseList(GetAssetResponseList),
-    GetAssetResponseForAsset(GetAssetResponseForAsset),
+    GetAssetResponseList(AssetList),
+    GetAssetResponseForAsset(Asset),
     Other(Value),
 }
 
 #[derive(Serialize, Deserialize, Debug, Default)]
-pub struct GetAssetResponseList {
-    pub total: Option<i32>,
-    pub limit: Option<i32>,
-    pub page: Option<i32>,
-    pub items: Option<Vec<GetAssetResponse>>,
+pub struct AssetList {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub grand_total: Option<u64>,
+    pub total: u32,
+    pub limit: u32,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub page: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub before: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub after: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cursor: Option<String>,
+    pub items: Vec<Asset>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub errors: Option<Vec<AssetError>>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Default)]
+#[serde(default)]
+pub struct AssetError {
+    pub id: String,
+    pub error: String,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -147,7 +169,7 @@ pub struct GetAssetResponse {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-pub struct GetAssetResponseForAsset {
+pub struct Asset {
     pub interface: Interface,
     pub id: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -165,6 +187,7 @@ pub struct GetAssetResponseForAsset {
     pub ownership: Ownership,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub uses: Option<Uses>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub supply: Option<Supply>,
     pub mutable: bool,
     pub burnt: bool,
@@ -476,7 +499,7 @@ pub struct Uses {
 #[serde(rename_all = "camelCase")]
 pub struct Supply {
     pub print_max_supply: Option<u64>,
-    pub print_current_supply: u64,
+    pub print_current_supply: Option<u64>,
     pub edition_nonce: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub edition_number: Option<u64>,

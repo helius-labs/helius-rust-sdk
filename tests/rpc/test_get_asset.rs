@@ -8,7 +8,6 @@ use helius_sdk::types::*;
 
 use mockito::{self, Server};
 use reqwest::Client;
-use serde_json::Value::Object;
 
 #[tokio::test]
 async fn test_get_asset_success() {
@@ -17,7 +16,7 @@ async fn test_get_asset_success() {
 
     let mock_response: ApiResponse = ApiResponse {
         jsonrpc: "2.0".to_string(),
-        result: ResponseType::GetAssetResponseForAsset(GetAssetResponseForAsset {
+        result: ResponseType::GetAssetResponseForAsset(Asset {
                 interface: Interface::MplCoreAsset,
                 id: "JE9mLqmTRZnUYoMJofSmZp8nZT4pzgARtAJS8crtgVWV".to_string(),
                 content: Some(
@@ -183,13 +182,13 @@ async fn test_get_asset_success() {
         }),
     };
 
-    let response: Result<Option<GetAssetResponseForAsset>, HeliusError> = helius.rpc().get_asset(request).await;
+    let response: Result<Option<Asset>, HeliusError> = helius.rpc().get_asset(request).await;
     assert!(response.is_ok(), "API call failed with error: {:?}", response.err());
 
-    let asset_response: Option<GetAssetResponseForAsset> = response.unwrap();
+    let asset_response: Option<Asset> = response.unwrap();
     assert!(asset_response.is_some(), "No asset returned when one was expected");
 
-    let asset: GetAssetResponseForAsset = asset_response.unwrap();
+    let asset: Asset = asset_response.unwrap();
     assert_eq!(
         asset.id, "JE9mLqmTRZnUYoMJofSmZp8nZT4pzgARtAJS8crtgVWV",
         "Asset ID does not match expected value"
@@ -238,6 +237,6 @@ async fn test_get_asset_failure() {
         }),
     };
 
-    let response: Result<Option<GetAssetResponseForAsset>, HeliusError> = helius.rpc().get_asset(request).await;
+    let response: Result<Option<Asset>, HeliusError> = helius.rpc().get_asset(request).await;
     assert!(response.is_err(), "Expected an error but got success");
 }

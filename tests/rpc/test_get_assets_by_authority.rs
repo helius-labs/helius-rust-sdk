@@ -2,8 +2,9 @@ use helius_sdk::config::Config;
 use helius_sdk::error::Result;
 use helius_sdk::rpc_client::RpcClient;
 use helius_sdk::types::{
-    ApiResponse, AssetsByAuthorityRequest, Attribute, Cluster, Content, File, GetAssetResponse, GetAssetResponseList,
-    HeliusEndpoints, Interface, Metadata, Ownership, OwnershipModel, ResponseType,
+    ApiResponse, Asset, AssetList, AssetsByAuthorityRequest, Attribute, Authorities, Cluster, Compression, Content,
+    Creator, File, Group, HeliusEndpoints, Interface, Links, Metadata, Ownership, OwnershipModel, ResponseType,
+    Royalty, RoyaltyModel, Scope, Supply,
 };
 use helius_sdk::Helius;
 
@@ -18,52 +19,191 @@ async fn test_get_assets_by_authority_success() {
 
     let mock_response: ApiResponse = ApiResponse {
         jsonrpc: "2.0".to_string(),
-        result: ResponseType::GetAssetResponseList(GetAssetResponseList {
-            total: Some(1),
-            limit: Some(10),
-            page: Some(1),
-            items: Some(vec![GetAssetResponse {
-                interface: Interface::V1NFT,
-                id: "123".to_string(),
-                content: Some(Content {
-                    schema: "http://example.com/schema".to_string(),
-                    json_uri: "http://example.com/json".to_string(),
-                    files: Some(vec![File {
-                        uri: Some("http://example.com/file1".to_string()),
-                        mime: Some("image/png".to_string()),
-                        cdn_uri: None,
-                        quality: None,
-                        contexts: None,
-                    }]),
+        result: ResponseType::GetAssetResponseList(AssetList {
+    grand_total: None,
+    total: 1,
+    limit: 1,
+    page: Some(
+        1,
+    ),
+    before: None,
+    after: None,
+    cursor: None,
+    items: vec![
+        Asset {
+            interface: Interface::ProgrammableNFT,
+            id: "JEGruwYE13mhX2wi2MGrPmeLiVyZtbBptmVy9vG3pXRC".to_string(),
+            content: Some(
+                Content {
+                    schema: "https://schema.metaplex.com/nft1.0.json".to_string(),
+                    json_uri: "https://madlads.s3.us-west-2.amazonaws.com/json/6867.json".to_string(),
+                    files: Some(
+                        vec![
+                            File {
+                                uri: Some(
+                                    "https://madlads.s3.us-west-2.amazonaws.com/images/6867.png".to_string(),
+                                ),
+                                mime: Some(
+                                    "image/png".to_string(),
+                                ),
+                                cdn_uri: Some(
+                                    "https://cdn.helius-rpc.com/cdn-cgi/image//https://madlads.s3.us-west-2.amazonaws.com/images/6867.png".to_string(),
+                                ),
+                                quality: None,
+                                contexts: None,
+                            },
+                            File {
+                                uri: Some(
+                                    "https://arweave.net/qJ5B6fx5hEt4P7XbicbJQRyTcbyLaV-OQNA1KjzdqOQ/6867.png".to_string(),
+                                ),
+                                mime: Some(
+                                    "image/png".to_string(),
+                                ),
+                                cdn_uri: Some(
+                                    "https://cdn.helius-rpc.com/cdn-cgi/image//https://arweave.net/qJ5B6fx5hEt4P7XbicbJQRyTcbyLaV-OQNA1KjzdqOQ/6867.png".to_string(),
+                                ),
+                                quality: None,
+                                contexts: None,
+                            },
+                        ],
+                    ),
                     metadata: Metadata {
-                        attributes: Some(vec![Attribute {
-                            value: "blue".to_string(),
-                            trait_type: "color".to_string(),
-                        }]),
-                        description: Some("A description".to_string()),
-                        name: "Item1".to_string(),
-                        symbol: "SYM".to_string(),
+                        attributes: Some(
+                            vec![
+                                Attribute {
+                                    value: "Male".to_string(),
+                                    trait_type: "Gender".to_string(),
+                                },
+                                Attribute {
+                                    value: "Galaxy".to_string(),
+                                    trait_type: "Type".to_string(),
+                                },
+                                Attribute {
+                                    value: "Galaxy".to_string(),
+                                    trait_type: "Expression".to_string(),
+                                },
+                                Attribute {
+                                    value: "Galaxy".to_string(),
+                                    trait_type: "Eyes".to_string(),
+                                },
+                                Attribute {
+                                    value: "Warlock Robe".to_string(),
+                                    trait_type: "Clothing".to_string(),
+                                },
+                                Attribute {
+                                    value: "Purple".to_string(),
+                                    trait_type: "Background".to_string(),
+                                },
+                            ],
+                        ),
+                        description: Some(
+                            "Fock it.".to_string(),
+                        ),
+                        name: "Mad Lads #6867".to_string(),
+                        symbol: "MAD".to_string(),
                     },
-                    links: None,
-                }),
-                authorities: None,
-                compression: None,
-                grouping: None,
-                royalty: None,
-                ownership: Ownership {
-                    frozen: false,
-                    delegated: false,
-                    delegate: None,
-                    ownership_model: OwnershipModel::Single,
-                    owner: "OwnerAddress1".to_string(),
+                    links: Some(
+                        Links {
+                            external_url: Some(
+                                "https://madlads.com".to_string(),
+                            ),
+                            image: Some(
+                                "https://madlads.s3.us-west-2.amazonaws.com/images/6867.png".to_string(),
+                            ),
+                            animation_url: None,
+                        },
+                    ),
                 },
-                creators: None,
-                uses: None,
-                supply: None,
-                mutable: false,
-                burnt: false,
-            }]),
-        }),
+            ),
+            authorities: Some(
+                vec![
+                    Authorities {
+                        address: "2RtGg6fsFiiF1EQzHqbd66AhW7R5bWeQGpTbv2UMkCdW".to_string(),
+                        scopes: vec![
+                            Scope::Full,
+                        ],
+                    },
+                ],
+            ),
+            compression: Some(
+                Compression {
+                    eligible: false,
+                    compressed: false,
+                    data_hash: "".to_string(),
+                    creator_hash: "".to_string(),
+                    asset_hash: "".to_string(),
+                    tree: "".to_string(),
+                    seq: 0,
+                    leaf_id: 0,
+                },
+            ),
+            grouping: Some(
+                vec![
+                    Group {
+                        group_key: "collection".to_string(),
+                        group_value: Some(
+                            "J1S9H3QjnRtBbbuD4HjPV6RpRhwuk4zKbxsnCHuTgh9w".to_string(),
+                        ),
+                        verified: None,
+                        collection_metadata: None,
+                    },
+                ],
+            ),
+            royalty: Some(
+                Royalty {
+                    royalty_model: RoyaltyModel::Creators,
+                    target: None,
+                    percent: 0.042,
+                    basis_points: 420,
+                    primary_sale_happened: true,
+                    locked: false,
+                },
+            ),
+            creators: Some(
+                vec![
+                    Creator {
+                        address: "5XvhfmRjwXkGp3jHGmaKpqeerNYjkuZZBYLVQYdeVcRv".to_string(),
+                        share: 0,
+                        verified: true,
+                    },
+                    Creator {
+                        address: "2RtGg6fsFiiF1EQzHqbd66AhW7R5bWeQGpTbv2UMkCdW".to_string(),
+                        share: 100,
+                        verified: true,
+                    },
+                ],
+            ),
+            ownership: Ownership {
+                frozen: true,
+                delegated: true,
+                delegate: Some(
+                    "FARqKAafAbgT25QcgiX5d1g6xpadgG7xymu5N6gSmp4x".to_string(),
+                ),
+                ownership_model: OwnershipModel::Single,
+                owner: "3F21SJs4FMpsakrxmd8GjgfQZG6BN6MVsvXcm5Yc6Jcf".to_string(),
+            },
+            uses: None,
+            supply: Some(
+                Supply {
+                    print_max_supply: None,
+                    print_current_supply: None,
+                    edition_nonce: None,
+                    edition_number: None,
+                    master_edition_mint: None,
+                },
+            ),
+            mutable: true,
+            burnt: false,
+            mint_extensions: None,
+            token_info: None,
+            group_definition: None,
+            plugins: None,
+            unknown_plugins: None,
+            mpl_core_info: None,
+        },
+    ],
+    errors: None,
+}),
         id: "1".to_string(),
     };
 
@@ -92,19 +232,18 @@ async fn test_get_assets_by_authority_success() {
     };
 
     let request: AssetsByAuthorityRequest = AssetsByAuthorityRequest {
-        authority_address: "GNPwr9fk9RJbfy9nSKbNiz5NPfc69KVwnizverx6fNze".to_string(),
+        authority_address: "2RtGg6fsFiiF1EQzHqbd66AhW7R5bWeQGpTbv2UMkCdW".to_string(),
         page: 1,
         limit: Some(1),
         ..Default::default()
     };
 
-    let response: Result<GetAssetResponseList> = helius.rpc().get_assets_by_authority(request).await;
+    let response: Result<AssetList> = helius.rpc().get_assets_by_authority(request).await;
     assert!(response.is_ok(), "The API call failed: {:?}", response.err());
 
-    let api_response: GetAssetResponseList = response.unwrap();
-    assert_eq!(api_response.total, Some(1), "Total does not match");
-    assert!(api_response.items.is_some(), "Items are missing");
-    assert_eq!(api_response.items.unwrap().len(), 1, "Items count does not match");
+    let api_response: AssetList = response.unwrap();
+    assert_eq!(api_response.total, 1, "Total does not match");
+    assert_eq!(api_response.items.len(), 1, "Items count does not match");
 }
 
 #[tokio::test]
@@ -138,11 +277,11 @@ async fn test_get_assets_by_authority_failure() {
     };
 
     let request: AssetsByAuthorityRequest = AssetsByAuthorityRequest {
-        authority_address: "GNPwr9fk9RJbfy9nSKbNiz5NPfc69KVwnizverx6fNze".to_string(),
+        authority_address: "2RtGg6fsFiiF1EQzHqbd66AhW7R5bWeQGpTbv2UMkCdW".to_string(),
         page: 1,
         ..Default::default()
     };
 
-    let response: Result<GetAssetResponseList> = helius.rpc().get_assets_by_authority(request).await;
+    let response: Result<AssetList> = helius.rpc().get_assets_by_authority(request).await;
     assert!(response.is_err(), "Expected an error due to server failure");
 }

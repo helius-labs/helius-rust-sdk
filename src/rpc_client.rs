@@ -5,9 +5,7 @@ use crate::config::Config;
 use crate::error::Result;
 use crate::request_handler::RequestHandler;
 use crate::types::types::{RpcRequest, RpcResponse};
-use crate::types::{
-    AssetsByAuthorityRequest, AssetsByOwnerRequest, GetAssetRequest, GetAssetResponseForAsset, GetAssetResponseList,
-};
+use crate::types::{Asset, AssetList, AssetsByAuthorityRequest, AssetsByOwnerRequest, GetAssetRequest};
 
 use reqwest::{Client, Method, Url};
 use serde::de::DeserializeOwned;
@@ -46,17 +44,17 @@ impl RpcClient {
     }
 
     /// Gets an asset by its ID
-    pub async fn get_asset(&self, request: GetAssetRequest) -> Result<Option<GetAssetResponseForAsset>> {
+    pub async fn get_asset(&self, request: GetAssetRequest) -> Result<Option<Asset>> {
         self.post_rpc_request("getAsset".to_string(), request).await
     }
 
     /// Gets a list of assets owned by a given address
-    pub async fn get_assets_by_owner(&self, request: AssetsByOwnerRequest) -> Result<GetAssetResponseList> {
+    pub async fn get_assets_by_owner(&self, request: AssetsByOwnerRequest) -> Result<AssetList> {
         self.post_rpc_request("getAssetsByOwner".to_string(), request).await
     }
 
     /// Gets a list of assets of a given authority
-    pub async fn get_assets_by_authority(&self, request: AssetsByAuthorityRequest) -> Result<GetAssetResponseList> {
+    pub async fn get_assets_by_authority(&self, request: AssetsByAuthorityRequest) -> Result<AssetList> {
         self.post_rpc_request("getAssetsByAuthority".to_string(), request).await
     }
 }
