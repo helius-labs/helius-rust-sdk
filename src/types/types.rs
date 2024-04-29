@@ -78,7 +78,7 @@ pub struct AssetsByOwnerRequest {
     pub sort_by: Option<AssetSortingRequest>,
 }
 
-#[derive(Serialize, Deserialize, Default)]
+#[derive(Serialize, Deserialize, Default, Debug)]
 pub struct AssetsByAuthorityRequest {
     #[serde(rename = "authorityAddress")]
     pub authority_address: String,
@@ -119,7 +119,7 @@ pub struct AssetSortingRequest {
 pub struct ApiResponse {
     pub jsonrpc: String,
     pub result: ResponseType,
-    pub id: u8,
+    pub id: String,
 }
 
 #[derive(Serialize, Deserialize, Debug, Default)]

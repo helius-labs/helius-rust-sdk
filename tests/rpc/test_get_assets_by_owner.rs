@@ -64,7 +64,7 @@ async fn test_get_assets_by_owner_success() {
                 burnt: false,
             }]),
         }),
-        id: 1,
+        id: "1".to_string(),
     };
 
     server

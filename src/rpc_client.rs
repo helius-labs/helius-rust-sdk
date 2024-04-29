@@ -5,7 +5,9 @@ use crate::config::Config;
 use crate::error::Result;
 use crate::request_handler::RequestHandler;
 use crate::types::types::{ApiResponse, RpcRequest, RpcResponse};
-use crate::types::{AssetsByAuthorityRequest, AssetsByOwnerRequest, GetAssetRequest, GetAssetResponseForAsset};
+use crate::types::{
+    AssetsByAuthorityRequest, AssetsByOwnerRequest, GetAssetRequest, GetAssetResponseForAsset, GetAssetResponseList,
+};
 
 use reqwest::{Client, Method, Url};
 use serde::de::DeserializeOwned;
@@ -30,17 +32,17 @@ impl RpcClient {
         R: Debug + Serialize + Debug + Send + Sync,
         T: Debug + DeserializeOwned + Default,
     {
-        let base_url: String = format!("{}?api-key={}", self.config.endpoints.rpc, self.config.api_key);
+        let base_url: String = format!("{}/?api-key={}", self.config.endpoints.rpc, self.config.api_key);
         let url: Url = Url::parse(&base_url).expect("Failed to parse URL");
 
-        //print!("{}", base_url);
-        //print!("{}", url);
+        println!("{}", base_url);
+        println!("{}", url);
 
         let rpc_request: RpcRequest<R> = RpcRequest::new(method, request);
-        //println!("Serialized Request: {:?}", serde_json::to_string(&rpc_request));
+        println!("Serialized Request: {:?}", serde_json::to_string(&rpc_request));
 
         let rpc_response: RpcResponse<T> = self.handler.send(Method::POST, url, Some(&rpc_request)).await?;
-        //print!("RPCRESPONSE {:?}", rpc_response.result);
+        println!("RPCRESPONSE {:?}", rpc_response.result);
         Ok(rpc_response.result)
     }
 
@@ -65,17 +67,7 @@ impl RpcClient {
     }
 
     /// Gets a list of assets of a given authority
-    pub async fn get_assets_by_authority(&self, request: AssetsByAuthorityRequest) -> Result<ApiResponse> {
-        let url: String = format!("{}?api-key={}", self.config.endpoints.rpc, self.config.api_key);
-        let url: Url = Url::parse(&url).expect("Failed to parse URL");
-
-        let request_body: Value = json!({
-            "jsonrpc": "2.0",
-            "id": 1,
-            "method": "getAssetsByAuthority",
-            "params": request
-        });
-
-        self.handler.send(Method::POST, url, Some(&request_body)).await
+    pub async fn get_assets_by_authority(&self, request: AssetsByAuthorityRequest) -> Result<GetAssetResponseList> {
+        self.post_rpc_request("getAssetsByAuthority".to_string(), request).await
     }
 }

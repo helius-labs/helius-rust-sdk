@@ -34,7 +34,7 @@ impl RequestHandler {
 
         let response: Response = self.send_request(request_builder).await?;
 
-        //print!("RESPONSE {:?}", response);
+        print!("RESPONSE {:?}", response);
 
         self.handle_response(response).await
     }
@@ -45,9 +45,9 @@ impl RequestHandler {
         let path: String = response.url().path().to_string();
         let body_text: String = response.text().await.unwrap_or_default();
 
-        // println!("STATUS {}", status);
-        // println!("PATH {}", path);
-        // println!("BODY {}", body_text);
+        println!("STATUS {}", status);
+        println!("PATH {}", path);
+        println!("BODY {}", body_text);
 
         if status.is_success() {
             match serde_json::from_str::<T>(&body_text) {
