@@ -4,6 +4,8 @@ mod utils {
 
 mod rpc {
     mod test_get_asset;
+    mod test_get_asset_batch;
     mod test_get_assets_by_authority;
+    mod test_get_assets_by_creator;
     mod test_get_assets_by_owner;
 }

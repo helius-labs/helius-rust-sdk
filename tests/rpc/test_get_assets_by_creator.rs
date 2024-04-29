@@ -2,14 +2,15 @@ use helius_sdk::config::Config;
 use helius_sdk::error::Result;
 use helius_sdk::rpc_client::RpcClient;
 use helius_sdk::types::{
-    ApiResponse, Asset, AssetList, AssetsByAuthorityRequest, Attribute, Authorities, Cluster, Compression, Content,
-    Creator, File, Group, HeliusEndpoints, Interface, Links, Metadata, Ownership, OwnershipModel, ResponseType,
-    Royalty, RoyaltyModel, Scope, Supply,
+    ApiResponse, Asset, AssetList, Attribute, Authorities, Cluster, Compression, Content, Creator, File,
+    GetAssetsByCreator, Group, HeliusEndpoints, Interface, Links, Metadata, Ownership, OwnershipModel, Royalty,
+    RoyaltyModel, Scope, Supply,
 };
 use helius_sdk::Helius;
 
 use mockito::{self, Server};
 use reqwest::Client;
+use serde_json::Value;
 use std::sync::Arc;
 
 #[tokio::test]
@@ -17,9 +18,9 @@ async fn test_get_assets_by_creator_success() {
     let mut server: Server = Server::new_with_opts_async(mockito::ServerOpts::default()).await;
     let url: String = server.url();
 
-    let mock_response: ApiResponse = ApiResponse {
+    let mock_response: ApiResponse<AssetList> = ApiResponse {
         jsonrpc: "2.0".to_string(),
-        result: ResponseType::GetAssetResponseList(AssetList {
+        result: AssetList {
     grand_total: None,
     total: 1,
     limit: 1,
@@ -71,27 +72,27 @@ async fn test_get_assets_by_creator_success() {
                         attributes: Some(
                             vec![
                                 Attribute {
-                                    value: "Male".to_string(),
+                                    value: Value::String("Male".to_string()),
                                     trait_type: "Gender".to_string(),
                                 },
                                 Attribute {
-                                    value: "Galaxy".to_string(),
+                                    value: Value::String("Galaxy".to_string()),
                                     trait_type: "Type".to_string(),
                                 },
                                 Attribute {
-                                    value: "Galaxy".to_string(),
+                                    value: Value::String("Galaxy".to_string()),
                                     trait_type: "Expression".to_string(),
                                 },
                                 Attribute {
-                                    value: "Galaxy".to_string(),
+                                    value: Value::String("Galaxy".to_string()),
                                     trait_type: "Eyes".to_string(),
                                 },
                                 Attribute {
-                                    value: "Warlock Robe".to_string(),
+                                    value: Value::String("Warlock Robe".to_string()),
                                     trait_type: "Clothing".to_string(),
                                 },
                                 Attribute {
-                                    value: "Purple".to_string(),
+                                    value: Value::String("Purple".to_string()),
                                     trait_type: "Background".to_string(),
                                 },
                             ],
@@ -203,7 +204,7 @@ async fn test_get_assets_by_creator_success() {
         },
     ],
     errors: None,
-}),
+},
         id: "1".to_string(),
     };
 
@@ -233,7 +234,7 @@ async fn test_get_assets_by_creator_success() {
 
     let request: GetAssetsByCreator = GetAssetsByCreator {
         creator_address: "2RtGg6fsFiiF1EQzHqbd66AhW7R5bWeQGpTbv2UMkCdW".to_string(),
-        page: 1,
+        page: Some(1),
         limit: Some(1),
         ..Default::default()
     };
@@ -278,7 +279,7 @@ async fn test_get_assets_by_creator_failure() {
 
     let request: GetAssetsByCreator = GetAssetsByCreator {
         creator_address: "2RtGg6fsFiiF1EQzHqbd66AhW7R5bWeQGpTbv2UMkCdW".to_string(),
-        page: 1,
+        page: Some(1),
         ..Default::default()
     };
 

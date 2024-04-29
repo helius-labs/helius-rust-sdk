@@ -8,15 +8,16 @@ use helius_sdk::types::*;
 
 use mockito::{self, Server};
 use reqwest::Client;
+use serde_json::Value;
 
 #[tokio::test]
 async fn test_get_asset_success() {
     let mut server: Server = Server::new_with_opts_async(mockito::ServerOpts::default()).await;
     let url: String = server.url();
 
-    let mock_response: ApiResponse = ApiResponse {
+    let mock_response: ApiResponse<Option<Asset>> = ApiResponse {
         jsonrpc: "2.0".to_string(),
-        result: ResponseType::GetAssetResponseForAsset(Asset {
+        result: Some(Asset {
                 interface: Interface::MplCoreAsset,
                 id: "JE9mLqmTRZnUYoMJofSmZp8nZT4pzgARtAJS8crtgVWV".to_string(),
                 content: Some(
@@ -44,15 +45,15 @@ async fn test_get_asset_success() {
                             attributes: Some(
                                 vec![
                                     Attribute {
-                                        value: "Common".to_string(),
+                                        value: Value::String("Common".to_string()),
                                         trait_type: "rarity".to_string(),
                                     },
                                     Attribute {
-                                        value: "false".to_string(),
+                                        value: Value::String("false".to_string()),
                                         trait_type: "used".to_string(),
                                     },
                                     Attribute {
-                                        value: "false".to_string(),
+                                        value: Value::String("false".to_string()),
                                         trait_type: "signed".to_string(),
                                     },
                                 ],

@@ -125,9 +125,9 @@ pub struct AssetSorting {
 }
 
 #[derive(Serialize, Deserialize, Debug, Default)]
-pub struct ApiResponse {
+pub struct ApiResponse<T> {
     pub jsonrpc: String,
-    pub result: ResponseType,
+    pub result: T,
     pub id: String,
 }
 
@@ -182,6 +182,13 @@ pub struct GetAssetResponse {
     pub supply: Option<Supply>,
     pub mutable: bool,
     pub burnt: bool,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct GetAssetBatch {
+    pub ids: Vec<String>,
+    #[serde(rename = "displayOptions")]
+    pub display_options: Option<GetAssetOptions>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -429,7 +436,7 @@ pub struct Metadata {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Attribute {
-    pub value: String,
+    pub value: Value,
     pub trait_type: String,
 }
 

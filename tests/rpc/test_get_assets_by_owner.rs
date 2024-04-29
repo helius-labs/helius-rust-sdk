@@ -3,13 +3,14 @@ use helius_sdk::error::HeliusError;
 use helius_sdk::rpc_client::RpcClient;
 use helius_sdk::types::{
     ApiResponse, Asset, AssetList, Attribute, Authorities, Cluster, Compression, Content, Creator, File,
-    GetAssetsByOwner, Group, HeliusEndpoints, Interface, Links, Metadata, Ownership, OwnershipModel, ResponseType,
-    Royalty, RoyaltyModel, Scope, Supply,
+    GetAssetsByOwner, Group, HeliusEndpoints, Interface, Links, Metadata, Ownership, OwnershipModel, Royalty,
+    RoyaltyModel, Scope, Supply,
 };
 use helius_sdk::Helius;
 
 use mockito::{self, Server};
 use reqwest::Client;
+use serde_json::Value;
 use std::sync::Arc;
 
 #[tokio::test]
@@ -17,9 +18,9 @@ async fn test_get_assets_by_owner_success() {
     let mut server: Server = Server::new_with_opts_async(mockito::ServerOpts::default()).await;
     let url: String = server.url();
 
-    let mock_response: ApiResponse = ApiResponse {
+    let mock_response: ApiResponse<AssetList> = ApiResponse {
         jsonrpc: "2.0".to_string(),
-        result: ResponseType::GetAssetResponseList(AssetList {
+        result: AssetList {
             grand_total: None,
             total: 1,
             limit: 1,
@@ -46,19 +47,19 @@ async fn test_get_assets_by_owner_success() {
                     metadata: Metadata {
                         attributes: Some(vec![
                             Attribute {
-                                value: "https://3000jup.com".to_string(),
+                                value: Value::String("https://3000jup.com".to_string()),
                                 trait_type: "Website".to_string(),
                             },
                             Attribute {
-                                value: "True".to_string(),
+                                value: Value::String("True".to_string()),
                                 trait_type: "Verified".to_string(),
                             },
                             Attribute {
-                                value: "3,000+ JUP ($1800+)".to_string(),
+                                value: Value::String("3,000+ JUP ($1800+)".to_string()),
                                 trait_type: "Amount".to_string(),
                             },
                             Attribute {
-                                value: "35 minutes!".to_string(),
+                                value: Value::String("35 minutes!".to_string()),
                                 trait_type: "Time Left".to_string(),
                             },
                         ]),
@@ -133,7 +134,7 @@ async fn test_get_assets_by_owner_success() {
                 mpl_core_info: None,
             }],
             errors: None,
-        }),
+        },
         id: "1".to_string(),
     };
 
