@@ -4,7 +4,7 @@ use std::sync::Arc;
 use crate::config::Config;
 use crate::error::Result;
 use crate::request_handler::RequestHandler;
-use crate::types::types::{ApiResponse, RpcRequest, RpcResponse};
+use crate::types::types::{RpcRequest, RpcResponse};
 use crate::types::{
     AssetsByAuthorityRequest, AssetsByOwnerRequest, GetAssetRequest, GetAssetResponseForAsset, GetAssetResponseList,
 };
@@ -12,7 +12,6 @@ use crate::types::{
 use reqwest::{Client, Method, Url};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
-use serde_json::{json, Value};
 
 pub struct RpcClient {
     pub handler: RequestHandler,
@@ -52,18 +51,8 @@ impl RpcClient {
     }
 
     /// Gets a list of assets owned by a given address
-    pub async fn get_assets_by_owner(&self, request: AssetsByOwnerRequest) -> Result<ApiResponse> {
-        let base_url: String = format!("{}?api-key={}", self.config.endpoints.rpc, self.config.api_key);
-        let url: Url = Url::parse(&base_url).expect("Failed to parse URL");
-
-        let request_body: Value = json!({
-            "jsonrpc": "2.0",
-            "id": 1,
-            "method": "getAssetsByOwner",
-            "params": request
-        });
-
-        self.handler.send(Method::POST, url, Some(&request_body)).await
+    pub async fn get_assets_by_owner(&self, request: AssetsByOwnerRequest) -> Result<GetAssetResponseList> {
+        self.post_rpc_request("getAssetsByOwner".to_string(), request).await
     }
 
     /// Gets a list of assets of a given authority

@@ -101,17 +101,13 @@ async fn test_get_assets_by_owner_success() {
         sort_by: None,
     };
 
-    let response: Result<ApiResponse, HeliusError> = helius.rpc().get_assets_by_owner(request).await;
+    let response: Result<GetAssetResponseList, HeliusError> = helius.rpc().get_assets_by_owner(request).await;
     assert!(response.is_ok(), "The API call failed: {:?}", response.err());
 
-    let api_response: ApiResponse = response.unwrap();
-    if let ResponseType::GetAssetResponseList(list) = api_response.result {
-        assert_eq!(list.total, Some(1), "Total does not match");
-        assert!(list.items.is_some(), "Items are missing");
-        assert_eq!(list.items.unwrap().len(), 1, "Items count does not match");
-    } else {
-        panic!("Expected GetAssetResponseList");
-    }
+    let api_response: GetAssetResponseList = response.unwrap();
+    assert_eq!(api_response.total, Some(1), "Total does not match");
+    assert!(api_response.items.is_some(), "Items are missing");
+    assert_eq!(api_response.items.unwrap().len(), 1, "Items count does not match");
 }
 
 #[tokio::test]
@@ -154,6 +150,6 @@ async fn test_get_assets_by_owner_failure() {
         sort_by: None,
     };
 
-    let response: Result<ApiResponse, HeliusError> = helius.rpc().get_assets_by_owner(request).await;
+    let response: Result<GetAssetResponseList, HeliusError> = helius.rpc().get_assets_by_owner(request).await;
     assert!(response.is_err(), "Expected an error due to server failure");
 }

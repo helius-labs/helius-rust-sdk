@@ -60,7 +60,7 @@ pub struct RpcResponse<T> {
     pub result: T,
 }
 
-#[derive(Serialize, Deserialize, Default)]
+#[derive(Serialize, Deserialize, Default, Debug)]
 pub struct AssetsByOwnerRequest {
     #[serde(rename = "ownerAddress")]
     pub owner_address: String,
