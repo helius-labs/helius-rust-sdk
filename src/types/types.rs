@@ -192,6 +192,20 @@ pub struct GetAssetBatch {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
+pub struct GetAssetProof {
+    pub id: String,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct AssetProof {
+    pub root: String,
+    pub proof: Vec<String>,
+    pub node_index: i32,
+    pub leaf: String,
+    pub tree_id: String,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
 pub struct Asset {
     pub interface: Interface,
     pub id: String,

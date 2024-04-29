@@ -6,7 +6,8 @@ use crate::error::Result;
 use crate::request_handler::RequestHandler;
 use crate::types::types::{RpcRequest, RpcResponse};
 use crate::types::{
-    Asset, AssetList, GetAsset, GetAssetBatch, GetAssetsByAuthority, GetAssetsByCreator, GetAssetsByOwner,
+    Asset, AssetList, AssetProof, GetAsset, GetAssetBatch, GetAssetProof, GetAssetsByAuthority, GetAssetsByCreator,
+    GetAssetsByOwner,
 };
 
 use reqwest::{Client, Method, Url};
@@ -53,6 +54,11 @@ impl RpcClient {
     /// Gets multiple assets by their ID
     pub async fn get_asset_batch(&self, request: GetAssetBatch) -> Result<Vec<Option<Asset>>> {
         self.post_rpc_request("getAssetBatch", request).await
+    }
+
+    /// Gets a merkle proof for a compressed asset by its ID
+    pub async fn get_asset_proof(&self, request: GetAssetProof) -> Result<Option<AssetProof>> {
+        self.post_rpc_request("getAssetProof", request).await
     }
 
     /// Gets a list of assets owned by a given address
