@@ -4,14 +4,11 @@ use helius_sdk::client::Helius;
 use helius_sdk::config::Config;
 use helius_sdk::error::HeliusError;
 use helius_sdk::rpc_client::RpcClient;
-use helius_sdk::types::{
-    ApiResponse, Attribute, Authorities, Cluster, Compression, Content, Creators, DisplayOptions, File,
-    GetAssetRequest, GetAssetResponseForAsset, Grouping, HeliusEndpoints, Interface, Links, Metadata, Ownership,
-    OwnershipModel, ResponseType, Royalty, RoyaltyModel, Scope, Supply,
-};
+use helius_sdk::types::*;
 
 use mockito::{self, Server};
 use reqwest::Client;
+use serde_json::Value::Object;
 
 #[tokio::test]
 async fn test_get_asset_success() {
@@ -21,112 +18,136 @@ async fn test_get_asset_success() {
     let mock_response: ApiResponse = ApiResponse {
         jsonrpc: "2.0".to_string(),
         result: ResponseType::GetAssetResponseForAsset(GetAssetResponseForAsset {
-            interface: Interface::ProgrammableNFT,
-            id: "F9Lw3ki3hJ7PF9HQXsBzoY8GyE6sPoEZZdXJBsTTD2rk".to_string(),
-            content: Some(Content {
-                schema: "https://schema.metaplex.com/nft1.0.json".to_string(),
-                json_uri: "https://madlads.s3.us-west-2.amazonaws.com/json/8420.json".to_string(),
-                files: Some(vec![File {
-                    uri: Some("https://madlads.s3.us-west-2.amazonaws.com/images/8420.png".to_string()),
-                    mime: Some("image/png".to_string()),
-                    cdn_uri: Some("https://cdn.helius-rpc.com/cdn-cgi/image//https://madlads.s3.us-west-2.amazonaws.com/images/8420.png".to_string()),
-                    quality: None,
-                    contexts: None,
-                }, File {
-                    uri: Some("https://arweave.net/qJ5B6fx5hEt4P7XbicbJQRyTcbyLaV-OQNA1KjzdqOQ/0.png".to_string()),
-                    mime: Some("image/png".to_string()),
-                    cdn_uri: Some("https://cdn.helius-rpc.com/cdn-cgi/image//https://arweave.net/qJ5B6fx5hEt4P7XbicbJQRyTcbyLaV-OQNA1KjzdqOQ/0.png".to_string()),
-                    quality: None,
-                    contexts: None,
-                }]),
-                metadata: Metadata {
-                    attributes: Some(vec![Attribute {
-                        value: "Male".to_string(),
-                        trait_type: "Gender".to_string(),
-                    }, Attribute {
-                        value: "King".to_string(),
-                        trait_type: "Type".to_string(),
-                    }, Attribute {
-                        value: "Royal".to_string(),
-                        trait_type: "Expression".to_string(),
-                    }, Attribute {
-                        value: "Mad Crown".to_string(),
-                        trait_type: "Hat".to_string(),
-                    }, Attribute {
-                        value: "Madness".to_string(),
-                        trait_type: "Eyes".to_string(),
-                    }, Attribute {
-                        value: "Mad Armor".to_string(),
-                        trait_type: "Clothing".to_string(),
-                    }, Attribute {
-                        value: "Royal Rug".to_string(),
-                        trait_type: "Background".to_string()
-                    }]),
-                    description: Some("Fock it.".to_string()),
-                    name: "Mad Lads #8420".to_string(),
-                    symbol: "MAD".to_string()
+                interface: Interface::MplCoreAsset,
+                id: "JE9mLqmTRZnUYoMJofSmZp8nZT4pzgARtAJS8crtgVWV".to_string(),
+                content: Some(
+                    Content {
+                        schema: "https://schema.metaplex.com/nft1.0.json".to_string(),
+                        json_uri: "https://arweave.net/q4vZtyCtru24QaHWAzFtPotd6BJR2bgKW5bVNxFLlAo".to_string(),
+                        files: Some(
+                            vec![
+                                File {
+                                    uri: Some(
+                                        "https://arweave.net/euLWELOqMcufuO38zxY8IDnaS1vMs9CwvFPshP6kb3o".to_string(),
+                                    ),
+                                    mime: Some(
+                                        "image/png".to_string(),
+                                    ),
+                                    cdn_uri: Some(
+                                        "https://cdn.helius-rpc.com/cdn-cgi/image//https://arweave.net/euLWELOqMcufuO38zxY8IDnaS1vMs9CwvFPshP6kb3o".to_string(),
+                                    ),
+                                    quality: None,
+                                    contexts: None,
+                                }
+                            ],
+                        ),
+                        metadata: Metadata {
+                            attributes: Some(
+                                vec![
+                                    Attribute {
+                                        value: "Common".to_string(),
+                                        trait_type: "rarity".to_string(),
+                                    },
+                                    Attribute {
+                                        value: "false".to_string(),
+                                        trait_type: "used".to_string(),
+                                    },
+                                    Attribute {
+                                        value: "false".to_string(),
+                                        trait_type: "signed".to_string(),
+                                    },
+                                ],
+                            ),
+                            description: Some(
+                                "Apt323 the 36 page Collectors Edition.".to_string(),
+                            ),
+                            name: "Apt323 Collectors Edition #72".to_string(),
+                            symbol: "".to_string(),
+                        },
+                        links: Some(
+                            Links {
+                                external_url: Some(
+                                    "https://dreader.app".to_string(),
+                                ),
+                                image: Some(
+                                    "https://arweave.net/euLWELOqMcufuO38zxY8IDnaS1vMs9CwvFPshP6kb3o".to_string(),
+                                ),
+                                animation_url: None,
+                            },
+                        ),
+                    },
+                ),
+                authorities: Some(
+                    vec![
+                        Authorities {
+                            address: "FXj8W4m33SgLB5ZAg35g8wsqFTvywc6fmJTXzoQQhrVf".to_string(),
+                            scopes: vec![
+                                Scope::Full,
+                            ],
+                        },
+                    ],
+                ),
+                compression: Some(
+                    Compression {
+                        eligible: false,
+                        compressed: false,
+                        data_hash: "".to_string(),
+                        creator_hash: "".to_string(),
+                        asset_hash: "".to_string(),
+                        tree: "".to_string(),
+                        seq: 0,
+                        leaf_id: 0,
+                    },
+                ),
+                grouping: Some(
+                    vec![
+                        Group {
+                            group_key: "collection".to_string(),
+                            group_value: Some(
+                                "FxZuKKWwRTzBuqpUtMeZkTAWwneA5cjdzDJQtNTjXF4C".to_string(),
+                            ),
+                            verified: None,
+                            collection_metadata: None,
+                        },
+                    ],
+                ),
+                royalty: Some(
+                    Royalty {
+                        royalty_model: RoyaltyModel::Creators,
+                        target: None,
+                        percent: 0.0,
+                        basis_points: 0,
+                        primary_sale_happened: false,
+                        locked: false,
+                    },
+                ),
+                creators: None,
+                ownership: Ownership {
+                    frozen: false,
+                    delegated: false,
+                    delegate: None,
+                    ownership_model: OwnershipModel::Single,
+                    owner: "faraVvDajMs9FRwLvjRKdpfvDwetTBqgdwy95MsQ6VZ".to_string(),
                 },
-                links: Some(Links {
-                    external_url: Some("https://madlads.com".to_string()),
-                    image: Some("https://madlads.s3.us-west-2.amazonaws.com/images/8420.png".to_string()),
-                    animation_url: None
-                }),
+                uses: None,
+                supply: None,
+                mutable: true,
+                burnt: false,
+                mint_extensions: None,
+                token_info: None,
+                group_definition: None,
+                plugins: None,
+                unknown_plugins: None,
+                mpl_core_info: Some(
+                    MplCoreInfo {
+                        num_minted: None,
+                        current_size: None,
+                        plugins_json_version: Some(
+                            1,
+                        ),
+                    },
+                ),
             }),
-            authorities: Some(vec![Authorities {
-                address: "2RtGg6fsFiiF1EQzHqbd66AhW7R5bWeQGpTbv2UMkCdW".to_string(),
-                scopes: vec![Scope::Full],
-            }]),
-            compression: Some(Compression {
-                eligible: false,
-                compressed: false,
-                data_hash: "".to_string(),
-                creator_hash: "".to_string(),
-                asset_hash: "".to_string(),
-                tree: "".to_string(),
-                seq: 0,
-                leaf_id: 0,
-            }),
-            grouping: Some(vec![Grouping {
-                group_key: "collection".to_string(),
-                group_value: "J1S9H3QjnRtBbbuD4HjPV6RpRhwuk4zKbxsnCHuTgh9w".to_string(),
-                verified: None,
-                collection_metadata: None,
-            }]),
-            royalty: Some(Royalty {
-                royalty_model: RoyaltyModel::Creators,
-                target: None,
-                percent: 0.042,
-                basis_points: 420,
-                primary_sale_happened: true,
-                locked: false,
-            }),
-            creators: Some(vec![Creators {
-                address: "5XvhfmRjwXkGp3jHGmaKpqeerNYjkuZZBYLVQYdeVcRv".to_string(),
-                share: 0,
-                verified: true,
-            }, Creators {
-                address: "2RtGg6fsFiiF1EQzHqbd66AhW7R5bWeQGpTbv2UMkCdW".to_string(),
-                share: 100,
-                verified: true,
-            }]),
-            ownership: Ownership {
-                frozen: true,
-                delegated: false,
-                delegate: None,
-                ownership_model: OwnershipModel::Single,
-                owner: "4zdNGgAtFsW1cQgHqkiWyRsxaAgxrSRRynnuunxzjxue".to_string(),
-            },
-            mint_extensions: None,
-            supply: Some(Supply {
-                print_max_supply: None,
-                print_current_supply: None,
-                edition_nonce: None,
-                edition_number: None,
-                master_edition_mint: None,
-            }),
-            token_info: None,
-            inscription: None,
-        }),
         id: "1".to_string(),
     };
 
@@ -155,12 +176,10 @@ async fn test_get_asset_success() {
     };
 
     let request: GetAssetRequest = GetAssetRequest {
-        id: "F9Lw3ki3hJ7PF9HQXsBzoY8GyE6sPoEZZdXJBsTTD2rk".to_string(),
-        display_options: Some(DisplayOptions {
-            show_unverified_collections: false,
-            show_collection_metadata: false,
-            show_fungible: false,
-            show_inscription: false,
+        id: "JE9mLqmTRZnUYoMJofSmZp8nZT4pzgARtAJS8crtgVWV".to_string(),
+        display_options: Some(GetAssetOptions {
+            show_unverified_collections: true,
+            ..Default::default()
         }),
     };
 
@@ -172,12 +191,12 @@ async fn test_get_asset_success() {
 
     let asset: GetAssetResponseForAsset = asset_response.unwrap();
     assert_eq!(
-        asset.id, "F9Lw3ki3hJ7PF9HQXsBzoY8GyE6sPoEZZdXJBsTTD2rk",
+        asset.id, "JE9mLqmTRZnUYoMJofSmZp8nZT4pzgARtAJS8crtgVWV",
         "Asset ID does not match expected value"
     );
     assert_eq!(
         asset.interface,
-        Interface::ProgrammableNFT,
+        Interface::MplCoreAsset,
         "Interface does not match expected value"
     );
 }
@@ -213,11 +232,9 @@ async fn test_get_asset_failure() {
 
     let request: GetAssetRequest = GetAssetRequest {
         id: "F9Lw3ki3hJ7PF9HQXsBzoY8GyE6sPoEZZdXJBsTTD2rk".to_string(),
-        display_options: Some(DisplayOptions {
-            show_unverified_collections: false,
-            show_collection_metadata: false,
-            show_fungible: false,
-            show_inscription: false,
+        display_options: Some(GetAssetOptions {
+            show_collection_metadata: true,
+            ..Default::default()
         }),
     };
 

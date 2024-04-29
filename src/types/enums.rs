@@ -23,6 +23,17 @@ pub enum Interface {
     ProgrammableNFT,
     #[serde(rename = "FungibleToken")]
     FungibleToken,
+    #[serde(rename = "V1_PRINT")]
+    V1PRINT,
+    #[allow(non_camel_case_types)]
+    #[serde(rename = "LEGACY_NFT")]
+    LEGACY_NFT,
+    #[serde(rename = "V2_NFT")]
+    Nft,
+    #[serde(rename = "MplCoreAsset")]
+    MplCoreAsset,
+    #[serde(rename = "MplCoreCollection")]
+    MplCoreCollection,
 }
 
 #[derive(Serialize, Deserialize, Debug, Default, Clone, PartialEq)]
@@ -45,12 +56,9 @@ pub enum RoyaltyModel {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
-pub enum UseMethods {
-    #[serde(rename = "Burn")]
+pub enum UseMethod {
     Burn,
-    #[serde(rename = "Single")]
     Single,
-    #[serde(rename = "Multiple")]
     Multiple,
 }
 
@@ -86,12 +94,16 @@ pub enum Context {
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub enum AssetSortBy {
+    #[serde(rename = "id")]
+    Id,
     #[serde(rename = "created")]
     Created,
     #[serde(rename = "updated")]
     Updated,
     #[serde(rename = "recent_action")]
     RecentAction,
+    #[serde(rename = "none")]
+    None,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]

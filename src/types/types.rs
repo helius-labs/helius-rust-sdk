@@ -1,6 +1,8 @@
 use super::enums::{
-    AssetSortBy, AssetSortDirection, Context, Interface, OwnershipModel, RoyaltyModel, Scope, UseMethods,
+    AssetSortBy, AssetSortDirection, Context, Interface, OwnershipModel, RoyaltyModel, Scope, UseMethod,
 };
+use crate::types::{DisplayOptions, GetAssetOptions};
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -64,13 +66,9 @@ pub struct RpcResponse<T> {
 pub struct AssetsByOwnerRequest {
     #[serde(rename = "ownerAddress")]
     pub owner_address: String,
-    #[serde(rename = "page")]
     pub page: u32,
-    #[serde(rename = "limit")]
     pub limit: Option<i32>,
-    #[serde(rename = "before")]
     pub before: Option<String>,
-    #[serde(rename = "after")]
     pub after: Option<String>,
     #[serde(rename = "displayOptions")]
     pub display_options: Option<DisplayOptions>,
@@ -92,27 +90,18 @@ pub struct AssetsByAuthorityRequest {
     pub sort_by: Option<AssetSortingRequest>,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Default)]
 pub struct GetAssetRequest {
     pub id: String,
     #[serde(rename = "displayOptions")]
-    pub display_options: Option<DisplayOptions>,
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-#[serde(rename_all = "camelCase")]
-pub struct DisplayOptions {
-    pub show_unverified_collections: bool,
-    pub show_collection_metadata: bool,
-    pub show_fungible: bool,
-    pub show_inscription: bool,
+    pub display_options: Option<GetAssetOptions>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct AssetSortingRequest {
     pub sort_by: AssetSortBy,
-    pub sort_direction: AssetSortDirection,
+    pub sort_direction: Option<AssetSortDirection>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Default)]
@@ -147,33 +136,50 @@ pub struct GetAssetResponse {
     pub content: Option<Content>,
     pub authorities: Option<Vec<Authorities>>,
     pub compression: Option<Compression>,
-    pub grouping: Option<Vec<Grouping>>,
+    pub grouping: Option<Vec<Group>>,
     pub royalty: Option<Royalty>,
     pub ownership: Ownership,
-    pub creators: Option<Vec<Creators>>,
+    pub creators: Option<Vec<Creator>>,
     pub uses: Option<Uses>,
     pub supply: Option<Supply>,
     pub mutable: bool,
     pub burnt: bool,
 }
 
-#[derive(Serialize, Deserialize, Debug, Default)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct GetAssetResponseForAsset {
     pub interface: Interface,
     pub id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub content: Option<Content>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub authorities: Option<Vec<Authorities>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub compression: Option<Compression>,
-    pub grouping: Option<Vec<Grouping>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub grouping: Option<Vec<Group>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub royalty: Option<Royalty>,
-    pub creators: Option<Vec<Creators>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub creators: Option<Vec<Creator>>,
     pub ownership: Ownership,
-    #[serde(rename = "mintExtensions")]
-    pub mint_extensions: Option<MintExtensions>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub uses: Option<Uses>,
     pub supply: Option<Supply>,
+    pub mutable: bool,
+    pub burnt: bool,
+    pub mint_extensions: Option<Value>,
     #[serde(rename = "tokenSupply")]
     pub token_info: Option<TokenInfo>,
-    pub inscription: Option<Inscription>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub group_definition: Option<GroupDefinition>,
+    // pub system: Option<SystemInfo>, TODO: Uncomment this line when the SystemInfo struct is defined
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub plugins: Option<Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub unknown_plugins: Option<Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub mpl_core_info: Option<MplCoreInfo>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -309,17 +315,20 @@ pub struct AdditionalMetadata {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct TokenInfo {
-    pub symbol: String,
-    pub supply: i32,
-    pub decimals: i32,
+    pub symbol: Option<String>,
+    pub balance: Option<u64>,
+    pub supply: Option<u64>,
+    pub decimals: Option<i32>,
     #[serde(rename = "tokenProgram")]
-    pub token_program: String,
+    pub token_program: Option<String>,
+    #[serde(rename = "associatedTokenAddress")]
+    pub associated_token_address: Option<String>,
     #[serde(rename = "priceInfo")]
-    pub price_info: PriceInfo,
+    pub price_info: Option<PriceInfo>,
     #[serde(rename = "mintAuthority")]
-    pub mint_authority: String,
+    pub mint_authority: Option<String>,
     #[serde(rename = "freezeAuthority")]
-    pub freeze_authority: String,
+    pub freeze_authority: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -349,8 +358,10 @@ pub struct Content {
     #[serde(alias = "$schema")]
     pub schema: String,
     pub json_uri: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub files: Option<Vec<File>>,
     pub metadata: Metadata,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub links: Option<Links>,
 }
 
@@ -365,6 +376,7 @@ pub struct File {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct FileQuality {
+    #[serde(rename = "$$schema")]
     pub schema: String,
 }
 
@@ -396,10 +408,13 @@ pub struct Authorities {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-pub struct Grouping {
+pub struct Group {
     pub group_key: String,
-    pub group_value: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub group_value: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub verified: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub collection_metadata: Option<CollectionMetadata>,
 }
 
@@ -420,14 +435,14 @@ pub struct Compression {
     pub creator_hash: String,
     pub asset_hash: String,
     pub tree: String,
-    pub seq: u32,
-    pub leaf_id: u32,
+    pub seq: i64,
+    pub leaf_id: i64,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-pub struct Creators {
+pub struct Creator {
     pub address: String,
-    pub share: u8,
+    pub share: i32,
     pub verified: bool,
 }
 
@@ -435,7 +450,7 @@ pub struct Creators {
 pub struct Royalty {
     pub royalty_model: RoyaltyModel,
     pub target: Option<String>,
-    pub percent: f32,
+    pub percent: f64,
     pub basis_points: u32,
     pub primary_sale_happened: bool,
     pub locked: bool,
@@ -452,18 +467,44 @@ pub struct Ownership {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Uses {
-    pub use_method: UseMethods,
-    pub remaining: u32,
-    pub total: u32,
+    pub use_method: UseMethod,
+    pub remaining: u64,
+    pub total: u64,
 }
 
 #[derive(Serialize, Deserialize, Debug, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct Supply {
-    #[serde(default)]
-    pub print_max_supply: Option<u32>,
-    pub print_current_supply: Option<u32>,
-    pub edition_nonce: Option<i32>,
-    pub edition_number: Option<i32>,
+    pub print_max_supply: Option<u64>,
+    pub print_current_supply: u64,
+    pub edition_nonce: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub edition_number: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub master_edition_mint: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Default)]
+pub struct GroupDefinition {
+    pub group_key: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub group_value: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub size: Option<u64>,
+    #[serde(skip_serializing)]
+    pub asset_id: Vec<u8>,
+}
+
+// #[derive(Debug, Serialize, Deserialize, JsonSchema)]
+// pub struct SystemInfo {
+//     pub created_at: Option<DateTime<Utc>>,
+// }
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct MplCoreInfo {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub num_minted: Option<i32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub current_size: Option<i32>,
+    pub plugins_json_version: Option<i32>,
 }
