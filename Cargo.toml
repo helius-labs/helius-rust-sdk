@@ -16,7 +16,9 @@ serde_json = "1.0.116"
 solana-sdk = "1.18.11"
 thiserror = "1.0.58"
 tokio = { version = "1.37.0", features = ["macros", "rt-multi-thread", "net"] }
-chrono = { version = "0.4.11", feaures = ["serde"] }
+chrono = { version = "0.4.11", features = ["serde"] }
+solana-client = "1.18.12"
+solana-core = "1.18.12"
 
 [dev-dependencies]
 mockito = "1.4.0"
