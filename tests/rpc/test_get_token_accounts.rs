@@ -8,7 +8,6 @@ use helius_sdk::types::*;
 
 use mockito::{self, Server};
 use reqwest::Client;
-use serde_json::Value;
 
 #[tokio::test]
 async fn test_get_token_accounts_success() {
@@ -16,37 +15,25 @@ async fn test_get_token_accounts_success() {
     let url: String = server.url();
 
     let mock_response: ApiResponse<TokenAccountsList> = ApiResponse {
-                jsonrpc: "2.0".to_string(),
-                result: Some(TokenAccountsList {
-                total: 1,
-                limit: 1,
-                page: Some(
-                    1,
-                ),
-                cursor: None,
-                before: None,
-                after: None,
-                token_accounts: [
-                    TokenAccount {
-                        address: "FDxksmT4hRCpS2Wr5NF2i3uuYGeTz6pSyychb44gDzL".to_string(),
-                        mint: Some(
-                            "2v5byxxWVeAcrN39fznVrhuWZuoPkjpzGuqJHemyqP1x".to_string(),
-                        ),
-                        owner: Some(
-                            "GdNh12yVy5Lsew9WXVCV5ErgK5SpmsBJkcti5jVtPB7o".to_string(),
-                        ),
-                        amount: Some(
-                            1,
-                        ),
-                        delegate: None,
-                        delegated_amount: Some(
-                            0,
-                        ),
-                        token_extensions: None,
-                        frozen: true,
-                    },
-                ],
-            }),
+        jsonrpc: "2.0".to_string(),
+        result: TokenAccountsList {
+            total: 1,
+            limit: 1,
+            page: Some(1),
+            cursor: None,
+            before: None,
+            after: None,
+            token_accounts: vec![TokenAccount {
+                address: "FDxksmT4hRCpS2Wr5NF2i3uuYGeTz6pSyychb44gDzL".to_string(),
+                mint: Some("2v5byxxWVeAcrN39fznVrhuWZuoPkjpzGuqJHemyqP1x".to_string()),
+                owner: Some("GdNh12yVy5Lsew9WXVCV5ErgK5SpmsBJkcti5jVtPB7o".to_string()),
+                amount: Some(1),
+                delegate: None,
+                delegated_amount: Some(0),
+                token_extensions: None,
+                frozen: true,
+            }],
+        },
         id: "1".to_string(),
     };
 
@@ -74,7 +61,7 @@ async fn test_get_token_accounts_success() {
         rpc_client,
     };
 
-    let request = GetTokenAccounts {
+    let request: GetTokenAccounts = GetTokenAccounts {
         owner: Some("GdNh12yVy5Lsew9WXVCV5ErgK5SpmsBJkcti5jVtPB7o".to_string()),
         page: Some(1),
         limit: Some(1),
@@ -85,7 +72,10 @@ async fn test_get_token_accounts_success() {
     assert!(response.is_ok(), "API call failed with error: {:?}", response.err());
 
     let token_accounts: TokenAccountsList = response.unwrap();
-    assert!(token_accounts.items.is_some(), "No token account returned when one was expected");
+    assert!(
+        token_accounts.total > 0,
+        "No token account returned when one was expected"
+    );
 
     assert_eq!(
         token_accounts.token_accounts[0].address, "FDxksmT4hRCpS2Wr5NF2i3uuYGeTz6pSyychb44gDzL",

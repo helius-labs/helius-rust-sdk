@@ -1,6 +1,7 @@
-use super::{enums::{
-    AssetSortBy, AssetSortDirection, Context, Interface, OwnershipModel, RoyaltyModel, Scope, UseMethod,
-}, SearchAssetsOptions, SearchConditionType, TokenType};
+use super::{
+    enums::{AssetSortBy, AssetSortDirection, Context, Interface, OwnershipModel, RoyaltyModel, Scope, UseMethod},
+    SearchAssetsOptions, SearchConditionType, TokenType,
+};
 use crate::types::{DisplayOptions, GetAssetOptions};
 // use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
