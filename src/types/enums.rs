@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
 
+use super::*;
+
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default)]
 pub enum Interface {
     #[serde(rename = "V1_NFT")]
@@ -130,4 +132,21 @@ pub enum TokenType {
     CompressedNft,
     RegularNft,
     All,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum MintApiAuthority {
+    Mainnet(&'static str),
+    Devnet(&'static str),
+}
+
+impl MintApiAuthority {
+    pub fn from_cluster(cluster: Cluster) -> Result<Self, &'static str> {
+        match cluster {
+            Cluster::Devnet => Ok(MintApiAuthority::Devnet("2LbAtCJSaHqTnP9M5QSjvAMXk79RNLusFspFN5Ew67TC")),
+            Cluster::MainnetBeta => Ok(MintApiAuthority::Mainnet(
+                "HnT5KVAywGgQDhmh6Usk4bxRg4RwKxCK4jmECyaDth5R",
+            )),
+        }
+    }
 }

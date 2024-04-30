@@ -155,3 +155,43 @@ async fn test_get_asset_proof_failure() {
     let result: Result<MintResponse, HeliusError> = helius.mint_compressed_nft(request).await;
     assert!(result.is_err(), "Expected an error but got success");
 }
+
+#[tokio::test]
+async fn test_mint_api_authority_from_cluster_success() {
+    let devnet_cluster: Cluster = Cluster::Devnet;
+    let mainnet_cluster: Cluster = Cluster::MainnetBeta;
+
+    let devnet_authority: Result<MintApiAuthority, &str> = MintApiAuthority::from_cluster(devnet_cluster);
+    let mainnet_authority: Result<MintApiAuthority, &str> = MintApiAuthority::from_cluster(mainnet_cluster);
+
+    assert_eq!(
+        devnet_authority.unwrap(),
+        MintApiAuthority::Devnet("2LbAtCJSaHqTnP9M5QSjvAMXk79RNLusFspFN5Ew67TC"),
+        "Devnet authority did not match expected value"
+    );
+    assert_eq!(
+        mainnet_authority.unwrap(),
+        MintApiAuthority::Mainnet("HnT5KVAywGgQDhmh6Usk4bxRg4RwKxCK4jmECyaDth5R"),
+        "Mainnet authority did not match expected value"
+    );
+}
+
+#[tokio::test]
+async fn test_mint_api_authority_from_cluster_failure() {
+    let devnet_cluster: Cluster = Cluster::Devnet;
+    let mainnet_cluster: Cluster = Cluster::MainnetBeta;
+
+    let devnet_authority: Result<MintApiAuthority, &str> = MintApiAuthority::from_cluster(devnet_cluster);
+    let mainnet_authority: Result<MintApiAuthority, &str> = MintApiAuthority::from_cluster(mainnet_cluster);
+
+    assert_ne!(
+        devnet_authority.unwrap(),
+        MintApiAuthority::Devnet("Blade"),
+        "Devnet authority did not match expected value"
+    );
+    assert_ne!(
+        mainnet_authority.unwrap(),
+        MintApiAuthority::Mainnet("Deacon Frost"),
+        "Mainnet authority did not match expected value"
+    );
+}
