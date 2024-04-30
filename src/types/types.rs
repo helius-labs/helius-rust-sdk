@@ -197,6 +197,11 @@ pub struct GetAssetProof {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
+pub struct GetAssetProofBatch {
+    pub ids: Vec<String>,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
 pub struct AssetProof {
     pub root: String,
     pub proof: Vec<String>,

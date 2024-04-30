@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::fmt::Debug;
 use std::sync::Arc;
 
@@ -6,8 +7,8 @@ use crate::error::Result;
 use crate::request_handler::RequestHandler;
 use crate::types::types::{RpcRequest, RpcResponse};
 use crate::types::{
-    Asset, AssetList, AssetProof, GetAsset, GetAssetBatch, GetAssetProof, GetAssetsByAuthority, GetAssetsByCreator,
-    GetAssetsByOwner,
+    Asset, AssetList, AssetProof, GetAsset, GetAssetBatch, GetAssetProof, GetAssetProofBatch, GetAssetsByAuthority,
+    GetAssetsByCreator, GetAssetsByOwner,
 };
 
 use reqwest::{Client, Method, Url};
@@ -59,6 +60,14 @@ impl RpcClient {
     /// Gets a merkle proof for a compressed asset by its ID
     pub async fn get_asset_proof(&self, request: GetAssetProof) -> Result<Option<AssetProof>> {
         self.post_rpc_request("getAssetProof", request).await
+    }
+
+    /// Gets multiple asset proofs by their IDs
+    pub async fn get_asset_proof_batch(
+        &self,
+        request: GetAssetProofBatch,
+    ) -> Result<HashMap<String, Option<AssetProof>>> {
+        self.post_rpc_request("getAssetProofBatch", request).await
     }
 
     /// Gets a list of assets owned by a given address
