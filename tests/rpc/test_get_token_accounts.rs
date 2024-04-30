@@ -11,27 +11,42 @@ use reqwest::Client;
 use serde_json::Value;
 
 #[tokio::test]
-async fn test_get_asset_signatures_success() {
+async fn test_get_token_accounts_success() {
     let mut server: Server = Server::new_with_opts_async(mockito::ServerOpts::default()).await;
     let url: String = server.url();
 
-    let mock_response: ApiResponse<TransactionSignatureList> = ApiResponse {
-        jsonrpc: "2.0".to_string(),
-        result: Some(TransactionSignatureList {
-            total: 1,
-            limit: 1000,
-            page: Some(
-                1,
-            ),
-            before: None,
-            after: None,
-            items: vec![
-                (
-                    "3uLpAGykcJmC4cvPoURqAKKktLLFeZBXid6SeXji6Pnd7YAtDxEG3PRXLXpUBdt1N6W18nUGeKv6eNUPb7Po7u3v".to_string(),
-                    "MintToCollectionV1".to_string(),
+    let mock_response: ApiResponse<TokenAccountsList> = ApiResponse {
+                jsonrpc: "2.0".to_string(),
+                result: Some(TokenAccountsList {
+                total: 1,
+                limit: 1,
+                page: Some(
+                    1,
                 ),
-            ],
-        }),
+                cursor: None,
+                before: None,
+                after: None,
+                token_accounts: [
+                    TokenAccount {
+                        address: "FDxksmT4hRCpS2Wr5NF2i3uuYGeTz6pSyychb44gDzL".to_string(),
+                        mint: Some(
+                            "2v5byxxWVeAcrN39fznVrhuWZuoPkjpzGuqJHemyqP1x".to_string(),
+                        ),
+                        owner: Some(
+                            "GdNh12yVy5Lsew9WXVCV5ErgK5SpmsBJkcti5jVtPB7o".to_string(),
+                        ),
+                        amount: Some(
+                            1,
+                        ),
+                        delegate: None,
+                        delegated_amount: Some(
+                            0,
+                        ),
+                        token_extensions: None,
+                        frozen: true,
+                    },
+                ],
+            }),
         id: "1".to_string(),
     };
 
@@ -59,26 +74,27 @@ async fn test_get_asset_signatures_success() {
         rpc_client,
     };
 
-    let request = GetAssetSignatures {
-        id: Some("8qjkHtHsqww1rac6Uctj4V7Z5yHoTyQj3iJ5vc4Aka8".to_string()),
+    let request = GetTokenAccounts {
+        owner: Some("GdNh12yVy5Lsew9WXVCV5ErgK5SpmsBJkcti5jVtPB7o".to_string()),
         page: Some(1),
+        limit: Some(1),
         ..Default::default()
     };
 
-    let response: Result<TransactionSignatureList, HeliusError> = helius.rpc().get_asset(request).await;
+    let response: Result<TokenAccountsList, HeliusError> = helius.rpc().get_token_accounts(request).await;
     assert!(response.is_ok(), "API call failed with error: {:?}", response.err());
 
-    let signatures: TransactionSignatureList = response.unwrap();
-    assert!(signatures.items.is_some(), "No signature returned when one was expected");
+    let token_accounts: TokenAccountsList = response.unwrap();
+    assert!(token_accounts.items.is_some(), "No token account returned when one was expected");
 
     assert_eq!(
-        signatures.items[0], "3uLpAGykcJmC4cvPoURqAKKktLLFeZBXid6SeXji6Pnd7YAtDxEG3PRXLXpUBdt1N6W18nUGeKv6eNUPb7Po7u3v",
+        token_accounts.token_accounts[0].address, "FDxksmT4hRCpS2Wr5NF2i3uuYGeTz6pSyychb44gDzL",
         "signature does not match expected value"
     );
 }
 
 #[tokio::test]
-async fn test_get_asset_signatures_failure() {
+async fn test_get_token_accounts_failure() {
     let mut server: Server = Server::new_with_opts_async(mockito::ServerOpts::default()).await;
     let url: String = server.url();
 
@@ -106,12 +122,13 @@ async fn test_get_asset_signatures_failure() {
         rpc_client,
     };
 
-    let request = GetAssetSignatures {
-        id: Some("8qjkHtHsqww1rac6Uctj4V7Z5yHoTyQj3iJ5vc4Aka8".to_string()),
+    let request = GetTokenAccounts {
+        owner: Some("GdNh12yVy5Lsew9WXVCV5ErgK5SpmsBJkcti5jVtPB7o".to_string()),
         page: Some(1),
+        limit: Some(1),
         ..Default::default()
     };
 
-    let response: Result<TransactionSignatureList, HeliusError> = helius.rpc().get_asset_signatures(request).await;
+    let response: Result<TokenAccountsList, HeliusError> = helius.rpc().get_token_accounts(request).await;
     assert!(response.is_err(), "Expected an error but got success");
 }

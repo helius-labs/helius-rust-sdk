@@ -224,6 +224,21 @@ pub struct GetAssetSignatures {
     pub sort_direction: Option<AssetSortDirection>,
 }
 
+#[derive(Debug, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct GetTokenAccounts {
+    pub owner: Option<String>,
+    pub mint: Option<String>,
+    pub limit: Option<u32>,
+    pub page: Option<u32>,
+    pub before: Option<String>,
+    pub after: Option<String>,
+    #[serde(default, alias = "displayOptions")]
+    pub options: Option<DisplayOptions>,
+    #[serde(default)]
+    pub cursor: Option<String>,
+}
+
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct AssetSorting {
@@ -269,6 +284,22 @@ pub struct TransactionSignatureList {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub after: Option<String>,
     pub items: Vec<(String, String)>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Default)]
+#[serde(default)]
+pub struct TokenAccountsList {
+    pub total: u32,
+    pub limit: u32,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub page: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cursor: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub before: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub after: Option<String>,
+    pub token_accounts: Vec<TokenAccount>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Default)]
@@ -658,3 +689,21 @@ pub struct NotFilter {
 //     #[serde(default)]
 //     pub before: Option<DateTime<Utc>>,
 // }
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct TokenAccount {
+    pub address: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub mint: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub owner: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub amount: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub delegate: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub delegated_amount: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub token_extensions: Option<Value>,
+    pub frozen: bool,
+}
