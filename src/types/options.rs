@@ -48,4 +48,3 @@ pub struct SearchAssetsOptions {
     #[serde(default)]
     pub show_closed_accounts: bool,
 }
-

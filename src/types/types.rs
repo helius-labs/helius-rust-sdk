@@ -60,7 +60,7 @@ impl<T> RpcRequest<T> {
 pub struct RpcResponse<T> {
     pub jsonrpc: String,
     pub id: String,
-    pub result: T
+    pub result: T,
 }
 
 #[derive(Serialize, Deserialize, Default, Debug)]
@@ -736,4 +736,35 @@ pub struct Edition {
     pub edition: Option<u64>,
 }
 
+#[derive(Serialize, Deserialize, Debug, Default)]
+pub struct MintCompressedNftRequest {
+    pub name: String,
+    pub symbol: String,
+    pub description: String,
+    pub owner: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub delegate: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub collection: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub uri: Option<String>,
+    pub attributes: Vec<Attribute>,
+    #[serde(rename = "imageUrl", skip_serializing_if = "Option::is_none")]
+    pub image_url: Option<String>,
+    #[serde(rename = "externalUrl", skip_serializing_if = "Option::is_none")]
+    pub external_url: Option<String>,
+    #[serde(rename = "sellerFeeBasisPoints", skip_serializing_if = "Option::is_none")]
+    pub seller_fee_basis_points: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub creators: Option<Vec<Creator>>,
+    #[serde(rename = "confirmTransaction", skip_serializing_if = "Option::is_none")]
+    pub confirm_transaction: Option<bool>,
+}
 
+#[derive(Serialize, Deserialize, Debug, Default)]
+pub struct MintResponse {
+    pub signature: String,
+    pub minted: bool,
+    #[serde(rename = "assetId")]
+    pub asset_id: Option<String>,
+}

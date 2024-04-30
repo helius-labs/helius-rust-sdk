@@ -9,35 +9,26 @@ use helius_sdk::types::*;
 use mockito::{self, Server};
 use reqwest::Client;
 
-
 #[tokio::test]
 async fn test_get_nft_editions_success() {
     let mut server: Server = Server::new_with_opts_async(mockito::ServerOpts::default()).await;
     let url: String = server.url();
 
     let mock_response: ApiResponse<EditionsList> = ApiResponse {
-                jsonrpc: "2.0".to_string(),
-                result: EditionsList {
-                    total: 1,
-                    limit: 1,
-                    page: Some(
-                        1,
-                    ),
-                    master_edition_address: "8SHfqzJYABeGfiG1apwiEYt6TvfGQiL1pdwEjvTKsyiZ".to_string(),
-                    supply: 65,
-                    max_supply: Some(
-                        69,
-                    ),
-                    editions: vec![
-                        Edition {
-                            mint: "GJvFDcBWf6aDncd1TBzx2ou1rgLFYaMBdbYLBa9oTAEw".to_string(),
-                            edition_address: "AoxgzXKEsJmUyF5pBb3djn9cJFA26zh2SQHvd9EYijZV".to_string(),
-                            edition: Some(
-                                1,
-                            ),
-                        },
-                    ],
-                },
+        jsonrpc: "2.0".to_string(),
+        result: EditionsList {
+            total: 1,
+            limit: 1,
+            page: Some(1),
+            master_edition_address: "8SHfqzJYABeGfiG1apwiEYt6TvfGQiL1pdwEjvTKsyiZ".to_string(),
+            supply: 65,
+            max_supply: Some(69),
+            editions: vec![Edition {
+                mint: "GJvFDcBWf6aDncd1TBzx2ou1rgLFYaMBdbYLBa9oTAEw".to_string(),
+                edition_address: "AoxgzXKEsJmUyF5pBb3djn9cJFA26zh2SQHvd9EYijZV".to_string(),
+                edition: Some(1),
+            }],
+        },
         id: "1".to_string(),
     };
 
@@ -68,14 +59,18 @@ async fn test_get_nft_editions_success() {
     let request = GetNftEditions {
         mint: Some("Ey2Qb8kLctbchQsMnhZs5DjY32To2QtPuXNwWvk4NosL".to_string()),
         page: Some(1),
-        limit: Some(1)
+        limit: Some(1),
     };
 
     let response: Result<EditionsList, HeliusError> = helius.rpc().get_nft_editions(request).await;
     assert!(response.is_ok(), "API call failed with error: {:?}", response.err());
 
     let editions_list: EditionsList = response.unwrap();
-    assert_eq!(editions_list.editions.len(), 1, "No token account returned when one was expected");
+    assert_eq!(
+        editions_list.editions.len(),
+        1,
+        "No token account returned when one was expected"
+    );
 
     assert_eq!(
         editions_list.editions[0].mint, "GJvFDcBWf6aDncd1TBzx2ou1rgLFYaMBdbYLBa9oTAEw",
@@ -115,7 +110,7 @@ async fn test_get_nft_editions_failure() {
     let request = GetNftEditions {
         mint: Some("Ey2Qb8kLctbchQsMnhZs5DjY32To2QtPuXNwWvk4NosL".to_string()),
         page: Some(1),
-        limit: Some(1)
+        limit: Some(1),
     };
 
     let response: Result<EditionsList, HeliusError> = helius.rpc().get_nft_editions(request).await;
