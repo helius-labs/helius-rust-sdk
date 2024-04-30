@@ -8,7 +8,6 @@ use helius_sdk::types::*;
 
 use mockito::{self, Server};
 use reqwest::Client;
-use serde_json::Value;
 
 #[tokio::test]
 async fn test_get_asset_signatures_success() {
@@ -17,21 +16,17 @@ async fn test_get_asset_signatures_success() {
 
     let mock_response: ApiResponse<TransactionSignatureList> = ApiResponse {
         jsonrpc: "2.0".to_string(),
-        result: Some(TransactionSignatureList {
+        result: TransactionSignatureList {
             total: 1,
             limit: 1000,
-            page: Some(
-                1,
-            ),
+            page: Some(1),
             before: None,
             after: None,
-            items: vec![
-                (
-                    "3uLpAGykcJmC4cvPoURqAKKktLLFeZBXid6SeXji6Pnd7YAtDxEG3PRXLXpUBdt1N6W18nUGeKv6eNUPb7Po7u3v".to_string(),
-                    "MintToCollectionV1".to_string(),
-                ),
-            ],
-        }),
+            items: vec![(
+                "3uLpAGykcJmC4cvPoURqAKKktLLFeZBXid6SeXji6Pnd7YAtDxEG3PRXLXpUBdt1N6W18nUGeKv6eNUPb7Po7u3v".to_string(),
+                "MintToCollectionV1".to_string(),
+            )],
+        },
         id: "1".to_string(),
     };
 
@@ -59,21 +54,22 @@ async fn test_get_asset_signatures_success() {
         rpc_client,
     };
 
-    let request = GetAssetSignatures {
+    let request: GetAssetSignatures = GetAssetSignatures {
         id: Some("8qjkHtHsqww1rac6Uctj4V7Z5yHoTyQj3iJ5vc4Aka8".to_string()),
         page: Some(1),
         ..Default::default()
     };
 
-    let response: Result<TransactionSignatureList, HeliusError> = helius.rpc().get_asset(request).await;
+    let response: Result<TransactionSignatureList, HeliusError> = helius.rpc().get_asset_signatures(request).await;
     assert!(response.is_ok(), "API call failed with error: {:?}", response.err());
 
     let signatures: TransactionSignatureList = response.unwrap();
-    assert!(signatures.items.is_some(), "No signature returned when one was expected");
+    assert!(signatures.total > 0, "No signature returned when one was expected");
 
     assert_eq!(
-        signatures.items[0], "3uLpAGykcJmC4cvPoURqAKKktLLFeZBXid6SeXji6Pnd7YAtDxEG3PRXLXpUBdt1N6W18nUGeKv6eNUPb7Po7u3v",
-        "signature does not match expected value"
+        signatures.items[0].0,
+        "3uLpAGykcJmC4cvPoURqAKKktLLFeZBXid6SeXji6Pnd7YAtDxEG3PRXLXpUBdt1N6W18nUGeKv6eNUPb7Po7u3v".to_string(),
+        "Signature does not match expected value"
     );
 }
 
@@ -106,7 +102,7 @@ async fn test_get_asset_signatures_failure() {
         rpc_client,
     };
 
-    let request = GetAssetSignatures {
+    let request: GetAssetSignatures = GetAssetSignatures {
         id: Some("8qjkHtHsqww1rac6Uctj4V7Z5yHoTyQj3iJ5vc4Aka8".to_string()),
         page: Some(1),
         ..Default::default()
