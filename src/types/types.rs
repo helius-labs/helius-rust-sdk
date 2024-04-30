@@ -118,63 +118,6 @@ pub struct GetAssetsByCreator {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-#[serde(rename_all = "camelCase")]
-pub struct AssetSorting {
-    pub sort_by: AssetSortBy,
-    pub sort_direction: Option<AssetSortDirection>,
-}
-
-#[derive(Serialize, Deserialize, Debug, Default)]
-pub struct ApiResponse<T> {
-    pub jsonrpc: String,
-    pub result: T,
-    pub id: String,
-}
-
-#[derive(Serialize, Deserialize, Debug, Default)]
-pub struct AssetList {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub grand_total: Option<u64>,
-    pub total: u32,
-    pub limit: u32,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub page: Option<u32>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub before: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub after: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub cursor: Option<String>,
-    pub items: Vec<Asset>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub errors: Option<Vec<AssetError>>,
-}
-
-#[derive(Serialize, Deserialize, Debug, Default)]
-#[serde(default)]
-pub struct AssetError {
-    pub id: String,
-    pub error: String,
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-pub struct GetAssetResponse {
-    pub interface: Interface,
-    pub id: String,
-    pub content: Option<Content>,
-    pub authorities: Option<Vec<Authorities>>,
-    pub compression: Option<Compression>,
-    pub grouping: Option<Vec<Group>>,
-    pub royalty: Option<Royalty>,
-    pub ownership: Ownership,
-    pub creators: Option<Vec<Creator>>,
-    pub uses: Option<Uses>,
-    pub supply: Option<Supply>,
-    pub mutable: bool,
-    pub burnt: bool,
-}
-
-#[derive(Serialize, Deserialize, Debug)]
 pub struct GetAssetBatch {
     pub ids: Vec<String>,
     #[serde(rename = "displayOptions")]
@@ -263,6 +206,76 @@ pub struct SearchAssets {
     pub tree: Option<String>,
     #[serde(default)]
     pub collection_nft: Option<bool>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct GetAssetSignatures {
+    pub id: Option<String>,
+    pub limit: Option<u32>,
+    pub page: Option<u32>,
+    pub before: Option<String>,
+    pub after: Option<String>,
+    pub tree: Option<String>,
+    pub leaf_index: Option<i64>,
+    #[serde(default)]
+    pub cursor: Option<String>,
+    #[serde(default)]
+    pub sort_direction: Option<AssetSortDirection>,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct AssetSorting {
+    pub sort_by: AssetSortBy,
+    pub sort_direction: Option<AssetSortDirection>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Default)]
+pub struct ApiResponse<T> {
+    pub jsonrpc: String,
+    pub result: T,
+    pub id: String,
+}
+
+#[derive(Serialize, Deserialize, Debug, Default)]
+pub struct AssetList {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub grand_total: Option<u64>,
+    pub total: u32,
+    pub limit: u32,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub page: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub before: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub after: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cursor: Option<String>,
+    pub items: Vec<Asset>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub errors: Option<Vec<AssetError>>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Default)]
+#[serde(default)]
+pub struct TransactionSignatureList {
+    pub total: u32,
+    pub limit: u32,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub page: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub before: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub after: Option<String>,
+    pub items: Vec<(String, String)>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Default)]
+#[serde(default)]
+pub struct AssetError {
+    pub id: String,
+    pub error: String,
 }
 
 #[derive(Serialize, Deserialize, Debug)]

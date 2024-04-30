@@ -7,7 +7,7 @@ use crate::error::Result;
 use crate::request_handler::RequestHandler;
 use crate::types::types::{RpcRequest, RpcResponse};
 use crate::types::{
-    Asset, AssetList, AssetProof, GetAsset, GetAssetBatch, GetAssetProof, GetAssetProofBatch, GetAssetsByAuthority, GetAssetsByCreator, GetAssetsByGroup, GetAssetsByOwner, SearchAssets
+    Asset, AssetList, AssetProof, GetAsset, GetAssetBatch, GetAssetProof, GetAssetProofBatch, GetAssetSignatures, GetAssetsByAuthority, GetAssetsByCreator, GetAssetsByGroup, GetAssetsByOwner, SearchAssets, TransactionSignatureList
 };
 
 use reqwest::{Client, Method, Url};
@@ -92,5 +92,10 @@ impl RpcClient {
     /// Gets assets based on the custom search criteria passed in
     pub async fn search_assets(&self, request: SearchAssets) -> Result<AssetList> {
         self.post_rpc_request("searchAssets", request).await
+    }
+
+    /// Gets transaction signatures for a given asset
+    pub async fn get_asset_signatures(&self, request: GetAssetSignatures) -> Result<TransactionSignatureList> {
+        self.post_rpc_request("getSignaturesForAsset", request).await
     }
 }
