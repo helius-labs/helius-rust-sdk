@@ -7,9 +7,7 @@ use crate::error::Result;
 use crate::request_handler::RequestHandler;
 use crate::types::types::{RpcRequest, RpcResponse};
 use crate::types::{
-    Asset, AssetList, AssetProof, GetAsset, GetAssetBatch, GetAssetProof, GetAssetProofBatch, GetAssetSignatures,
-    GetAssetsByAuthority, GetAssetsByCreator, GetAssetsByGroup, GetAssetsByOwner, GetTokenAccounts, SearchAssets,
-    TokenAccountsList, TransactionSignatureList,
+    Asset, AssetList, AssetProof, EditionsList, GetAsset, GetAssetBatch, GetAssetProof, GetAssetProofBatch, GetAssetSignatures, GetAssetsByAuthority, GetAssetsByCreator, GetAssetsByGroup, GetAssetsByOwner, GetNftEditions, GetTokenAccounts, SearchAssets, TokenAccountsList, TransactionSignatureList
 };
 
 use reqwest::{Client, Method, Url};
@@ -104,5 +102,10 @@ impl RpcClient {
     /// Gets transaction signatures for a given asset
     pub async fn get_token_accounts(&self, request: GetTokenAccounts) -> Result<TokenAccountsList> {
         self.post_rpc_request("getTokenAccounts", request).await
+    }
+
+    /// Gets all the NFT editions  associated with a specific master NFT
+    pub async fn get_nft_editions(&self, request: GetNftEditions) -> Result<EditionsList> {
+        self.post_rpc_request("getNftEditions", request).await
     }
 }

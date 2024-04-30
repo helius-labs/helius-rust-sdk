@@ -12,6 +12,8 @@ mod rpc {
     mod test_get_assets_by_creator;
     mod test_get_assets_by_group;
     mod test_get_assets_by_owner;
+    mod test_get_asset_signatures;
+    mod test_get_nft_editions;
     mod test_get_token_accounts;
     mod test_search_assets;
 }

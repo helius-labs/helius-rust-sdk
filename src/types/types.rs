@@ -60,7 +60,7 @@ impl<T> RpcRequest<T> {
 pub struct RpcResponse<T> {
     pub jsonrpc: String,
     pub id: String,
-    pub result: T,
+    pub result: T
 }
 
 #[derive(Serialize, Deserialize, Default, Debug)]
@@ -240,6 +240,14 @@ pub struct GetTokenAccounts {
     pub cursor: Option<String>,
 }
 
+#[derive(Debug, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct GetNftEditions {
+    pub mint: Option<String>,
+    pub limit: Option<u32>,
+    pub page: Option<u32>,
+}
+
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct AssetSorting {
@@ -304,10 +312,15 @@ pub struct TokenAccountsList {
 }
 
 #[derive(Serialize, Deserialize, Debug, Default)]
-#[serde(default)]
-pub struct AssetError {
-    pub id: String,
-    pub error: String,
+pub struct EditionsList {
+    pub total: u32,
+    pub limit: u32,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub page: Option<u32>,
+    pub master_edition_address: String,
+    pub supply: u64,
+    pub max_supply: Option<u64>,
+    pub editions: Vec<Edition>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -345,6 +358,13 @@ pub struct Asset {
     pub unknown_plugins: Option<Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub mpl_core_info: Option<MplCoreInfo>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Default)]
+#[serde(default)]
+pub struct AssetError {
+    pub id: String,
+    pub error: String,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -708,3 +728,12 @@ pub struct TokenAccount {
     pub token_extensions: Option<Value>,
     pub frozen: bool,
 }
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct Edition {
+    pub mint: String,
+    pub edition_address: String,
+    pub edition: Option<u64>,
+}
+
+
