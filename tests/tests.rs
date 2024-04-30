@@ -12,4 +12,5 @@ mod rpc {
     mod test_get_assets_by_group;
     mod test_get_assets_by_owner;
     mod test_get_token_accounts;
+    mod test_search_assets;
 }
