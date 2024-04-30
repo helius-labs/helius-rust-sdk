@@ -15,17 +15,26 @@ use crate::types::{
 use reqwest::{Client, Method, Url};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
+use solana_client::rpc_client::RpcClient as SolanaRpcClient;
 
 pub struct RpcClient {
     pub handler: RequestHandler,
     pub config: Arc<Config>,
+    pub solana_client: SolanaRpcClient,
 }
 
 impl RpcClient {
     /// Initializes a new RpcClient instance
     pub fn new(client: Arc<Client>, config: Arc<Config>) -> Result<Self> {
         let handler: RequestHandler = RequestHandler::new(client)?;
-        Ok(RpcClient { handler, config })
+        let url: String = format!("{}/?api-key={}", config.endpoints.rpc, config.api_key);
+        let solana_client: SolanaRpcClient = SolanaRpcClient::new(url);
+
+        Ok(RpcClient {
+            handler,
+            config,
+            solana_client,
+        })
     }
 
     /// Streamlines an RPC POST request
