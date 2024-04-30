@@ -94,22 +94,6 @@ pub struct GetAssetsByAuthority {
     pub cursor: Option<String>,
 }
 
-#[derive(Serialize, Deserialize, Default, Debug)]
-pub struct GetAssetsByGroup {
-    #[serde(rename = "groupKey")]
-    pub group_key: String,
-    #[serde(rename = "groupValue")]
-    pub group_value: String,
-    pub page: u32,
-    pub limit: u32,
-    #[serde(rename = "sortBy")]
-    pub sort_by: Option<AssetSorting>,
-    pub before: Option<String>,
-    pub after: Option<String>,
-    #[serde(rename = "displayOptions")]
-    pub display_options: Option<DisplayOptions>,
-}
-
 #[derive(Serialize, Deserialize, Debug, Default)]
 pub struct GetAsset {
     pub id: String,
@@ -214,6 +198,22 @@ pub struct AssetProof {
     pub node_index: i32,
     pub leaf: String,
     pub tree_id: String,
+}
+
+#[derive(Serialize, Deserialize, Debug, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct GetAssetsByGroup {
+    pub group_key: String,
+    pub group_value: String,
+    pub sort_by: Option<AssetSorting>,
+    pub limit: Option<u32>,
+    pub page: Option<u32>,
+    pub before: Option<String>,
+    pub after: Option<String>,
+    #[serde(default, alias = "displayOptions")]
+    pub options: Option<DisplayOptions>,
+    #[serde(default)]
+    pub cursor: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
