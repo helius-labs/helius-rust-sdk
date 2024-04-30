@@ -1,6 +1,6 @@
-use super::enums::{
+use super::{enums::{
     AssetSortBy, AssetSortDirection, Context, Interface, OwnershipModel, RoyaltyModel, Scope, UseMethod,
-};
+}, SearchAssetsOptions, SearchConditionType, TokenType};
 use crate::types::{DisplayOptions, GetAssetOptions};
 // use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
@@ -214,6 +214,55 @@ pub struct GetAssetsByGroup {
     pub options: Option<DisplayOptions>,
     #[serde(default)]
     pub cursor: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct SearchAssets {
+    pub negate: Option<bool>,
+    pub condition_type: Option<SearchConditionType>,
+    pub interface: Option<Interface>,
+    pub owner_address: Option<String>,
+    pub owner_type: Option<OwnershipModel>,
+    pub creator_address: Option<String>,
+    pub creator_verified: Option<bool>,
+    pub authority_address: Option<String>,
+    pub grouping: Option<(String, String)>,
+    pub delegate: Option<String>,
+    pub frozen: Option<bool>,
+    pub supply: Option<u64>,
+    pub supply_mint: Option<String>,
+    pub compressed: Option<bool>,
+    pub compressible: Option<bool>,
+    pub royalty_target_type: Option<RoyaltyModel>,
+    pub royalty_target: Option<String>,
+    pub royalty_amount: Option<u32>,
+    pub burnt: Option<bool>,
+    pub sort_by: Option<AssetSorting>,
+    pub limit: Option<u32>,
+    pub page: Option<u32>,
+    pub before: Option<String>,
+    pub after: Option<String>,
+    #[serde(default)]
+    pub json_uri: Option<String>,
+    #[serde(default)]
+    pub not: Option<NotFilter>,
+    #[serde(default, alias = "displayOptions")]
+    pub options: Option<SearchAssetsOptions>,
+    #[serde(default)]
+    pub cursor: Option<String>,
+    #[serde(default)]
+    pub name: Option<String>,
+    #[serde(default)]
+    pub collections: Option<Vec<String>>,
+    #[serde(default)]
+    pub token_type: Option<TokenType>,
+    // #[serde(default)]
+    // pub created_at: Option<CreatedAtFilter>, //TODO: Uncomment this line when the CreatedAtFilter struct is defined
+    #[serde(default)]
+    pub tree: Option<String>,
+    #[serde(default)]
+    pub collection_nft: Option<bool>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -579,3 +628,20 @@ pub struct MplCoreInfo {
     pub current_size: Option<i32>,
     pub plugins_json_version: Option<i32>,
 }
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct NotFilter {
+    pub collections: Option<Vec<String>>,
+    pub owners: Option<Vec<Vec<u8>>>,
+    pub creators: Option<Vec<Vec<u8>>>,
+    pub authorities: Option<Vec<Vec<u8>>>,
+}
+
+// #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+// #[serde(deny_unknown_fields, rename_all = "camelCase")]
+// pub struct CreatedAtFilter {
+//     #[serde(default)]
+//     pub after: Option<DateTime<Utc>>,
+//     #[serde(default)]
+//     pub before: Option<DateTime<Utc>>,
+// }

@@ -113,3 +113,21 @@ pub enum AssetSortDirection {
     #[serde(rename = "desc")]
     Desc,
 }
+
+#[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]
+pub enum SearchConditionType {
+    #[serde(rename = "all")]
+    All,
+    #[serde(rename = "any")]
+    Any,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(rename_all(serialize = "camelCase", deserialize = "camelCase"))]
+pub enum TokenType {
+    Fungible,
+    NonFungible,
+    CompressedNft,
+    RegularNft,
+    All,
+}

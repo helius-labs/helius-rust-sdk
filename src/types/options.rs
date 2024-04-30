@@ -26,3 +26,25 @@ pub struct GetAssetOptions {
     pub show_native_balance: bool,
     pub show_inscription: bool,
 }
+
+#[derive(Serialize, Deserialize, Debug, Default)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct SearchAssetsOptions {
+    // Customer configured
+    #[serde(default)]
+    pub show_collection_metadata: bool,
+    #[serde(default)]
+    pub show_grand_total: bool,
+    #[serde(default)]
+    pub show_unverified_collections: bool,
+    #[serde(default)]
+    pub show_raw_data: bool,
+    #[serde(default)]
+    pub require_full_index: bool,
+    #[serde(default)]
+    pub show_system_metadata: bool,
+    #[serde(default)]
+    pub show_zero_balance: bool,
+    #[serde(default)]
+    pub show_closed_accounts: bool
+}
