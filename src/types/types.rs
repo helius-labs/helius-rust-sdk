@@ -94,6 +94,22 @@ pub struct GetAssetsByAuthority {
     pub cursor: Option<String>,
 }
 
+#[derive(Serialize, Deserialize, Default, Debug)]
+pub struct GetAssetsByGroup {
+    #[serde(rename = "groupKey")]
+    pub group_key: String,
+    #[serde(rename = "groupValue")]
+    pub group_value: String,
+    pub page: u32,
+    pub limit: u32,
+    #[serde(rename = "sortBy")]
+    pub sort_by: Option<AssetSorting>,
+    pub before: Option<String>,
+    pub after: Option<String>,
+    #[serde(rename = "displayOptions")]
+    pub display_options: Option<DisplayOptions>,
+}
+
 #[derive(Serialize, Deserialize, Debug, Default)]
 pub struct GetAsset {
     pub id: String,
@@ -129,16 +145,6 @@ pub struct ApiResponse<T> {
     pub jsonrpc: String,
     pub result: T,
     pub id: String,
-}
-
-#[derive(Serialize, Deserialize, Debug, Default)]
-#[serde(untagged)]
-pub enum ResponseType {
-    #[default]
-    DefaultResponse, // This is a placeholder for the default response type. TODO: Replace this an appropriate type
-    GetAssetResponseList(AssetList),
-    GetAssetResponseForAsset(Asset),
-    Other(Value),
 }
 
 #[derive(Serialize, Deserialize, Debug, Default)]

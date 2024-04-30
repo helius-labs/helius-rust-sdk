@@ -8,7 +8,7 @@ use crate::request_handler::RequestHandler;
 use crate::types::types::{RpcRequest, RpcResponse};
 use crate::types::{
     Asset, AssetList, AssetProof, GetAsset, GetAssetBatch, GetAssetProof, GetAssetProofBatch, GetAssetsByAuthority,
-    GetAssetsByCreator, GetAssetsByOwner,
+    GetAssetsByCreator, GetAssetsByGroup, GetAssetsByOwner,
 };
 
 use reqwest::{Client, Method, Url};
@@ -70,11 +70,6 @@ impl RpcClient {
         self.post_rpc_request("getAssetProofBatch", request).await
     }
 
-    /// Gets a list of assets owned by a given address
-    pub async fn get_assets_by_owner(&self, request: GetAssetsByOwner) -> Result<AssetList> {
-        self.post_rpc_request("getAssetsByOwner", request).await
-    }
-
     /// Gets a list of assets of a given authority
     pub async fn get_assets_by_authority(&self, request: GetAssetsByAuthority) -> Result<AssetList> {
         self.post_rpc_request("getAssetsByAuthority", request).await
@@ -83,5 +78,15 @@ impl RpcClient {
     /// Gets a list of assets of a given creator
     pub async fn get_assets_by_creator(&self, request: GetAssetsByCreator) -> Result<AssetList> {
         self.post_rpc_request("getAssetsByCreator", request).await
+    }
+
+    /// Gets a list of assets by a group key and value
+    pub async fn get_assets_by_group(&self, request: GetAssetsByGroup) -> Result<AssetList> {
+        self.post_rpc_request("getAssetsByGroup", request).await
+    }
+
+    /// Gets a list of assets owned by a given address
+    pub async fn get_assets_by_owner(&self, request: GetAssetsByOwner) -> Result<AssetList> {
+        self.post_rpc_request("getAssetsByOwner", request).await
     }
 }
