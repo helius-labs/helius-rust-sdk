@@ -2000,6 +2000,7 @@ dependencies = [
  "serde_json",
  "solana-client",
  "solana-core",
+ "solana-program",
  "solana-sdk",
  "thiserror",
  "tokio",

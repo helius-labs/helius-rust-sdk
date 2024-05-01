@@ -19,6 +19,7 @@ tokio = { version = "1.37.0", features = ["macros", "rt-multi-thread", "net"] }
 chrono = { version = "0.4.11", features = ["serde"] }
 solana-client = "1.18.12"
 solana-core = "1.18.12"
+solana-program = "1.18.12"
 
 [dev-dependencies]
 mockito = "1.4.0"
