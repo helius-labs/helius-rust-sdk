@@ -1,6 +1,6 @@
 use super::{
     enums::{AssetSortBy, AssetSortDirection, Context, Interface, OwnershipModel, RoyaltyModel, Scope, UseMethod},
-    SearchAssetsOptions, SearchConditionType, TokenType,
+    SearchAssetsOptions, SearchConditionType, TokenType, PriorityLevel, UiTransactionEncoding
 };
 use crate::types::{DisplayOptions, GetAssetOptions};
 // use chrono::{DateTime, Utc};
@@ -767,4 +767,40 @@ pub struct MintResponse {
     pub minted: bool,
     #[serde(rename = "assetId")]
     pub asset_id: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct GetPriorityFeeEstimateOptions {
+    priority_level: Option<PriorityLevel>,
+    include_all_priority_fee_levels: Option<bool>,
+    transaction_encoding: Option<UiTransactionEncoding>,
+    lookback_slots: Option<u8>,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct GetPriorityFeeEstimateRequest {
+    transaction: Option<String>,
+    #[serde(rename = "accountKeys")]
+    account_keys: Option<Vec<String>>,
+    options: Option<GetPriorityFeeEstimateOptions>,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct MicroLamportPriorityFeeLevels {
+    none: f64,
+    low: f64,
+    medium: f64,
+    high: f64,
+    #[serde(rename = "veryHigh")]
+    very_high: f64,
+    #[serde(rename = "unsafeMax")]
+    unsafe_max: f64,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct GetPriorityFeeResponse {
+    priority_fee_estimate: Option<f64>,
+    priority_fee_levels: Option<MicroLamportPriorityFeeLevels>,
 }

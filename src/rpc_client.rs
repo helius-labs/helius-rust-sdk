@@ -24,9 +24,7 @@ use crate::error::Result;
 use crate::request_handler::RequestHandler;
 use crate::types::types::{RpcRequest, RpcResponse};
 use crate::types::{
-    Asset, AssetList, AssetProof, EditionsList, GetAsset, GetAssetBatch, GetAssetProof, GetAssetProofBatch,
-    GetAssetSignatures, GetAssetsByAuthority, GetAssetsByCreator, GetAssetsByGroup, GetAssetsByOwner, GetNftEditions,
-    GetTokenAccounts, SearchAssets, TokenAccountsList, TransactionSignatureList,
+    Asset, AssetList, AssetProof, EditionsList, GetAsset, GetAssetBatch, GetAssetProof, GetAssetProofBatch, GetAssetSignatures, GetAssetsByAuthority, GetAssetsByCreator, GetAssetsByGroup, GetAssetsByOwner, GetNftEditions, GetPriorityFeeEstimateRequest, GetTokenAccounts, SearchAssets, TokenAccountsList, TransactionSignatureList
 };
 
 use reqwest::{Client, Method, Url};
@@ -227,5 +225,16 @@ impl RpcClient {
     /// A `Result` containing an `EditionsList` of all the editions linked to the master NFT. It can also return `None` if there aren't any editions linked to the specified master NFT
     pub async fn get_nft_editions(&self, request: GetNftEditions) -> Result<EditionsList> {
         self.post_rpc_request("getNftEditions", request).await
+    }
+
+    /// Gets an estimate of the priority fees required for a transaction to be processed more quicklGetPriorityFeeEstimateRequest
+    /// 
+    /// This method calculates varying levels of transaction fees that can influence the priority of a transaction, based on current network conditions
+    /// 
+    /// # Arguments
+    /// * `request` - A struct that includes the following:
+    /// `transaction` - Optionally, the serialized transaction for which the fee estimate is requested
+    pub async fn get_priority_fee_estimate(&self, request: GetPriorityFeeEstimateRequest) -> Result<GetPriorityFeeEstimateResponse> {
+        self.post_rpc_request("getPriorityFeeEstimate", request).await
     }
 }

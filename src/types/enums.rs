@@ -150,3 +150,23 @@ impl MintApiAuthority {
         }
     }
 }
+
+#[derive(Serialize, Deserialize, Debug)]
+pub enum PriorityLevel {
+    None,
+    Low,
+    Medium,
+    High,
+    VeryHigh,
+    UnsafeMax,
+    Default,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub enum UiTransactionEncoding {
+    Binary,
+    Base64,
+    Base58,
+    Json,
+    JsonParsed,
+}
