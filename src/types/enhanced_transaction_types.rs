@@ -204,3 +204,15 @@ pub struct CompressedNftEvent {
     pub metadata: Option<Metadata>,
     pub update_args: Option<Value>,
 }
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct ParseTransactionsRequest {
+    pub transactions: Vec<String>,
+}
+
+/// We have a limit of 100 transactions per call, so this helps split the signatures into different chunks
+impl ParseTransactionsRequest {
+    pub fn from_slice(signatures: &[String]) -> Vec<Self> {
+      signatures.chunks(100).map(|chunk| Self { transactions: chunk.to_vec() }).collect()
+    }
+  }
