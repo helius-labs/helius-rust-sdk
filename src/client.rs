@@ -32,7 +32,10 @@ impl Helius {
     ///
     /// # Example
     /// ```rust
-    /// let helius = Helius::new("your_api_key", Cluster::Devnet).expect("Failed to create a Helius client")
+    /// use helius_sdk::client::Helius;
+    /// use helius_sdk::types::Cluster;
+    ///
+    /// let helius = Helius::new("your_api_key", Cluster::Devnet).expect("Failed to create a Helius client");
     /// ```
     pub fn new(api_key: &str, cluster: Cluster) -> Result<Self> {
         let config: Arc<Config> = Arc::new(Config::new(api_key, cluster)?);

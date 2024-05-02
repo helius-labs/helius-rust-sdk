@@ -47,17 +47,18 @@ impl HeliusFactory {
     /// # Example
     /// ```rust
     /// use helius_sdk::types::*;
-    /// use helius_sdk::Helius;
-    /// 
+    /// use helius_sdk::client::Helius;
+    /// use helius_sdk::factory::HeliusFactory;
+    ///
     /// #[tokio::main]
     /// async fn main() {
     ///     let factory = HeliusFactory::new("your_api_key_here");
     ///
     ///     let helius_dev = factory.create(Cluster::Devnet).unwrap();
-    ///     helius_dev.request_name().await;
+    ///     // Perform devnet request: helius_dev.request_name().await;
     ///     
     ///     let helius_main = factory.create(Cluster::MainnetBeta).unwrap();
-    ///     helius_main.request_name().await;
+    ///     // Perform mainnet request: helius_main.request_name().await;
     /// }
     /// ```
     pub fn create(&self, cluster: Cluster) -> Result<Helius> {
