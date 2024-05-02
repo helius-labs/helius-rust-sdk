@@ -1,6 +1,6 @@
 use super::{
     enums::{AssetSortBy, AssetSortDirection, Context, Interface, OwnershipModel, RoyaltyModel, Scope, UseMethod},
-    SearchAssetsOptions, SearchConditionType, TokenType, PriorityLevel, UiTransactionEncoding
+    PriorityLevel, SearchAssetsOptions, SearchConditionType, TokenType, UiTransactionEncoding,
 };
 use crate::types::{DisplayOptions, GetAssetOptions};
 // use chrono::{DateTime, Utc};
@@ -769,38 +769,39 @@ pub struct MintResponse {
     pub asset_id: Option<String>,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct GetPriorityFeeEstimateOptions {
-    priority_level: Option<PriorityLevel>,
-    include_all_priority_fee_levels: Option<bool>,
-    transaction_encoding: Option<UiTransactionEncoding>,
-    lookback_slots: Option<u8>,
+    pub priority_level: Option<PriorityLevel>,
+    pub include_all_priority_fee_levels: Option<bool>,
+    pub transaction_encoding: Option<UiTransactionEncoding>,
+    pub lookback_slots: Option<u8>,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Default)]
 pub struct GetPriorityFeeEstimateRequest {
-    transaction: Option<String>,
-    #[serde(rename = "accountKeys")]
-    account_keys: Option<Vec<String>>,
-    options: Option<GetPriorityFeeEstimateOptions>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub transaction: Option<String>,
+    #[serde(rename = "accountKeys", skip_serializing_if = "Option::is_none")]
+    pub account_keys: Option<Vec<String>>,
+    pub options: Option<GetPriorityFeeEstimateOptions>,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Default)]
 pub struct MicroLamportPriorityFeeLevels {
-    none: f64,
-    low: f64,
-    medium: f64,
-    high: f64,
+    pub none: f64,
+    pub low: f64,
+    pub medium: f64,
+    pub high: f64,
     #[serde(rename = "veryHigh")]
-    very_high: f64,
+    pub very_high: f64,
     #[serde(rename = "unsafeMax")]
-    unsafe_max: f64,
+    pub unsafe_max: f64,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Default)]
 #[serde(rename_all = "camelCase")]
-pub struct GetPriorityFeeResponse {
-    priority_fee_estimate: Option<f64>,
-    priority_fee_levels: Option<MicroLamportPriorityFeeLevels>,
+pub struct GetPriorityFeeEstimateResponse {
+    pub priority_fee_estimate: Option<f64>,
+    pub priority_fee_levels: Option<MicroLamportPriorityFeeLevels>,
 }

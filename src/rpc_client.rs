@@ -24,7 +24,10 @@ use crate::error::Result;
 use crate::request_handler::RequestHandler;
 use crate::types::types::{RpcRequest, RpcResponse};
 use crate::types::{
-    Asset, AssetList, AssetProof, EditionsList, GetAsset, GetAssetBatch, GetAssetProof, GetAssetProofBatch, GetAssetSignatures, GetAssetsByAuthority, GetAssetsByCreator, GetAssetsByGroup, GetAssetsByOwner, GetNftEditions, GetPriorityFeeEstimateRequest, GetTokenAccounts, SearchAssets, TokenAccountsList, TransactionSignatureList
+    Asset, AssetList, AssetProof, EditionsList, GetAsset, GetAssetBatch, GetAssetProof, GetAssetProofBatch,
+    GetAssetSignatures, GetAssetsByAuthority, GetAssetsByCreator, GetAssetsByGroup, GetAssetsByOwner, GetNftEditions,
+    GetPriorityFeeEstimateRequest, GetPriorityFeeEstimateResponse, GetTokenAccounts, SearchAssets, TokenAccountsList,
+    TransactionSignatureList,
 };
 
 use reqwest::{Client, Method, Url};
@@ -228,13 +231,26 @@ impl RpcClient {
     }
 
     /// Gets an estimate of the priority fees required for a transaction to be processed more quicklGetPriorityFeeEstimateRequest
-    /// 
+    ///
     /// This method calculates varying levels of transaction fees that can influence the priority of a transaction, based on current network conditions
-    /// 
+    ///
     /// # Arguments
     /// * `request` - A struct that includes the following:
     /// `transaction` - Optionally, the serialized transaction for which the fee estimate is requested
-    pub async fn get_priority_fee_estimate(&self, request: GetPriorityFeeEstimateRequest) -> Result<GetPriorityFeeEstimateResponse> {
-        self.post_rpc_request("getPriorityFeeEstimate", request).await
+    /// `account_key` - Optionally, a list of account public keys involved in a given transaction to help determine the necessary priority fee based on the accounts' recent activity
+    /// `options` - Additional options for fine-tuning the request, such as the desired priority level or the number of slots to look back and consider for the estimate
+    ///
+    /// # Returns
+    /// A `Result` that, if successful, wraps the `GetPriorityFeeEstimateResponse` struct, containing:
+    /// - `priority_fee_estimate`: The estimated priority fee in micro lamports
+    /// - `priority_fee_levels`: A detailed breakdown of potential priority fees at various levels
+    ///
+    /// # Errors
+    /// Returns
+    pub async fn get_priority_fee_estimate(
+        &self,
+        request: GetPriorityFeeEstimateRequest,
+    ) -> Result<GetPriorityFeeEstimateResponse> {
+        self.post_rpc_request("getPriorityFeeEstimate", vec![request]).await
     }
 }
