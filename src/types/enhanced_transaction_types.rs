@@ -213,6 +213,11 @@ pub struct ParseTransactionsRequest {
 /// We have a limit of 100 transactions per call, so this helps split the signatures into different chunks
 impl ParseTransactionsRequest {
     pub fn from_slice(signatures: &[String]) -> Vec<Self> {
-      signatures.chunks(100).map(|chunk| Self { transactions: chunk.to_vec() }).collect()
+        signatures
+            .chunks(100)
+            .map(|chunk| Self {
+                transactions: chunk.to_vec(),
+            })
+            .collect()
     }
-  }
+}
