@@ -805,3 +805,61 @@ pub struct GetPriorityFeeEstimateResponse {
     pub priority_fee_estimate: Option<f64>,
     pub priority_fee_levels: Option<MicroLamportPriorityFeeLevels>,
 }
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct GetRwaAssetRequest {
+    pub id: String,
+}
+
+#[derive(Serialize, Deserialize, Debug, Default)]
+pub struct GetRwaAssetResponse {
+    pub items: FullRwaAccount,
+}
+
+#[derive(Serialize, Deserialize, Default, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct FullRwaAccount {
+    pub asset_controller: Option<AssetControllerAccount>,
+    pub data_registry: Option<DataRegistryAccount>,
+    pub identity_registry: Option<IdentityRegistryAccount>,
+    pub policy_engine: Option<PolicyEngine>,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct AssetControllerAccount {
+    pub address: String,
+    pub mint: String,
+    pub authority: String,
+    pub delegate: String,
+    pub version: u32,
+    pub closed: bool,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct DataRegistryAccount {
+    pub address: String,
+    pub mint: String,
+    pub version: u32,
+    pub closed: bool,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct IdentityRegistryAccount {
+    pub address: String,
+    pub mint: String,
+    pub authority: String,
+    pub delegate: String,
+    pub version: u32,
+    pub closed: bool,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct PolicyEngine {
+    pub address: String,
+    pub mint: String,
+    pub authority: String,
+    pub delegate: String,
+    pub policies: Vec<String>,
+    pub version: u32,
+    pub closed: bool,
+}
