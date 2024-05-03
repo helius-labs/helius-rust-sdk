@@ -22,7 +22,10 @@ jobs:
         toolchain: stable
         profile: minimal
         override: true
+        components: clippy
     
+    - name: Check with Clippy
+      run: cargo clippy -- -D warnings
     - name: Build
       run: cargo build --verbose
       
