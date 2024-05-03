@@ -13,6 +13,8 @@ use helius_sdk::error::HeliusError;
 use helius_sdk::rpc_client::RpcClient;
 use helius_sdk::types::types::{GetAssetResponseForAsset, DisplayOptions};
 use helius_sdk::types::{Cluster, GetAssetRequest};
+
+use reqwest::Client;
 use std::sync::Arc;
 
 #[tokio::main]
@@ -21,7 +23,7 @@ async fn main() -> Result<(), HeliusError> {
     let cluster: Cluster = Cluster::MainnetBeta;
 
     let config: Config = Config::new(api_key, cluster)?;
-    let client: reqwest::Client = reqwest::Client::new();
+    let client: Client = Client::new();
     let rpc_client: RpcClient = RpcClient::new(Arc::new(client), Arc::new(config))?;
 
     let request: GetAssetRequest = GetAssetRequest {
