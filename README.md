@@ -47,6 +47,7 @@ async fn main() -> Result<(), HeliusError> {
     Ok(())
 }
 ```
+More examples on how to use the SDK can be found in the [`examples`](https://github.com/helius-labs/helius-rust-sdk/tree/dev/examples) directory.
 
 ## Error Handling
 
@@ -65,9 +66,30 @@ If you encounter any of these errors, refer to the Helius documentation for furt
 Our SDK is designed to provide a seamless developer experience when building on Solana. We've separated the core functionality into various segments:
 
 DAS API
+- [get_asset](https://docs.helius.dev/compression-and-das-api/digital-asset-standard-das-api/get-asset)
+- [get_asset_batch](https://docs.helius.dev/compression-and-das-api/digital-asset-standard-das-api/get-asset/get-asset-batch)
+- [get_asset_proof](https://docs.helius.dev/compression-and-das-api/digital-asset-standard-das-api/get-asset-proof)
+- [get_asset_proof_batch](https://docs.helius.dev/compression-and-das-api/digital-asset-standard-das-api/get-asset-proof/get-asset-proof-batch)
+- [get_assets_by_owner](https://docs.helius.dev/compression-and-das-api/digital-asset-standard-das-api/get-assets-by-owner)
+- [get_assets_by_authority](https://docs.helius.dev/compression-and-das-api/digital-asset-standard-das-api/get-assets-by-authority)
+- [get_assets_by_creator](https://docs.helius.dev/compression-and-das-api/digital-asset-standard-das-api/get-assets-by-creator)
+- [get_assets_by_group](https://docs.helius.dev/compression-and-das-api/digital-asset-standard-das-api/get-assets-by-group)
+- [search_assets](https://docs.helius.dev/compression-and-das-api/digital-asset-standard-das-api/search-assets)
+- [get_signatures_for_asset](https://docs.helius.dev/compression-and-das-api/digital-asset-standard-das-api/get-signatures-for-asset)
+- [get_token_accounts](https://docs.helius.dev/compression-and-das-api/digital-asset-standard-das-api/get-token-accounts)
+- [get_nft_edition](https://docs.helius.dev/compression-and-das-api/digital-asset-standard-das-api/get-nft-editions)
+- [get_rwa_asset](https://github.com/helius-labs/helius-sdk/pull/71)
 
 Mint API
+- [mint_compressed_nft](https://docs.helius.dev/compression-and-das-api/mint-api/mint-compressed-nft)
+
+Enhanced Transactions API
+- [parse_transactions](https://docs.helius.dev/solana-apis/enhanced-transactions-api/parse-transaction-s)
+- [parsed_transaction_history](https://docs.helius.dev/solana-apis/enhanced-transactions-api/parsed-transaction-history)
 
 Webhooks
 
 Helper Methods
+- [get_priority_fee_estimate](https://docs.helius.dev/solana-rpc-nodes/alpha-priority-fee-api)
+- [deserialize_str_to_number](https://github.com/helius-labs/helius-rust-sdk/blob/dev/src/utils/deserialize_str_to_number.rs)
+- [is_valid_solana_address](https://github.com/helius-labs/helius-rust-sdk/blob/dev/src/utils/is_valid_solana_address.rs)
