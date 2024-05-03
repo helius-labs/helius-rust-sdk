@@ -50,9 +50,14 @@ jobs:
       run: |
         # Determine base commit depending on event type
         if [[ $GITHUB_EVENT_NAME == 'pull_request' ]]; then
-          BASE_COMMIT=$GITHUB_BASE_REF
+          BASE_COMMIT=$(git merge-base $GITHUB_BASE_REF $GITHUB_SHA)
         else
-          BASE_COMMIT=$GITHUB_SHA^  # Using the parent commit of the current commit
+          # Check if the current commit has a parent commit
+          if git rev-parse --verify $GITHUB_SHA^ > /dev/null 2>&1; then
+            BASE_COMMIT=$GITHUB_SHA^  # Using the parent commit of the current commit
+          else
+            BASE_COMMIT=$GITHUB_SHA  # Use the current commit if no parent is available
+          fi
         fi
     
         # Get changed files in Rust format
@@ -63,10 +68,7 @@ jobs:
         else
           echo "No Rust files changed."
         fi
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-    
-
+      
     - name: Build
       run: cargo build --verbose
       
