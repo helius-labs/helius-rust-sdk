@@ -38,7 +38,7 @@ use solana_client::rpc_client::RpcClient as SolanaRpcClient;
 pub struct RpcClient {
     pub handler: RequestHandler,
     pub config: Arc<Config>,
-    pub solana_client: SolanaRpcClient,
+    pub solana_client: Arc<SolanaRpcClient>,
 }
 
 impl RpcClient {
@@ -56,7 +56,7 @@ impl RpcClient {
     pub fn new(client: Arc<Client>, config: Arc<Config>) -> Result<Self> {
         let handler: RequestHandler = RequestHandler::new(client)?;
         let url: String = format!("{}/?api-key={}", config.endpoints.rpc, config.api_key);
-        let solana_client: SolanaRpcClient = SolanaRpcClient::new(url);
+        let solana_client: Arc<SolanaRpcClient> = Arc::new(SolanaRpcClient::new(url));
 
         Ok(RpcClient {
             handler,

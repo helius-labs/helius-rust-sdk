@@ -6,6 +6,7 @@ use crate::rpc_client::RpcClient;
 use crate::types::Cluster;
 
 use reqwest::Client;
+use solana_client::rpc_client::RpcClient as SolanaRpcClient;
 
 /// The `Helius` struct is the main entry point to interacting with the SDK
 ///
@@ -55,5 +56,9 @@ impl Helius {
     /// A cloned `Arc<RpcClient>` that can be safely shared across threads
     pub fn rpc(&self) -> Arc<RpcClient> {
         self.rpc_client.clone()
+    }
+
+    pub fn connection(&self) -> Arc<SolanaRpcClient> {
+        self.rpc_client.solana_client.clone()
     }
 }
