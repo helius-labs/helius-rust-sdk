@@ -95,3 +95,4 @@ Helper Methods
 - [get_priority_fee_estimate](https://docs.helius.dev/solana-rpc-nodes/alpha-priority-fee-api)
 - [deserialize_str_to_number](https://github.com/helius-labs/helius-rust-sdk/blob/dev/src/utils/deserialize_str_to_number.rs)
 - [is_valid_solana_address](https://github.com/helius-labs/helius-rust-sdk/blob/dev/src/utils/is_valid_solana_address.rs)
+- [make_keypairs](https://github.com/helius-labs/helius-rust-sdk/blob/dev/src/utils/make_keypairs.rs)
