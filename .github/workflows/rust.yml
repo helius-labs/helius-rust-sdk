@@ -48,13 +48,24 @@ jobs:
       
     - name: Check with Clippy on changed files
       run: |
-        CHANGED_FILES=$(git diff --name-only ${{ github.event.before }} ${{ github.sha }} | grep '\.rs$')
+        # Determine base commit depending on event type
+        if [[ $GITHUB_EVENT_NAME == 'pull_request' ]]; then
+          BASE_COMMIT=$GITHUB_BASE_REF
+        else
+          BASE_COMMIT=$GITHUB_SHA^  # Using the parent commit of the current commit
+        fi
+    
+        # Get changed files in Rust format
+        CHANGED_FILES=$(git diff --name-only $BASE_COMMIT $GITHUB_SHA | grep '\.rs$')
         if [ -n "$CHANGED_FILES" ]; then
           echo "Running Clippy on changed files..."
           echo "$CHANGED_FILES" | xargs cargo clippy -- -D warnings
         else
           echo "No Rust files changed."
         fi
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    
 
     - name: Build
       run: cargo build --verbose
