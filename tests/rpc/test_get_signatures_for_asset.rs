@@ -60,7 +60,7 @@ async fn test_get_asset_signatures_success() {
         ..Default::default()
     };
 
-    let response: Result<TransactionSignatureList, HeliusError> = helius.rpc().get_asset_signatures(request).await;
+    let response: Result<TransactionSignatureList, HeliusError> = helius.rpc().get_signatures_for_asset(request).await;
     assert!(response.is_ok(), "API call failed with error: {:?}", response.err());
 
     let signatures: TransactionSignatureList = response.unwrap();
@@ -108,6 +108,6 @@ async fn test_get_asset_signatures_failure() {
         ..Default::default()
     };
 
-    let response: Result<TransactionSignatureList, HeliusError> = helius.rpc().get_asset_signatures(request).await;
+    let response: Result<TransactionSignatureList, HeliusError> = helius.rpc().get_signatures_for_asset(request).await;
     assert!(response.is_err(), "Expected an error but got success");
 }

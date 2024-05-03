@@ -204,7 +204,7 @@ impl RpcClient {
     ///
     /// # Returns
     /// A `Result` containing a `TransactionSignatureList` detailing the transactions involving the specified asset. It can also return `None` if any transactions involving the specified asset cannot be retrieved
-    pub async fn get_asset_signatures(&self, request: GetAssetSignatures) -> Result<TransactionSignatureList> {
+    pub async fn get_signatures_for_asset(&self, request: GetAssetSignatures) -> Result<TransactionSignatureList> {
         self.post_rpc_request("getSignaturesForAsset", request).await
     }
 
