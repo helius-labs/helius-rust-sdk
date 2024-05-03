@@ -28,7 +28,7 @@ pub struct EnhancedTransaction {
 #[serde(rename_all = "camelCase")]
 pub struct AccountData {
     pub account: String,
-    pub native_token_balance: Number,
+    pub native_token_balance: Option<Number>,
     pub token_balance_changes: Option<Vec<TokenBalanceChange>>,
 }
 
