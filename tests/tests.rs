@@ -1,6 +1,7 @@
 mod utils {
     mod test_deserialize_str_to_number;
     mod test_is_valid_solana_address;
+    mod test_make_keypairs;
 }
 
 mod rpc {
