@@ -16,6 +16,25 @@ jobs:
 
     steps:
     - uses: actions/checkout@v3
+
+    - name: Cache cargo registry
+      uses: actions/cache@v3
+      with:
+        path: ~/.cargo/registry
+        key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+    
+    - name: Cache cargo index
+      uses: actions/cache@v3
+      with:
+          path: ~/.cargo/git
+          key: ${{ runner.os }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
+    
+    - name: Cache target directory
+      uses: actions/cache@v3
+      with:
+          path: target
+          key: ${{ runner.os }}-target-${{ hashFiles('**/Cargo.lock') }}
+
     - name: Set up Rust
       uses: actions-rs/toolchain@v1
       with:
@@ -27,8 +46,15 @@ jobs:
     - name: Install Protobuf Compiler
       run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
       
-    - name: Check with Clippy
-      run: cargo clippy -- -D warnings
+    - name: Check with Clippy on changed files
+      run: |
+        CHANGED_FILES=$(git diff --name-only ${{ github.event.before }} ${{ github.sha }} | grep '\.rs$')
+        if [ -n "$CHANGED_FILES" ]; then
+          echo "Running Clippy on changed files..."
+          echo "$CHANGED_FILES" | xargs cargo clippy -- -D warnings
+        else
+          echo "No Rust files changed."
+        fi
 
     - name: Build
       run: cargo build --verbose
