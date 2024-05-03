@@ -24,8 +24,12 @@ jobs:
         override: true
         components: clippy
     
+    - name: Install Protobuf Compiler
+      run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
+      
     - name: Check with Clippy
       run: cargo clippy -- -D warnings
+
     - name: Build
       run: cargo build --verbose
       
