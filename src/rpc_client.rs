@@ -208,7 +208,7 @@ impl RpcClient {
         self.post_rpc_request("getSignaturesForAsset", request).await
     }
 
-    /// Gets transaction signatures for a given asset
+    /// Gets information about all token accounts for a specific mint or owner
     ///
     /// # Arguments
     /// * `request` - A struct that includes the owner or mint address, along with optional sorting, pagination, and display options
@@ -230,7 +230,7 @@ impl RpcClient {
         self.post_rpc_request("getNftEditions", request).await
     }
 
-    /// Gets an estimate of the priority fees required for a transaction to be processed more quicklGetPriorityFeeEstimateRequest
+    /// Gets an estimate of the priority fees required for a transaction to be processed more quickly
     ///
     /// This method calculates varying levels of transaction fees that can influence the priority of a transaction, based on current network conditions
     ///
