@@ -46,28 +46,18 @@ jobs:
     - name: Install Protobuf Compiler
       run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
       
-    - name: Check with Clippy on changed files
+    - name: Get Changed Files
+      id: files
       run: |
-        # Determine base commit depending on event type
-        if [[ $GITHUB_EVENT_NAME == 'pull_request' ]]; then
-          BASE_COMMIT=$(git merge-base $GITHUB_BASE_REF $GITHUB_SHA)
-        else
-          # Check if the current commit has a parent commit
-          if git rev-parse --verify $GITHUB_SHA^ > /dev/null 2>&1; then
-            BASE_COMMIT=$GITHUB_SHA^  # Using the parent commit of the current commit
-          else
-            BASE_COMMIT=$GITHUB_SHA  # Use the current commit if no parent is available
-          fi
-        fi
+        echo "::set-output name=list::$(git diff --name-only ${{ github.event.before }} ${{ github.event.after }} | grep '\.rs$')"
     
-        # Get changed files in Rust format
-        CHANGED_FILES=$(git diff --name-only $BASE_COMMIT $GITHUB_SHA | grep '\.rs$')
-        if [ -n "$CHANGED_FILES" ]; then
-          echo "Running Clippy on changed files..."
-          echo "$CHANGED_FILES" | xargs cargo clippy -- -D warnings
-        else
-          echo "No Rust files changed."
-        fi
+    - name: Run Clippy
+      if: steps.files.outputs.list != ''
+      run: |
+        for file in ${{ steps.files.outputs.list }}; do
+          echo "Running clippy on $file"
+          cargo clippy -- -D warnings -A clippy::all $file || exit 1
+        done
       
     - name: Build
       run: cargo build --verbose
