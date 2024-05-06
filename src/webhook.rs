@@ -86,7 +86,10 @@ impl Helius {
         );
         let parsed_url: Url = Url::parse(&url).expect("Failed to parse URL");
 
-        self.rpc_client.handler.send(Method::GET, parsed_url, None::<&()>).await
+        self.rpc_client
+            .handler
+            .send(Method::GET, parsed_url, None::<&()>)
+            .await
     }
 
     /// Retrieves all Helius webhooks programmatically
@@ -102,6 +105,27 @@ impl Helius {
         );
         let parsed_url: Url = Url::parse(&url).expect("Failed to parse URL");
 
-        self.rpc_client.handler.send(Method::GET, parsed_url, None::<&()>).await
+        self.rpc_client.handler
+            .send(Method::GET, parsed_url, None::<&()>)
+            .await
+    }
+
+    /// Deletes a given Helius webhook programmatically
+    /// 
+    /// # Arguments
+    /// * `webhook_id` - The ID of the webhook to be deleted
+    /// 
+    /// # Returns
+    /// A unit since there isn't any response
+    pub async fn delete_webhook(&self, webhook_id: &str) -> Result<()> {
+        let url: String = format!(
+            "{}v0/webhooks/{}/?api-key={}",
+            self.config.endpoints.api, webhook_id, self.config.api_key
+        );
+        let parsed_url: Url = Url::parse(&url).expect("Failed to parse URL");
+
+        self.rpc_client.handler
+            .send(Method::DELETE, parsed_url, None::<&()>)
+            .await
     }
 }
