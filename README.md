@@ -3,6 +3,9 @@ An asynchronous Helius Rust SDK for building the future of Solana
 
 ## Documentation
 
+## Contributions
+Interested in contributing to the Helius Rust SDK? Read the following [contributions guide](https://github.com/helius-labs/helius-rust-sdk/blob/dev/CONTRIBUTIONS.md) before opening up a pull request!
+
 ## Installation
 
 ## Usage
