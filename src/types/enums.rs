@@ -689,3 +689,46 @@ pub enum ProgramName {
     #[serde(other)]
     Other(String),
 }
+
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum TransactionStatus {
+    #[default]
+    All,
+    Success,
+    Failed,
+}
+
+#[derive(Deserialize, Serialize, Eq, PartialEq, Clone, Debug, Default)]
+pub enum WebhookType {
+    #[serde(rename = "enhanced")]
+    #[default]
+    Enhanced,
+    #[serde(rename = "enhancedDevnet")]
+    EnhancedDevnet,
+    #[serde(rename = "raw")]
+    Raw,
+    #[serde(rename = "rawDevnet")]
+    RawDevnet,
+    #[serde(rename = "discord")]
+    Discord,
+    #[serde(rename = "discordDevnet")]
+    DiscordDevnet,
+}
+
+#[derive(Clone, Debug, Deserialize_enum_str, Serialize_enum_str, Default, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum AccountWebhookEncoding {
+    #[default]
+    JsonParsed,
+    #[serde(other)]
+    Other(String),
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub enum CollectionIdentifier {
+    #[serde(rename = "firstVerifiedCreators")]
+    FirstVerifiedCreators(Vec<String>),
+    #[serde(rename = "verifiedCollectionAddress")]
+    VerifiedCollectionAddress(Vec<String>),
+}

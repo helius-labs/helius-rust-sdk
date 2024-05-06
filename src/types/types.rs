@@ -1,6 +1,7 @@
 use super::{
     enums::{AssetSortBy, AssetSortDirection, Context, Interface, OwnershipModel, RoyaltyModel, Scope, UseMethod},
-    PriorityLevel, SearchAssetsOptions, SearchConditionType, TokenType, UiTransactionEncoding,
+    AccountWebhookEncoding, CollectionIdentifier, PriorityLevel, SearchAssetsOptions, SearchConditionType, TokenType,
+    TransactionStatus, TransactionType, UiTransactionEncoding, WebhookType,
 };
 use crate::types::{DisplayOptions, GetAssetOptions};
 // use chrono::{DateTime, Utc};
@@ -862,4 +863,113 @@ pub struct PolicyEngine {
     pub policies: Vec<String>,
     pub version: u32,
     pub closed: bool,
+}
+
+// #[derive(Serialize, Deserialize, PartialEq, Eq, Clone, Debug, Default)]
+// #[serde(rename_all = "camelCase")]
+// pub struct Webhook {
+//     #[serde(flatten)]
+//     pub webhook_data: WebhookData,
+// }
+
+// #[derive(Serialize, Deserialize, PartialEq, Eq, Clone, Debug, Default)]
+// #[serde(rename_all(serialize = "camelCase", deserialize = "camelCase"))]
+// pub struct WebhookData {
+//     #[serde(rename = "webhookURL")]
+//     pub webhook_url: String,
+//     #[serde(skip_serializing_if = "Vec::is_empty")]
+//     pub transaction_types: Vec<TransactionType>,
+//     pub account_addresses: Vec<String>,
+//     pub webhook_type: WebhookType,
+//     #[serde(skip_serializing_if = "Option::is_none")]
+//     pub auth_header: Option<String>,
+//     #[serde(default)]
+//     pub txn_status: TransactionStatus,
+//     #[serde(default)]
+//     pub encoding: AccountWebhookEncoding,
+// }
+
+// #[derive(Serialize, Deserialize, Clone, Debug, Default)]
+// pub struct CreateWebhookRequest {
+//     #[serde(flatten)]
+//     pub webhook_data: WebhookData,
+//     #[serde(rename = "webhookID")]
+//     pub webhook_id: String,
+//     pub wallet: String,
+// }
+
+// Just completely redo the types here for all the requests and responses - shits fucking borked rn
+
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct Webhook {
+    #[serde(rename = "webhookID")]
+    pub webhook_id: String,
+    pub wallet: String,
+    pub project: String,
+    #[serde(rename = "webhookURL")]
+    pub webhook_url: String,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub transaction_types: Vec<TransactionType>,
+    pub account_addresses: Vec<String>,
+    pub webhook_type: WebhookType,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub auth_header: Option<String>,
+    #[serde(default)]
+    pub txn_status: TransactionStatus,
+    #[serde(default)]
+    pub encoding: AccountWebhookEncoding,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct CreateWebhookRequest {
+    #[serde(rename = "webhookURL")]
+    pub webhook_url: String,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub transaction_types: Vec<TransactionType>,
+    pub account_addresses: Vec<String>,
+    pub webhook_type: WebhookType,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub auth_header: Option<String>,
+    #[serde(default)]
+    pub txn_status: TransactionStatus,
+    #[serde(default)]
+    pub encoding: AccountWebhookEncoding,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct CreateCollectionWebhookRequest {
+    pub collection_query: CollectionIdentifier,
+    #[serde(rename = "webhookURL")]
+    pub webhook_url: String,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub transaction_types: Vec<TransactionType>,
+    pub account_addresses: Vec<String>,
+    pub webhook_type: WebhookType,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub auth_header: Option<String>,
+    #[serde(default)]
+    pub txn_status: TransactionStatus,
+    #[serde(default)]
+    pub encoding: AccountWebhookEncoding,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct EditWebhookRequest {
+    #[serde(rename = "webhookID")]
+    pub webhook_id: String,
+    #[serde(rename = "webhookURL")]
+    pub webhook_url: String,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub transaction_types: Vec<TransactionType>,
+    pub account_addresses: Vec<String>,
+    pub webhook_type: WebhookType,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub auth_header: Option<String>,
+    #[serde(default)]
+    pub txn_status: TransactionStatus,
+    #[serde(default)]
+    pub encoding: AccountWebhookEncoding,
 }
