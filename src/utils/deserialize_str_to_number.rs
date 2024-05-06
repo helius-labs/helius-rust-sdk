@@ -3,10 +3,10 @@ use serde::{Deserialize, Deserializer};
 use serde_json::{Number, Value};
 
 /// Deserializes a `String` to a `Number`
-/// 
+///
 /// # Arguments
 /// * `deserializer` - The deserializer instance from which to read the JSON value
-/// 
+///
 /// # Returns a `Result` that is:
 /// - `Ok(Number)` when the input is either a valid `Number` string or a JSON `Number`
 /// - `Err(D::Error)` when there's an error from the deserializer if the input is neither a stringified number nor a direct `Number`,

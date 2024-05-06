@@ -28,10 +28,10 @@ impl Helius {
     }
 
     /// Retrieves a parsed transaction history for a specific address
-    /// 
+    ///
     /// # Arguments
     /// * `address` - An address for which a given parsed transaction history will be retrieved
-    /// 
+    ///
     /// # Returns
     /// A `Result` wrapping a vector of `EnhancedTransaction`s
     pub async fn parsed_transaction_history(&self, address: &str) -> Result<Vec<EnhancedTransaction>> {

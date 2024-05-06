@@ -2,10 +2,10 @@ use solana_sdk::pubkey::Pubkey;
 use std::str::FromStr;
 
 /// Checks whether a given string slice is a valid Solana address
-/// 
+///
 /// # Arguments
 /// * `address` - A string slice representing an address to validate
-/// 
+///
 /// # Returns
 /// `true` if the input is a valid Solana address based on the following criteria:
 /// - Have a length between 32 and 44 characters, inclusive
