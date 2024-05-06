@@ -90,6 +90,11 @@ Enhanced Transactions API
 - [`parsed_transaction_history`](https://docs.helius.dev/solana-apis/enhanced-transactions-api/parsed-transaction-history) - Retrieves a parsed transaction history for a specific address
 
 ### Webhooks
+- [`create_webhook`]()
+- [`edit_webhook`]()
+- [`append_addresses_to_webhook`]()
+- [`get_webhook_by_id`]()
+- [`get_all_webhooks`]()
 
 ### Helper Methods
 - [`get_priority_fee_estimate`](https://docs.helius.dev/solana-rpc-nodes/alpha-priority-fee-api) - Gets an estimate of the priority fees required for a transaction to be processed more quickly

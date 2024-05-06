@@ -5,7 +5,13 @@ use crate::Helius;
 use reqwest::{Method, Url};
 
 impl Helius {
-    /// Creates a webhook given account addresses,
+    /// Creates a webhook given account addresses
+    ///
+    /// # Arguments
+    /// * `request` - A `CreateWebhookRequest` containing the relevant webhook parameters for creation such as the webhook url and type
+    ///
+    /// # Returns
+    /// A `Result` wrapping a `Webhook` if the webhook is successfully created, or a `HeliusError` if creation fails
     pub async fn create_webhook(&self, request: CreateWebhookRequest) -> Result<Webhook> {
         let url: String = format!(
             "{}v0/webhooks/?api-key={}",
@@ -22,6 +28,12 @@ impl Helius {
     }
 
     /// Edits a Helius webhook programmatically
+    ///
+    /// # Arguments
+    /// * `request` - An `EditWebhookRequest` containing the parameters to be updated for a given webhook
+    ///
+    /// # Returns
+    /// A `Result` wrapping the updated `Webhook`, or a `HeliusError` if the edit request fails
     pub async fn edit_webhook(&self, request: EditWebhookRequest) -> Result<Webhook> {
         let url: String = format!(
             "{}v0/webhooks/{}/?api-key={}",
@@ -36,6 +48,13 @@ impl Helius {
     }
 
     /// Appends a set of addresses to a given webhook
+    ///
+    /// # Arguments
+    /// * `webhook_id` - The ID of the webhook to be updated
+    /// * `new_addresses` - A slice of strings representing the new account addresses to be added to the given webhook
+    ///
+    /// # Returns
+    /// A `Result` containing the updated `Webhook` object
     pub async fn append_addresses_to_webhook(&self, webhook_id: &str, new_addresses: &[String]) -> Result<Webhook> {
         let mut webhook: Webhook = self.get_webhook_by_id(webhook_id).await?;
         webhook.account_addresses.extend(new_addresses.to_vec());
@@ -54,6 +73,12 @@ impl Helius {
     }
 
     /// Gets a webhook config given a webhook ID
+    ///
+    /// # Arguments
+    /// * `webhook_id` - The ID of the webhook to be updated
+    ///
+    /// # Returns
+    /// A `Result` wrapping the `Webhook` queried, if it exists
     pub async fn get_webhook_by_id(&self, webhook_id: &str) -> Result<Webhook> {
         let url: String = format!(
             "{}v0/webhooks/{}/?api-key={}",
@@ -67,6 +92,9 @@ impl Helius {
     /// Retrieves all Helius webhooks programmatically
     ///
     /// Due to response size limitations, we will truncate addresses returned to 100 per config
+    ///
+    /// # Returns
+    /// A `Result` containing a vector of `Webhook` representing all configured webhooks for a given account
     pub async fn get_all_webhooks(&self) -> Result<Vec<Webhook>> {
         let url: String = format!(
             "{}v0/webhooks/?api-key={}",
