@@ -7,6 +7,13 @@ An asynchronous Helius Rust SDK for building the future of Solana
 Interested in contributing to the Helius Rust SDK? Read the following [contributions guide](https://github.com/helius-labs/helius-rust-sdk/blob/dev/CONTRIBUTIONS.md) before opening up a pull request!
 
 ## Installation
+To start using the Helius Rust SDK in your project, add it as a dependency via `cargo`. Open your project's `Cargo.toml` and add the following line under `[dependencies]`:
+```toml
+helius_sdk = "0.1.0"
+```
+Alternatively, use `cargo add helius_sdk` to add the dependency directly via the command line. This will automatically find the latest version compatible with your project and add it to your `Cargo.toml`.
+
+Remember to run `cargo update` regularly to fetch the latest version of the SDK.
 
 ## Usage
 The SDK needs to be configured with your account's API key, which can be found on the [Helius Developer Dashboard](https://dev.helius.xyz/dashboard/app). The following code is an example of how to use the SDK to fetch info on [Mad Lad #8420](https://xray.helius.xyz/token/F9Lw3ki3hJ7PF9HQXsBzoY8GyE6sPoEZZdXJBsTTD2rk?network=mainnet):
@@ -55,7 +62,6 @@ async fn main() -> Result<(), HeliusError> {
 More examples on how to use the SDK can be found in the [`examples`](https://github.com/helius-labs/helius-rust-sdk/tree/dev/examples) directory.
 
 ## Error Handling
-
 ### Common Error Codes
 You may encounter several error codes when working with the Helius Rust SDK. Below is a table detailing some of the common error codes along with additional information to aid with troubleshooting:
 
@@ -65,7 +71,10 @@ You may encounter several error codes when working with the Helius Rust SDK. Bel
 | 429        | Too Many Requests         | This indicates that the user has exceeded the request limit in a given timeframe or is out of credits |
 | 5XX        | Internal Server Error     | This is a generic error message for server-side issues. Please contact Helius support for assistance |
 
-If you encounter any of these errors, refer to the Helius documentation for further guidance, or reach out to the Helius support team for more detailed assistance
+If you encounter any of these errors:
+- Refer to [`errors.rs`](https://github.com/helius-labs/helius-rust-sdk/blob/dev/src/error.rs) for a list of all possible errors returned by the `Helius` client
+- Refer to the [Helius documentation](https://docs.helius.dev/) for further guidance
+- Reach out to the Helius support team for more detailed assistance
 
 ## Using the Helius SDK
 Our SDK is designed to provide a seamless developer experience when building on Solana. We've separated the core functionality into various segments:
