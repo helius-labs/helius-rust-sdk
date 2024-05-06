@@ -48,18 +48,11 @@ jobs:
     - name: Install Protobuf Compiler
       run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
       
-    - name: Get Changed Files
-      id: files
-      run: |
-        echo "::set-output name=list::$(git diff --name-only ${{ github.event.before }} ${{ github.event.after }} | grep '\.rs$')"
-    
-    - name: Run Clippy
-      if: steps.files.outputs.list != ''
-      run: |
-        for file in ${{ steps.files.outputs.list }}; do
-          echo "Running clippy on $file"
-          cargo clippy -- -D warnings -A clippy::all $file || exit 1
-        done
+    - name: rust-clippy-check
+      uses: actions-rs/clippy-check@v1.0.7
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        args: -- -D warnings
       
     - name: Build
       run: cargo build --verbose
