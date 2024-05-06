@@ -6,8 +6,9 @@ description ="An asynchronous Helius Rust SDK for building the future of Solana"
 repository = "https://github.com/0xIchigo/helius-rust-sdk"
 license = "MIT"
 authors = ["0xIchigo <0xIchigo@protonmail.com>"]
-documentation = "https://docs.rs/helius-sdk"
+documentation = "https://docs.helius.dev/"
 readme = "README.md"
+homepage = "https://www.helius.dev/"
 
 [dependencies]
 reqwest = { version = "0.12.3", features = ["json"] }
@@ -16,6 +17,11 @@ serde_json = "1.0.116"
 solana-sdk = "1.18.11"
 thiserror = "1.0.58"
 tokio = { version = "1.37.0", features = ["macros", "rt-multi-thread", "net"] }
+chrono = { version = "0.4.11", features = ["serde"] }
+solana-client = "1.18.12"
+solana-core = "1.18.12"
+solana-program = "1.18.12"
+serde-enum-str = "0.4.0"
 
 [dev-dependencies]
 mockito = "1.4.0"

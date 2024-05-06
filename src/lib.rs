@@ -1,6 +1,6 @@
 pub mod client;
 pub mod config;
-pub mod das_api;
+pub mod enhanced_transactions;
 pub mod error;
 pub mod factory;
 pub mod mint_api;

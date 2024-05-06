@@ -13,16 +13,54 @@ jobs:
   build:
 
     runs-on: ubuntu-latest
+    
+    permissions:
+      contents: write
+      pull-requests: write
 
     steps:
     - uses: actions/checkout@v3
+      with:
+        fetch-depth: '0'
+
+    - name: Cache cargo registry
+      uses: actions/cache@v3
+      with:
+        path: ~/.cargo/registry
+        key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+    
+    - name: Cache cargo index
+      uses: actions/cache@v3
+      with:
+          path: ~/.cargo/git
+          key: ${{ runner.os }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
+    
+    - name: Cache target directory
+      uses: actions/cache@v3
+      with:
+          path: target
+          key: ${{ runner.os }}-target-${{ hashFiles('**/Cargo.lock') }}
+
     - name: Set up Rust
       uses: actions-rs/toolchain@v1
       with:
         toolchain: stable
         profile: minimal
         override: true
+        components: clippy
     
+    - name: Install Protobuf Compiler
+      run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
+      
+    - name: Check formatting
+      run: cargo fmt --all -- --check
+    
+    - name: rust-clippy-check
+      uses: giraffate/clippy-action@v1
+      with:
+          reporter: 'github-pr-review'
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+      
     - name: Build
       run: cargo build --verbose
       
