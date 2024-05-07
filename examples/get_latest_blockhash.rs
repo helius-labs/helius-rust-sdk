@@ -1,10 +1,12 @@
 use helius_sdk::config::Config;
 use helius_sdk::error::HeliusError;
 use helius_sdk::rpc_client::RpcClient;
-use helius_sdk::types::{Asset, Cluster, GetAssetBatch, GetAssetOptions};
+use helius_sdk::types::*;
 use helius_sdk::Helius;
 
 use reqwest::Client;
+use solana_client::client_error::ClientError;
+use solana_sdk::hash::Hash;
 use std::sync::Arc;
 
 #[tokio::main]
@@ -22,19 +24,8 @@ async fn main() -> Result<(), HeliusError> {
         rpc_client,
     };
 
-    let request: GetAssetBatch = GetAssetBatch {
-        ids: vec![
-            "81bxPqYCE8j34nQm7Rooqi8Vt3iMHLzgZJ71rUVbQQuz".to_string(),
-            "CWHuz6GPjWYdwt7rTfRHKaorMwZP58Spyd7aqGK7xFbn".to_string(),
-        ],
-        display_options: Some(GetAssetOptions {
-            show_collection_metadata: true,
-            ..Default::default()
-        }),
-    };
-
-    let response: Result<Vec<Option<Asset>>, HeliusError> = helius.rpc().get_asset_batch(request).await;
-    println!("Assets: {:?}", response);
+    let result: Result<Hash, ClientError> = helius.connection().get_latest_blockhash();
+    println!("{:?}", result);
 
     Ok(())
 }
