@@ -32,9 +32,15 @@ async fn main() -> Result<(), HeliusError> {
     let api_key: &str = "YOUR_API_KEY";
     let cluster: Cluster = Cluster::MainnetBeta;
 
-    let config: Config = Config::new(api_key, cluster)?;
+    let config: Arc<Config> = Arc::new(Config::new(api_key, cluster)?);
     let client: Client = Client::new();
-    let rpc_client: RpcClient = RpcClient::new(Arc::new(client), Arc::new(config))?;
+    let rpc_client: Arc<RpcClient> = Arc::new(RpcClient::new(Arc::new(client.clone()), Arc::clone(&config)).unwrap());
+
+    let helius: Helius = Helius {
+        config,
+        client,
+        rpc_client,
+    };
 
     let request: GetAssetRequest = GetAssetRequest {
         id: "F9Lw3ki3hJ7PF9HQXsBzoY8GyE6sPoEZZdXJBsTTD2rk".to_string(),
@@ -46,7 +52,7 @@ async fn main() -> Result<(), HeliusError> {
         }),
     };
 
-    let response: Result<Option<GetAssetResponseForAsset>, HeliusError> = rpc_client.get_asset(request).await;
+    let response: Result<Option<GetAssetResponseForAsset>, HeliusError> = helius.rpc().get_asset(request).await;
 
     match response {
         Ok(Some(asset)) => {
