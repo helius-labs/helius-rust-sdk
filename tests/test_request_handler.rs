@@ -1,5 +1,5 @@
-use helius_sdk::error::{HeliusError, Result};
-use helius_sdk::request_handler::RequestHandler;
+use helius::error::{HeliusError, Result};
+use helius::request_handler::RequestHandler;
 
 use mockito::{self, Server};
 use reqwest::{Client, Method};

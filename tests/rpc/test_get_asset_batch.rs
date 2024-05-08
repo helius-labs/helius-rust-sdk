@@ -1,10 +1,10 @@
 use std::sync::Arc;
 
-use helius_sdk::client::Helius;
-use helius_sdk::config::Config;
-use helius_sdk::error::HeliusError;
-use helius_sdk::rpc_client::RpcClient;
-use helius_sdk::types::{
+use helius::client::Helius;
+use helius::config::Config;
+use helius::error::HeliusError;
+use helius::rpc_client::RpcClient;
+use helius::types::{
     ApiResponse, Asset, Attribute, Authorities, Cluster, CollectionMetadata, Compression, Content, Creator, File,
     GetAssetBatch, GetAssetOptions, Group, HeliusEndpoints, Interface, Links, Metadata, Ownership, OwnershipModel,
     Royalty, RoyaltyModel, Scope, Supply,

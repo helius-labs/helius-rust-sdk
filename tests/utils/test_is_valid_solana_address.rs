@@ -1,4 +1,4 @@
-use helius_sdk::utils::is_valid_solana_address;
+use helius::utils::is_valid_solana_address;
 
 #[test]
 fn test_valid_addresses() {

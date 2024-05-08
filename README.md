@@ -18,11 +18,11 @@ Remember to run `cargo update` regularly to fetch the latest version of the SDK.
 ## Usage
 The SDK needs to be configured with your account's API key, which can be found on the [Helius Developer Dashboard](https://dev.helius.xyz/dashboard/app). The following code is an example of how to use the SDK to fetch info on [Mad Lad #8420](https://xray.helius.xyz/token/F9Lw3ki3hJ7PF9HQXsBzoY8GyE6sPoEZZdXJBsTTD2rk?network=mainnet):
 ```rust
-use helius_sdk::config::Config;
-use helius_sdk::error::HeliusError;
-use helius_sdk::rpc_client::RpcClient;
-use helius_sdk::types::types::{GetAssetResponseForAsset, DisplayOptions};
-use helius_sdk::types::{Cluster, GetAssetRequest};
+use helius::config::Config;
+use helius::error::HeliusError;
+use helius::rpc_client::RpcClient;
+use helius::types::types::{GetAssetResponseForAsset, DisplayOptions};
+use helius::types::{Cluster, GetAssetRequest};
 
 use reqwest::Client;
 use std::sync::Arc;
@@ -84,7 +84,7 @@ If you encounter any of these errors:
 - Refer to the [Helius documentation](https://docs.helius.dev/) for further guidance
 - Reach out to the Helius support team for more detailed assistance
 
-## Using the Helius SDK
+## Methods
 Our SDK is designed to provide a seamless developer experience when building on Solana. We've separated the core functionality into various segments:
 
 ### DAS API

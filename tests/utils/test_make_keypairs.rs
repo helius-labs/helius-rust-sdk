@@ -1,4 +1,4 @@
-use helius_sdk::utils::make_keypairs;
+use helius::utils::make_keypairs;
 use solana_sdk::{signature::Keypair, signer::Signer};
 use std::collections::HashSet;
 
