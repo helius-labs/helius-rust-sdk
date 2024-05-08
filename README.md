@@ -16,31 +16,18 @@ Alternatively, use `cargo add helius_sdk` to add the dependency directly via the
 Remember to run `cargo update` regularly to fetch the latest version of the SDK.
 
 ## Usage
-The SDK needs to be configured with your account's API key, which can be found on the [Helius Developer Dashboard](https://dev.helius.xyz/dashboard/app). The following code is an example of how to use the SDK to fetch info on [Mad Lad #8420](https://xray.helius.xyz/token/F9Lw3ki3hJ7PF9HQXsBzoY8GyE6sPoEZZdXJBsTTD2rk?network=mainnet):
+The SDK provides a [`Helius`](https://github.com/helius-labs/helius-rust-sdk/blob/dev/src/client.rs) instance that can be configured with an API key and a given Solana cluster. Developers can generate a new API key on the [Helius Developer Dashboard](https://dev.helius.xyz/dashboard/app). This instance acts as the main entry point for interacting with the SDK by providing methods to access different Solana and RPC client functionalities. The following code is an example of how to use the SDK to fetch info on [Mad Lad #8420](https://xray.helius.xyz/token/F9Lw3ki3hJ7PF9HQXsBzoY8GyE6sPoEZZdXJBsTTD2rk?network=mainnet):
 ```rust
-use helius::config::Config;
 use helius::error::HeliusError;
-use helius::rpc_client::RpcClient;
 use helius::types::types::{GetAssetResponseForAsset, DisplayOptions};
 use helius::types::{Cluster, GetAssetRequest};
-
-use reqwest::Client;
-use std::sync::Arc;
 
 #[tokio::main]
 async fn main() -> Result<(), HeliusError> {
     let api_key: &str = "YOUR_API_KEY";
     let cluster: Cluster = Cluster::MainnetBeta;
 
-    let config: Arc<Config> = Arc::new(Config::new(api_key, cluster)?);
-    let client: Client = Client::new();
-    let rpc_client: Arc<RpcClient> = Arc::new(RpcClient::new(Arc::new(client.clone()), Arc::clone(&config)).unwrap());
-
-    let helius: Helius = Helius {
-        config,
-        client,
-        rpc_client,
-    };
+    let helius: Helius = Helius::new(api_key, cluster).unwrap();
 
     let request: GetAssetRequest = GetAssetRequest {
         id: "F9Lw3ki3hJ7PF9HQXsBzoY8GyE6sPoEZZdXJBsTTD2rk".to_string(),
