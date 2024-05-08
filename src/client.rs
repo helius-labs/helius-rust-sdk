@@ -33,8 +33,8 @@ impl Helius {
     ///
     /// # Example
     /// ```rust
-    /// use helius_sdk::client::Helius;
-    /// use helius_sdk::types::Cluster;
+    /// use helius::client::Helius;
+    /// use helius::types::Cluster;
     ///
     /// let helius = Helius::new("your_api_key", Cluster::Devnet).expect("Failed to create a Helius client");
     /// ```
