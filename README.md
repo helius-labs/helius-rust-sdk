@@ -10,9 +10,9 @@ Interested in contributing to the Helius Rust SDK? Read the following [contribut
 ## Installation
 To start using the Helius Rust SDK in your project, add it as a dependency via `cargo`. Open your project's `Cargo.toml` and add the following line under `[dependencies]`:
 ```toml
-helius_sdk = "0.1.0"
+helius = "0.1.0"
 ```
-Alternatively, use `cargo add helius_sdk` to add the dependency directly via the command line. This will automatically find the latest version compatible with your project and add it to your `Cargo.toml`.
+Alternatively, use `cargo add helius` to add the dependency directly via the command line. This will automatically find the latest version compatible with your project and add it to your `Cargo.toml`.
 
 Remember to run `cargo update` regularly to fetch the latest version of the SDK.
 
