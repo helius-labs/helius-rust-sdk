@@ -2,6 +2,7 @@
 An asynchronous Helius Rust SDK for building the future of Solana
 
 ## Documentation
+The latest documentation can be found [here on docs.rs](https://docs.rs/helius/latest/helius/)
 
 ## Contributions
 Interested in contributing to the Helius Rust SDK? Read the following [contributions guide](https://github.com/helius-labs/helius-rust-sdk/blob/dev/CONTRIBUTIONS.md) before opening up a pull request!
@@ -9,9 +10,9 @@ Interested in contributing to the Helius Rust SDK? Read the following [contribut
 ## Installation
 To start using the Helius Rust SDK in your project, add it as a dependency via `cargo`. Open your project's `Cargo.toml` and add the following line under `[dependencies]`:
 ```toml
-helius_sdk = "0.1.0"
+helius = "0.1.0"
 ```
-Alternatively, use `cargo add helius_sdk` to add the dependency directly via the command line. This will automatically find the latest version compatible with your project and add it to your `Cargo.toml`.
+Alternatively, use `cargo add helius` to add the dependency directly via the command line. This will automatically find the latest version compatible with your project and add it to your `Cargo.toml`.
 
 Remember to run `cargo update` regularly to fetch the latest version of the SDK.
 
@@ -92,7 +93,7 @@ Our SDK is designed to provide a seamless developer experience when building on 
 ### Mint API
 - [`mint_compressed_nft`](https://docs.helius.dev/compression-and-das-api/mint-api/mint-compressed-nft) - The easiest way to mint a compressed NFT (cNFT)
 
-Enhanced Transactions API
+### Enhanced Transactions API
 - [`parse_transactions`](https://docs.helius.dev/solana-apis/enhanced-transactions-api/parse-transaction-s) - Parses transactions given an array of transaction IDs
 - [`parsed_transaction_history`](https://docs.helius.dev/solana-apis/enhanced-transactions-api/parsed-transaction-history) - Retrieves a parsed transaction history for a specific address
 
