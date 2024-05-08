@@ -1,12 +1,11 @@
 [package]
-name = "helius_sdk"
+name = "helius"
 version = "0.1.0"
 edition = "2021"
 description ="An asynchronous Helius Rust SDK for building the future of Solana"
 repository = "https://github.com/0xIchigo/helius-rust-sdk"
 license = "MIT"
 authors = ["0xIchigo <0xIchigo@protonmail.com>"]
-documentation = "https://docs.helius.dev/"
 readme = "README.md"
 homepage = "https://www.helius.dev/"
 

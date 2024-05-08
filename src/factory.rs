@@ -24,7 +24,7 @@ impl HeliusFactory {
     ///
     /// # Example
     /// ```rust
-    /// use helius_sdk::HeliusFactory;
+    /// use helius::HeliusFactory;
     /// let factory = HeliusFactory::new("your_api_key_here");
     /// ```
     pub fn new(api_key: &str) -> Self {
@@ -46,9 +46,9 @@ impl HeliusFactory {
     ///
     /// # Example
     /// ```rust
-    /// use helius_sdk::types::*;
-    /// use helius_sdk::client::Helius;
-    /// use helius_sdk::factory::HeliusFactory;
+    /// use helius::types::*;
+    /// use helius::client::Helius;
+    /// use helius::factory::HeliusFactory;
     ///
     /// #[tokio::main]
     /// async fn main() {

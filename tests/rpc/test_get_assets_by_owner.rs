@@ -1,12 +1,12 @@
-use helius_sdk::config::Config;
-use helius_sdk::error::HeliusError;
-use helius_sdk::rpc_client::RpcClient;
-use helius_sdk::types::{
+use helius::config::Config;
+use helius::error::HeliusError;
+use helius::rpc_client::RpcClient;
+use helius::types::{
     ApiResponse, Asset, AssetList, Attribute, Authorities, Cluster, Compression, Content, Creator, File,
     GetAssetsByOwner, Group, HeliusEndpoints, Interface, Links, Metadata, Ownership, OwnershipModel, Royalty,
     RoyaltyModel, Scope, Supply,
 };
-use helius_sdk::Helius;
+use helius::Helius;
 
 use mockito::{self, Server};
 use reqwest::Client;

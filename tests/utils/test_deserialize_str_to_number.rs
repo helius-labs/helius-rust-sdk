@@ -1,6 +1,6 @@
 use std::fmt;
 
-use helius_sdk::utils::deserialize_str_to_number;
+use helius::utils::deserialize_str_to_number;
 
 use serde::{Deserialize, Serialize};
 use serde_json::Number;

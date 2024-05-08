@@ -1,6 +1,6 @@
-use helius_sdk::client::Helius;
-use helius_sdk::error::Result;
-use helius_sdk::types::Cluster;
+use helius::client::Helius;
+use helius::error::Result;
+use helius::types::Cluster;
 
 #[test]
 fn test_creating_new_client_success() {
