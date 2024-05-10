@@ -20,8 +20,7 @@ Remember to run `cargo update` regularly to fetch the latest version of the SDK.
 The SDK provides a [`Helius`](https://github.com/helius-labs/helius-rust-sdk/blob/dev/src/client.rs) instance that can be configured with an API key and a given Solana cluster. Developers can generate a new API key on the [Helius Developer Dashboard](https://dev.helius.xyz/dashboard/app). This instance acts as the main entry point for interacting with the SDK by providing methods to access different Solana and RPC client functionalities. The following code is an example of how to use the SDK to fetch info on [Mad Lad #8420](https://xray.helius.xyz/token/F9Lw3ki3hJ7PF9HQXsBzoY8GyE6sPoEZZdXJBsTTD2rk?network=mainnet):
 ```rust
 use helius::error::HeliusError;
-use helius::types::types::{GetAssetResponseForAsset, DisplayOptions};
-use helius::types::{Cluster, GetAssetRequest};
+use helius::types::{Cluster, DisplayOptions, GetAssetRequest, GetAssetResponseForAsset};
 
 #[tokio::main]
 async fn main() -> Result<(), HeliusError> {
@@ -98,12 +97,13 @@ Our SDK is designed to provide a seamless developer experience when building on 
 - [`parsed_transaction_history`](https://docs.helius.dev/solana-apis/enhanced-transactions-api/parsed-transaction-history) - Retrieves a parsed transaction history for a specific address
 
 ### Webhooks
-- [`create_webhook`](https://docs.helius.dev/webhooks-and-websockets/api-reference/create-webhook) - Creates a webhook given account addresses
-- [`edit_webhook`](https://docs.helius.dev/webhooks-and-websockets/api-reference/edit-webhook) - Edits a Helius webhook programmatically
 - [`append_addresses_to_webhook`](https://github.com/helius-labs/helius-rust-sdk/blob/2d161e1ebf6d06df686d9e248ea80de215457b40/src/webhook.rs#L50-L73) - Appends a set of addresses to a given webhook
-- [`get_webhook_by_id`](https://docs.helius.dev/webhooks-and-websockets/api-reference/get-webhook) - Gets a webhook config given a webhook ID
-- [`get_all_webhooks`](https://docs.helius.dev/webhooks-and-websockets/api-reference/get-all-webhooks) - Retrieves all Helius webhooks programmatically
+- [`create_webhook`](https://docs.helius.dev/webhooks-and-websockets/api-reference/create-webhook) - Creates a webhook given account addresses
 - [`delete_webhook`](https://docs.helius.dev/webhooks-and-websockets/api-reference/delete-webhook) - Deletes a given Helius webhook programmatically
+- [`edit_webhook`](https://docs.helius.dev/webhooks-and-websockets/api-reference/edit-webhook) - Edits a Helius webhook programmatically
+- [`get_all_webhooks`](https://docs.helius.dev/webhooks-and-websockets/api-reference/get-all-webhooks) - Retrieves all Helius webhooks programmatically
+- [`get_webhook_by_id`](https://docs.helius.dev/webhooks-and-websockets/api-reference/get-webhook) - Gets a webhook config given a webhook ID
+- [`remove_addresses_from_webhook`](https://github.com/helius-labs/helius-rust-sdk/blob/bf24259e3333ae93126bb65b342c2c63e80e07a6/src/webhook.rs#L75-L105) - Removes a list of addresses from an existing webhook by its ID
 
 ### Helper Methods
 - [`get_priority_fee_estimate`](https://docs.helius.dev/solana-rpc-nodes/alpha-priority-fee-api) - Gets an estimate of the priority fees required for a transaction to be processed more quickly
