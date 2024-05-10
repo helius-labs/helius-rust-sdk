@@ -72,6 +72,38 @@ impl Helius {
         self.edit_webhook(edit_request).await
     }
 
+    /// Removes a list of addresses from an existing webhook by its ID
+    ///
+    /// # Arguments
+    /// * `webhook_id` - The ID of the webhook to edit
+    /// * `addresses_to_remove` - The vector of addresses to be removed from the webhook provided
+    ///
+    /// # Returns
+    /// A `Result` wrapping the edited `Webhook`, if successful
+    pub async fn remove_addresses_from_webhook(
+        &self,
+        webhook_id: &str,
+        addresses_to_remove: &[String],
+    ) -> Result<Webhook> {
+        let mut webhook: Webhook = self.get_webhook_by_id(webhook_id).await?;
+        webhook
+            .account_addresses
+            .retain(|address| !addresses_to_remove.contains(address));
+
+        let edit_request: EditWebhookRequest = EditWebhookRequest {
+            webhook_id: webhook_id.to_string(),
+            webhook_url: webhook.webhook_url,
+            transaction_types: webhook.transaction_types,
+            auth_header: webhook.auth_header,
+            txn_status: webhook.txn_status,
+            encoding: webhook.encoding,
+            account_addresses: webhook.account_addresses,
+            webhook_type: webhook.webhook_type,
+        };
+
+        self.edit_webhook(edit_request).await
+    }
+
     /// Gets a webhook config given a webhook ID
     ///
     /// # Arguments
