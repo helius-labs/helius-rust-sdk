@@ -2,7 +2,8 @@
 name = "helius"
 version = "0.1.1"
 edition = "2021"
-description ="An asynchronous Helius Rust SDK for building the future of Solana"
+description = "An asynchronous Helius Rust SDK for building the future of Solana"
+keywords = ["helius", "solana", "asynchronous-sdk", "das", "cryptocurrency"]
 repository = "https://github.com/helius-labs/helius-rust-sdk"
 docs = "https://docs.rs/helius/latest/helius/"
 license = "MIT"
