@@ -14,6 +14,7 @@ use reqwest::Client;
 /// Using a factory simplifies client code and enhances maintainability by ensuring that all `Helius` clients are configured consistently.
 pub struct HeliusFactory {
     api_key: String,
+    client: Option<Client>,
 }
 
 impl HeliusFactory {
@@ -30,7 +31,25 @@ impl HeliusFactory {
     pub fn new(api_key: &str) -> Self {
         HeliusFactory {
             api_key: api_key.to_string(),
+            client: None,
         }
+    }
+
+    /// Use your own reqwest client
+    ///
+    /// # Arguments
+    /// * `client` - a [`request::Client`]
+    ///
+    /// # Example
+    /// ```rust
+    /// use helius::HeliusFactory;
+    /// use helius::types::Cluster;
+    /// let mut factory = HeliusFactory::new("your_api_key_here");
+    /// factory.with_client(reqwest::Client::new()).create(Cluster::Devnet).unwrap();
+    /// ```
+    pub fn with_client(&mut self, client: Client) -> &mut Self {
+        self.client = Some(client);
+        self
     }
 
     /// Provides a way to create multiple `Helius` clients in a thread-safe manner
@@ -63,7 +82,7 @@ impl HeliusFactory {
     /// ```
     pub fn create(&self, cluster: Cluster) -> Result<Helius> {
         let config: Arc<Config> = Arc::new(Config::new(&self.api_key, cluster)?);
-        let client: Client = Client::new();
+        let client: Client = self.client.clone().unwrap_or_default();
         let rpc_client: Arc<RpcClient> = Arc::new(RpcClient::new(Arc::new(client.clone()), config.clone())?);
 
         Ok(Helius {
