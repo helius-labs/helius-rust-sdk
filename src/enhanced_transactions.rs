@@ -1,5 +1,5 @@
 use crate::error::Result;
-use crate::types::{EnhancedTransaction, ParseTransactionsRequest};
+use crate::types::{EnhancedTransaction, ParseTransactionsRequest, ParseTransactionHistoryRequest};
 use crate::Helius;
 
 use reqwest::{Method, Url};
@@ -31,14 +31,20 @@ impl Helius {
     ///
     /// # Arguments
     /// * `address` - An address for which a given parsed transaction history will be retrieved
+    /// * `before` - An optional signature to get history before, useful for pagination
     ///
     /// # Returns
     /// A `Result` wrapping a vector of `EnhancedTransaction`s
-    pub async fn parsed_transaction_history(&self, address: &str) -> Result<Vec<EnhancedTransaction>> {
-        let url: String = format!(
+    pub async fn parsed_transaction_history(&self, request: ParseTransactionHistoryRequest) -> Result<Vec<EnhancedTransaction>> {
+        let mut url: String = format!(
             "{}v0/addresses/{}/transactions?api-key={}",
-            self.config.endpoints.api, address, self.config.api_key
+            self.config.endpoints.api, request.address, self.config.api_key
         );
+
+        if let Some(before) = request.before {
+            url = format!("{}&before={}", url, before);
+        }
+
         let parsed_url: Url = Url::parse(&url).expect("Failed to parse URL");
 
         self.rpc_client.handler.send(Method::GET, parsed_url, None::<&()>).await
