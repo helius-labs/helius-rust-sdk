@@ -211,7 +211,7 @@ pub struct ParseTransactionsRequest {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-pub struct ParseTransactionHistoryRequest {
+pub struct ParsedTransactionHistoryRequest {
     pub address: String,
     pub before: Option<String>,
 }
