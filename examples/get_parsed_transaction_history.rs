@@ -9,9 +9,13 @@ async fn main() -> Result<(), HeliusError> {
 
     let helius: Helius = Helius::new(api_key, cluster).unwrap();
 
-    let response: Result<Vec<EnhancedTransaction>, HeliusError> = helius
-        .parsed_transaction_history("2k5AXX4guW9XwRQ1AKCpAuUqgWDpQpwFfpVFh3hnm2Ha")
-        .await;
+    let request: ParsedTransactionHistoryRequest = ParsedTransactionHistoryRequest {
+        address: "2k5AXX4guW9XwRQ1AKCpAuUqgWDpQpwFfpVFh3hnm2Ha".to_string(),
+        before: None,
+    };
+
+    let response: Result<Vec<EnhancedTransaction>, HeliusError> = helius.parsed_transaction_history(request).await;
+
     println!("Assets: {:?}", response);
 
     Ok(())
