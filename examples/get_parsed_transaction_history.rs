@@ -9,14 +9,12 @@ async fn main() -> Result<(), HeliusError> {
 
     let helius: Helius = Helius::new(api_key, cluster).unwrap();
 
-    let request: ParseTransactionHistoryRequest = ParseTransactionHistoryRequest {
+    let request: ParsedTransactionHistoryRequest = ParsedTransactionHistoryRequest {
         address: "2k5AXX4guW9XwRQ1AKCpAuUqgWDpQpwFfpVFh3hnm2Ha".to_string(),
         before: None,
     };
 
-    let response: Result<Vec<EnhancedTransaction>, HeliusError> = helius
-        .parsed_transaction_history(request)
-        .await;
+    let response: Result<Vec<EnhancedTransaction>, HeliusError> = helius.parsed_transaction_history(request).await;
 
     println!("Assets: {:?}", response);
 
