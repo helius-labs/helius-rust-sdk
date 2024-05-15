@@ -4,6 +4,7 @@ use crate::config::Config;
 use crate::error::Result;
 use crate::rpc_client::RpcClient;
 use crate::types::Cluster;
+use crate::websocket::{EnhancedWebsocket, ENHANCED_WEBSOCKET_URL};
 
 use reqwest::Client;
 use solana_client::rpc_client::RpcClient as SolanaRpcClient;
@@ -19,6 +20,8 @@ pub struct Helius {
     pub client: Client,
     /// A reference-counted RPC client tailored for making requests in a thread-safe manner
     pub rpc_client: Arc<RpcClient>,
+    /// A reference-counted enhanced (geyser) websocket client
+    pub ws_client: Option<Arc<EnhancedWebsocket>>,
 }
 
 impl Helius {
@@ -42,11 +45,25 @@ impl Helius {
         let config: Arc<Config> = Arc::new(Config::new(api_key, cluster)?);
         let client: Client = Client::new();
         let rpc_client: Arc<RpcClient> = Arc::new(RpcClient::new(Arc::new(client.clone()), config.clone())?);
-
         Ok(Helius {
             config,
             client,
             rpc_client,
+            ws_client: None,
+        })
+    }
+
+    pub async fn new_with_ws(api_key: &str, cluster: Cluster) -> Result<Self> {
+        let config: Arc<Config> = Arc::new(Config::new(api_key, cluster)?);
+        let client: Client = Client::new();
+        let rpc_client: Arc<RpcClient> = Arc::new(RpcClient::new(Arc::new(client.clone()), config.clone())?);
+        let wss = format!("{}{}", ENHANCED_WEBSOCKET_URL, api_key);
+        let ws_client = Arc::new(EnhancedWebsocket::new(&wss).await?);
+        Ok(Helius {
+            config,
+            client,
+            rpc_client,
+            ws_client: Some(ws_client),
         })
     }
 
@@ -60,5 +77,9 @@ impl Helius {
 
     pub fn connection(&self) -> Arc<SolanaRpcClient> {
         self.rpc_client.solana_client.clone()
+    }
+
+    pub fn ws(&self) -> Option<Arc<EnhancedWebsocket>> {
+        self.ws_client.clone()
     }
 }

@@ -145,6 +145,7 @@ async fn test_get_assets_by_group_success() {
         config,
         client,
         rpc_client,
+        ws_client: None,
     };
 
     let sorting: AssetSorting = AssetSorting {
@@ -200,6 +201,7 @@ async fn test_get_assets_by_group_failure() {
         config,
         client,
         rpc_client,
+        ws_client: None,
     };
 
     let sorting: AssetSorting = AssetSorting {

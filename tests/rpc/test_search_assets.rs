@@ -160,6 +160,7 @@ async fn test_search_assets_success() {
         config,
         client,
         rpc_client,
+        ws_client: None,
     };
 
     let request: SearchAssets = SearchAssets {
@@ -206,6 +207,7 @@ async fn test_search_assets_failure() {
         config,
         client,
         rpc_client,
+        ws_client: None,
     };
 
     let request: SearchAssets = SearchAssets {

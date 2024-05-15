@@ -66,6 +66,7 @@ async fn test_get_asset_proof_batch_success() {
         config,
         client,
         rpc_client,
+        ws_client: None,
     };
 
     let request: GetAssetProofBatch = GetAssetProofBatch {
@@ -121,6 +122,7 @@ async fn test_get_asset_proof_failure() {
         config,
         client,
         rpc_client,
+        ws_client: None,
     };
 
     let request: GetAssetProofBatch = GetAssetProofBatch {

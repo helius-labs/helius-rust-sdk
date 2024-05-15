@@ -63,6 +63,7 @@ async fn test_get_asset_proof_success() {
         config,
         client,
         rpc_client,
+        ws_client: None,
     };
 
     let request: GetAssetProof = GetAssetProof {
@@ -110,6 +111,7 @@ async fn test_get_asset_proof_failure() {
         config,
         client,
         rpc_client,
+        ws_client: None,
     };
 
     let request: GetAssetProof = GetAssetProof {

@@ -59,6 +59,7 @@ async fn test_get_token_accounts_success() {
         config,
         client,
         rpc_client,
+        ws_client: None,
     };
 
     let request: GetTokenAccounts = GetTokenAccounts {
@@ -110,6 +111,7 @@ async fn test_get_token_accounts_failure() {
         config,
         client,
         rpc_client,
+        ws_client: None,
     };
 
     let request = GetTokenAccounts {

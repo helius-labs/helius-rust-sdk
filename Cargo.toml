@@ -22,6 +22,15 @@ chrono = { version = "0.4.11", features = ["serde"] }
 solana-client = "1.18.12"
 solana-program = "1.18.12"
 serde-enum-str = "0.4.0"
+tokio-tungstenite = { version = "0.21.0", features = ["native-tls", "handshake"] }
+tokio-stream = "0.1.15"
+solana-rpc-client-api = "1.18.12"
+futures-util = "0.3.30"
+solana-account-decoder = "1.18.12"
+solana-transaction-status = "1.18.12"
+futures = "0.3.30"
+semver = "1.0.23"
+url = "2.5.0"
 
 [dev-dependencies]
 mockito = "1.4.0"

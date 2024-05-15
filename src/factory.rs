@@ -89,6 +89,7 @@ impl HeliusFactory {
             config,
             client,
             rpc_client,
+            ws_client: None,
         })
     }
 }

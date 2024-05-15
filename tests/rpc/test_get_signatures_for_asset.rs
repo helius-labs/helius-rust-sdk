@@ -52,6 +52,7 @@ async fn test_get_asset_signatures_success() {
         config,
         client,
         rpc_client,
+        ws_client: None,
     };
 
     let request: GetAssetSignatures = GetAssetSignatures {
@@ -100,6 +101,7 @@ async fn test_get_asset_signatures_failure() {
         config,
         client,
         rpc_client,
+        ws_client: None,
     };
 
     let request: GetAssetSignatures = GetAssetSignatures {

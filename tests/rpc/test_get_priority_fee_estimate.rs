@@ -52,6 +52,7 @@ async fn test_get_nft_editions_success() {
         config,
         client,
         rpc_client,
+        ws_client: None,
     };
 
     let request: GetPriorityFeeEstimateRequest = GetPriorityFeeEstimateRequest {
@@ -105,6 +106,7 @@ async fn test_get_nft_editions_failure() {
         config,
         client,
         rpc_client,
+        ws_client: None,
     };
 
     let request: GetPriorityFeeEstimateRequest = GetPriorityFeeEstimateRequest {
