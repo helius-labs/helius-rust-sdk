@@ -18,8 +18,6 @@ impl Helius {
             "{}v0/transactions?api-key={}",
             self.config.endpoints.api, self.config.api_key
         );
-
-        println!("{}", url);
         let parsed_url: Url = Url::parse(&url).expect("Failed to parse URL");
 
         self.rpc_client
