@@ -17,9 +17,7 @@ impl Helius {
             "{}v0/webhooks/?api-key={}",
             self.config.endpoints.api, self.config.api_key
         );
-
         let parsed_url: Url = Url::parse(&url).expect("Failed to parse URL");
-        println!("PARSED URL: {}", parsed_url);
 
         self.rpc_client
             .handler
