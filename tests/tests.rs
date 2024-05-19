@@ -20,3 +20,6 @@ mod rpc {
     mod test_get_token_accounts;
     mod test_search_assets;
 }
+mod webhook{
+    mod test_create_webhook;
+}
