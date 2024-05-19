@@ -22,4 +22,5 @@ mod rpc {
 }
 mod webhook{
     mod test_create_webhook;
+    mod test_edit_webhook;
 }
