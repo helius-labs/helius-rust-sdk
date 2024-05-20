@@ -28,5 +28,6 @@ mod webhook{
     mod test_get_all_webhooks;
     mod test_delete_webhook;
     mod test_append_addresses_to_webhook;
+    mod test_remove_addresses_from_webhook;
 
 }
