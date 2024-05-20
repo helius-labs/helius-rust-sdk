@@ -17,6 +17,7 @@ async fn main() -> Result<(), HeliusError> {
             include_all_priority_fee_levels: None,
             transaction_encoding: None,
             lookback_slots: None,
+            recommended: None,
         }),
     };
 
