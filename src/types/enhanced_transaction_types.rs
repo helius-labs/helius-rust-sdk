@@ -210,6 +210,12 @@ pub struct ParseTransactionsRequest {
     pub transactions: Vec<String>,
 }
 
+#[derive(Serialize, Deserialize, Debug)]
+pub struct ParsedTransactionHistoryRequest {
+    pub address: String,
+    pub before: Option<String>,
+}
+
 /// We have a limit of 100 transactions per call, so this helps split the signatures into different chunks
 impl ParseTransactionsRequest {
     pub fn from_slice(signatures: &[String]) -> Vec<Self> {
