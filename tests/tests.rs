@@ -26,5 +26,6 @@ mod webhook{
     mod test_get_webhook_by_id;
 
     mod test_get_all_webhooks;
+    mod test_delete_webhook;
 
 }
