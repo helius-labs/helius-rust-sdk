@@ -777,6 +777,7 @@ pub struct GetPriorityFeeEstimateOptions {
     pub include_all_priority_fee_levels: Option<bool>,
     pub transaction_encoding: Option<UiTransactionEncoding>,
     pub lookback_slots: Option<u8>,
+    pub recommended: Option<bool>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Default)]
