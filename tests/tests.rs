@@ -20,14 +20,13 @@ mod rpc {
     mod test_get_token_accounts;
     mod test_search_assets;
 }
-mod webhook{
+mod webhook {
     mod test_create_webhook;
     mod test_edit_webhook;
     mod test_get_webhook_by_id;
 
-    mod test_get_all_webhooks;
-    mod test_delete_webhook;
     mod test_append_addresses_to_webhook;
+    mod test_delete_webhook;
+    mod test_get_all_webhooks;
     mod test_remove_addresses_from_webhook;
-
 }
