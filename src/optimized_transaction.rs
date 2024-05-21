@@ -1,15 +1,21 @@
-use crate::error::Result;
+use crate::error::{HeliusError, Result};
 use crate::Helius;
+
+use reqwest::StatusCode;
 use solana_client::rpc_response::{Response, RpcSimulateTransactionResult};
 use solana_sdk::{
     address_lookup_table::AddressLookupTableAccount,
+    commitment_config::CommitmentConfig,
     compute_budget::ComputeBudgetInstruction,
     hash::Hash,
     instruction::Instruction,
     message::{v0, VersionedMessage},
     pubkey::Pubkey,
+    signature::Signature,
     transaction::VersionedTransaction,
 };
+use std::time::Duration;
+use tokio::time::sleep;
 
 impl Helius {
     /// Simulates a transaction to get the total compute units consumed
@@ -52,5 +58,40 @@ impl Helius {
 
         // Return the units consumed or None if not available
         Ok(result.value.units_consumed)
+    }
+
+    /// Poll a transaction to check whether it has been confirmed
+    ///
+    /// * `txt-sig` - The transaction signature to check
+    ///
+    /// # Returns
+    /// The confirmed transaction signature or an error if the confirmation times out
+    pub async fn poll_transaction_confirmation(&self, txt_sig: Signature) -> Result<Signature> {
+        // 15 second timeout
+        let timeout: Duration = Duration::from_secs(15);
+        // 5 second retry interval
+        let interval: Duration = Duration::from_secs(5);
+        let mut elapsed = Duration::default();
+
+        let commitment_config: CommitmentConfig = CommitmentConfig::confirmed();
+
+        loop {
+            if elapsed >= timeout {
+                return Err(HeliusError::Timeout {
+                    code: StatusCode::REQUEST_TIMEOUT,
+                    text: format!("Transaction {}'s confirmation timed out", txt_sig),
+                });
+            }
+
+            match self.connection().get_signature_status_with_commitment(&txt_sig, commitment_config) {
+                Ok(Some(Ok(()))) => return Ok(txt_sig),
+                Ok(Some(Err(err))) => return Err(HeliusError::TransactionError(err)),
+                Ok(None) => {
+                    sleep(interval).await;
+                    elapsed += interval;
+                }
+                Err(err) => return Err(HeliusError::ClientError(err)),
+            }
+        }
     }
 }

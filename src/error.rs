@@ -1,9 +1,12 @@
 use reqwest::{Error as ReqwestError, StatusCode};
 use serde_json::Error as SerdeJsonError;
 use solana_client::client_error::ClientError;
-use solana_sdk::message::CompileError;
-use solana_sdk::sanitize::SanitizeError;
-use solana_sdk::signature::SignerError;
+use solana_sdk::{
+    message::CompileError,
+    sanitize::SanitizeError,
+    signature::SignerError,
+    transaction::TransactionError,
+};
 use thiserror::Error;
 
 /// Represents all possible errors returned by the `Helius` client
@@ -81,6 +84,18 @@ pub enum HeliusError {
     /// This captures errors from the signing operations in the Solana SDK
     #[error("Signer error: {0}")]
     SignerError(#[from] SignerError),
+
+    /// Indicates that the transaction confirmation timed out
+    ///
+    /// For polling a transaction's confirmation status
+    #[error("Transaction confirmation timed out with error code {code}: {text}")]
+    Timeout { code: StatusCode, text: String },
+
+    /// Represents transaction errors from the Solana SDK
+    ///
+    /// This captures errors that occur when processing transactions
+    #[error("Transaction error: {0}")]
+    TransactionError(#[from] TransactionError),
 
     /// Indicates the request lacked valid authentication credentials
     ///
