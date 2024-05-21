@@ -1,9 +1,9 @@
 use reqwest::{Error as ReqwestError, StatusCode};
 use serde_json::Error as SerdeJsonError;
 use solana_client::client_error::ClientError;
+use solana_sdk::message::CompileError;
 use solana_sdk::sanitize::SanitizeError;
 use solana_sdk::signature::SignerError;
-use solana_sdk::message::CompileError;
 use thiserror::Error;
 
 /// Represents all possible errors returned by the `Helius` client
@@ -25,7 +25,7 @@ pub enum HeliusError {
     ClientError(#[from] ClientError),
 
     /// Represents compile errors from the Solana SDK
-    /// 
+    ///
     /// This captures all compile errors thrown by the Solana SDK
     #[error("Compile error: {0}")]
     CompileError(#[from] CompileError),

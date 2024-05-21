@@ -37,7 +37,8 @@ impl Helius {
         let recent_blockhash: Hash = self.connection().get_latest_blockhash()?;
 
         // Create a v0::Message
-        let v0_message: v0::Message = v0::Message::try_compile(&payer, &test_instructions, &lookup_tables, recent_blockhash)?;
+        let v0_message: v0::Message =
+            v0::Message::try_compile(&payer, &test_instructions, &lookup_tables, recent_blockhash)?;
         let versioned_message: VersionedMessage = VersionedMessage::V0(v0_message);
 
         // Create an unsigned VersionedTransaction
