@@ -18,6 +18,7 @@ async fn main() -> Result<(), HeliusError> {
             transaction_encoding: None,
             lookback_slots: None,
             recommended: None,
+            include_vote: None,
         }),
     };
 
