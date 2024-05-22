@@ -1,5 +1,8 @@
 use crate::error::{HeliusError, Result};
-use crate::types::{GetPriorityFeeEstimateRequest, GetPriorityFeeEstimateResponse, SmartTransactionConfig};
+use crate::types::{
+    GetPriorityFeeEstimateOptions, GetPriorityFeeEstimateRequest, GetPriorityFeeEstimateResponse,
+    SmartTransactionConfig,
+};
 use crate::Helius;
 
 use base64::engine::general_purpose::STANDARD;
@@ -19,7 +22,7 @@ use solana_sdk::{
     signature::{Signature, Signer},
     transaction::{Transaction, VersionedTransaction},
 };
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use tokio::time::sleep;
 
 impl Helius {
@@ -76,12 +79,12 @@ impl Helius {
         let timeout: Duration = Duration::from_secs(15);
         // 5 second retry interval
         let interval: Duration = Duration::from_secs(5);
-        let mut elapsed = Duration::default();
+        let start: Instant = Instant::now();
 
         let commitment_config: CommitmentConfig = CommitmentConfig::confirmed();
 
         loop {
-            if elapsed >= timeout {
+            if start.elapsed() >= timeout {
                 return Err(HeliusError::Timeout {
                     code: StatusCode::REQUEST_TIMEOUT,
                     text: format!("Transaction {}'s confirmation timed out", txt_sig),
@@ -96,7 +99,6 @@ impl Helius {
                 Ok(Some(Err(err))) => return Err(HeliusError::TransactionError(err)),
                 Ok(None) => {
                     sleep(interval).await;
-                    elapsed += interval;
                 }
                 Err(err) => return Err(HeliusError::ClientError(err)),
             }
@@ -130,18 +132,23 @@ impl Helius {
         let priority_fee_request: GetPriorityFeeEstimateRequest = GetPriorityFeeEstimateRequest {
             transaction: Some(transaction_base64),
             account_keys: None,
-            options: None,
+            options: Some(GetPriorityFeeEstimateOptions {
+                recommended: Some(true),
+                ..Default::default()
+            }),
         };
 
         let priority_fee_estimate: GetPriorityFeeEstimateResponse =
             self.rpc().get_priority_fee_estimate(priority_fee_request).await?;
 
-        let priority_fee = priority_fee_estimate
+        let priority_fee_f64 = priority_fee_estimate
             .priority_fee_estimate
             .ok_or(HeliusError::InvalidInput(
                 "Priority fee estimate not available".to_string(),
-            ))?
-            .to_bits();
+            ))?;
+
+        // Directly cast as u64
+        let priority_fee: u64 = priority_fee_f64 as u64;
 
         // Add the compute unit price instruction with the estimated fee
         let compute_budget_ix: Instruction = ComputeBudgetInstruction::set_compute_unit_price(priority_fee);
@@ -153,7 +160,7 @@ impl Helius {
             .get_compute_units(final_instructions.clone(), pubkey, vec![])
             .await?
         {
-            // Add some margin to the compute units
+            // Add some margin to the compute units to ensure the transaction does not fail
             let compute_units_ix: Instruction =
                 ComputeBudgetInstruction::set_compute_unit_limit((units as f64 * 1.1).ceil() as u32);
             final_instructions.insert(0, compute_units_ix);
@@ -192,14 +199,15 @@ impl Helius {
                     return self.poll_transaction_confirmation(txt_sig).await;
                 }
                 Err(error) => {
-                    if retry_count == max_retries {
+                    retry_count += 1;
+
+                    if retry_count > max_retries {
                         return Err(HeliusError::ClientError(error));
                     }
-                    retry_count += 1;
+
+                    continue;
                 }
             }
-
-            sleep(Duration::from_secs(5)).await;
         }
 
         Err(HeliusError::Timeout {
