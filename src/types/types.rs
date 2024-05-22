@@ -8,6 +8,9 @@ use crate::types::{DisplayOptions, GetAssetOptions};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+use solana_sdk::instruction::Instruction;
+use solana_sdk::signature::Keypair;
+
 /// Defines the available clusters supported by Helius
 #[derive(Debug, Clone, PartialEq)]
 pub enum Cluster {
@@ -939,4 +942,22 @@ pub struct EditWebhookRequest {
     pub txn_status: TransactionStatus,
     #[serde(default)]
     pub encoding: AccountWebhookEncoding,
+}
+
+pub struct SmartTransactionConfig<'a> {
+    pub instructions: Vec<Instruction>,
+    pub from_keypair: &'a Keypair,
+    pub skip_preflight_checks: Option<bool>,
+    pub max_retries: Option<usize>,
+}
+
+impl<'a> SmartTransactionConfig<'a> {
+    pub fn new(instructions: Vec<Instruction>, from_keypair: &'a Keypair) -> Self {
+        Self {
+            instructions,
+            from_keypair,
+            skip_preflight_checks: None,
+            max_retries: None,
+        }
+    }
 }

@@ -1,7 +1,12 @@
 use crate::error::{HeliusError, Result};
+use crate::types::{GetPriorityFeeEstimateRequest, GetPriorityFeeEstimateResponse, SmartTransactionConfig};
 use crate::Helius;
 
+use base64::engine::general_purpose::STANDARD;
+use base64::Engine;
+use bincode::{ErrorKind, serialize};
 use reqwest::StatusCode;
+use solana_client::rpc_config::RpcSendTransactionConfig;
 use solana_client::rpc_response::{Response, RpcSimulateTransactionResult};
 use solana_sdk::{
     address_lookup_table::AddressLookupTableAccount,
@@ -11,8 +16,8 @@ use solana_sdk::{
     instruction::Instruction,
     message::{v0, VersionedMessage},
     pubkey::Pubkey,
-    signature::Signature,
-    transaction::VersionedTransaction,
+    signature::{Signature, Signer},
+    transaction::{Transaction, VersionedTransaction},
 };
 use std::time::Duration;
 use tokio::time::sleep;
@@ -83,7 +88,10 @@ impl Helius {
                 });
             }
 
-            match self.connection().get_signature_status_with_commitment(&txt_sig, commitment_config) {
+            match self
+                .connection()
+                .get_signature_status_with_commitment(&txt_sig, commitment_config)
+            {
                 Ok(Some(Ok(()))) => return Ok(txt_sig),
                 Ok(Some(Err(err))) => return Err(HeliusError::TransactionError(err)),
                 Ok(None) => {
@@ -93,5 +101,109 @@ impl Helius {
                 Err(err) => return Err(HeliusError::ClientError(err)),
             }
         }
+    }
+
+    /// Builds and sends an optimized transaction, and handles its confirmation status
+    ///
+    /// # Arguments
+    /// * `config` - The configuration for the smart transaction, which includes the transaction's instructions, the user's keypair, whether preflight checks
+    /// should be skipped, and how many times to retry the transaction, if provided
+    ///
+    /// # Returns
+    /// The transaction signature, if successful
+    pub async fn send_smart_transaction(&self, config: SmartTransactionConfig<'_>) -> Result<Signature> {
+        let pubkey: Pubkey = config.from_keypair.pubkey();
+        let mut recent_blockhash: Hash = self.connection().get_latest_blockhash()?;
+
+        // Build the initial transaction and estimate the priority fee
+        let mut transaction: Transaction = Transaction::new_with_payer(&config.instructions, Some(&pubkey));
+        transaction.try_sign(&[config.from_keypair], recent_blockhash)?;
+
+        // Serialize the transaction
+        let serialized_transaction: Vec<u8> = serialize(&transaction).map_err(|e: Box<ErrorKind>| HeliusError::InvalidInput(e.to_string()))?;
+
+        // Convert the serialized transaction to a Base64 string
+        let transaction_base64: String = STANDARD.encode(&serialized_transaction);
+
+        // Get the priority fee estimate based on the serialized transaction
+        let priority_fee_request: GetPriorityFeeEstimateRequest = GetPriorityFeeEstimateRequest {
+            transaction: Some(transaction_base64),
+            account_keys: None,
+            options: None,
+        };
+
+        let priority_fee_estimate: GetPriorityFeeEstimateResponse =
+            self.rpc().get_priority_fee_estimate(priority_fee_request).await?;
+
+        let priority_fee = priority_fee_estimate
+            .priority_fee_estimate
+            .ok_or(HeliusError::InvalidInput(
+                "Priority fee estimate not available".to_string(),
+            ))?
+            .to_bits();
+
+        // Add the compute unit price instruction with the estimated fee
+        let compute_budget_ix: Instruction = ComputeBudgetInstruction::set_compute_unit_price(priority_fee);
+        let mut final_instructions: Vec<Instruction> = vec![compute_budget_ix];
+        final_instructions.extend(config.instructions.clone());
+
+        // Get the optimal compute units
+        if let Some(units) = self
+            .get_compute_units(final_instructions.clone(), pubkey, vec![])
+            .await?
+        {
+            // Add some margin to the compute units
+            let compute_units_ix: Instruction =
+                ComputeBudgetInstruction::set_compute_unit_limit((units as f64 * 1.1).ceil() as u32);
+            final_instructions.insert(0, compute_units_ix);
+        }
+
+        // Build the optimized transaction
+        let mut optimized_transaction: Transaction = Transaction::new_with_payer(&final_instructions, Some(&pubkey));
+        optimized_transaction.try_sign(&[config.from_keypair], recent_blockhash)?;
+
+        // Re-fetch the blockhash every 4 retries, or roughly once every minute
+        let blockhash_validity_threshold: usize = 4;
+
+        let mut retry_count: usize = 0;
+        let txt_sig: Signature;
+
+        let skip_preflight_checks: bool = config.skip_preflight_checks.unwrap_or(true);
+        let send_transaction_config: RpcSendTransactionConfig = RpcSendTransactionConfig {
+            skip_preflight: skip_preflight_checks,
+            ..Default::default()
+        };
+        let max_retries: usize = config.max_retries.unwrap_or(6);
+
+        // Send the transaction with configurable retries and preflight checks
+        while retry_count <= max_retries {
+            if retry_count > 0 && retry_count % blockhash_validity_threshold == 0 {
+                recent_blockhash = self.connection().get_latest_blockhash()?;
+                optimized_transaction.try_sign(&[config.from_keypair], recent_blockhash)?;
+            }
+
+            match self
+                .connection()
+                .send_transaction_with_config(&optimized_transaction, send_transaction_config)
+            {
+                Ok(signature) => {
+                    txt_sig = signature;
+                    return self.poll_transaction_confirmation(txt_sig).await;
+                }
+                Err(error) => {
+                    if retry_count == max_retries {
+                        return Err(HeliusError::ClientError(error));
+                    }
+                    retry_count += 1;
+                }
+            }
+
+            sleep(Duration::from_secs(5)).await;
+        }
+
+        Err(HeliusError::Timeout {
+            code: StatusCode::REQUEST_TIMEOUT,
+            text: "Reached an unexpected point in send_smart_transaction".to_string(),
+        })
     }
 }

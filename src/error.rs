@@ -2,10 +2,7 @@ use reqwest::{Error as ReqwestError, StatusCode};
 use serde_json::Error as SerdeJsonError;
 use solana_client::client_error::ClientError;
 use solana_sdk::{
-    message::CompileError,
-    sanitize::SanitizeError,
-    signature::SignerError,
-    transaction::TransactionError,
+    message::CompileError, sanitize::SanitizeError, signature::SignerError, transaction::TransactionError,
 };
 use thiserror::Error;
 
