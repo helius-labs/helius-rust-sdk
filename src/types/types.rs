@@ -8,8 +8,7 @@ use crate::types::{DisplayOptions, GetAssetOptions};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use solana_sdk::instruction::Instruction;
-use solana_sdk::signature::Keypair;
+use solana_sdk::{address_lookup_table::AddressLookupTableAccount, instruction::Instruction, signature::Keypair};
 
 /// Defines the available clusters supported by Helius
 #[derive(Debug, Clone, PartialEq)]
@@ -949,6 +948,7 @@ pub struct SmartTransactionConfig<'a> {
     pub from_keypair: &'a Keypair,
     pub skip_preflight_checks: Option<bool>,
     pub max_retries: Option<usize>,
+    pub lookup_tables: Option<Vec<AddressLookupTableAccount>>,
 }
 
 impl<'a> SmartTransactionConfig<'a> {
@@ -958,6 +958,7 @@ impl<'a> SmartTransactionConfig<'a> {
             from_keypair,
             skip_preflight_checks: None,
             max_retries: None,
+            lookup_tables: None,
         }
     }
 }

@@ -108,103 +108,199 @@ impl Helius {
     /// Builds and sends an optimized transaction, and handles its confirmation status
     ///
     /// # Arguments
-    /// * `config` - The configuration for the smart transaction, which includes the transaction's instructions, the user's keypair, whether preflight checks
-    /// should be skipped, and how many times to retry the transaction, if provided
+    /// * `config` - The configuration for the smart transaction, which includes the transaction's instructions, and the user's keypair. If provided, it also
+    /// includes whether preflight checks should be skipped, how many times to retry the transaction, and any address lookup tables to be included in the transaction
     ///
     /// # Returns
     /// The transaction signature, if successful
     pub async fn send_smart_transaction(&self, config: SmartTransactionConfig<'_>) -> Result<Signature> {
         let pubkey: Pubkey = config.from_keypair.pubkey();
         let mut recent_blockhash: Hash = self.connection().get_latest_blockhash()?;
+        let mut final_instructions: Vec<Instruction> = vec![];
 
-        // Build the initial transaction and estimate the priority fee
-        let mut transaction: Transaction = Transaction::new_with_payer(&config.instructions, Some(&pubkey));
-        transaction.try_sign(&[config.from_keypair], recent_blockhash)?;
+        // Determine if we need to use a versioned transaction
+        let is_versioned: bool = config.lookup_tables.is_some();
+        let mut legacy_transaction: Option<Transaction> = None;
+        let mut versioned_transaction: Option<VersionedTransaction> = None;
 
-        // Serialize the transaction
-        let serialized_transaction: Vec<u8> =
-            serialize(&transaction).map_err(|e: Box<ErrorKind>| HeliusError::InvalidInput(e.to_string()))?;
+        // Build the initial transaction based on whether lookup tables are present
+        if is_versioned {
+            // If lookup tables are present, we build a versioned transaction
+            let lookup_tables: &[AddressLookupTableAccount] = config.lookup_tables.as_deref().unwrap();
+            let mut instructions: Vec<Instruction> = vec![ComputeBudgetInstruction::set_compute_unit_price(1)];
+            instructions.extend(config.instructions.clone());
 
-        // Convert the serialized transaction to a Base64 string
-        let transaction_base64: String = STANDARD.encode(&serialized_transaction);
+            let v0_message: v0::Message =
+                v0::Message::try_compile(&pubkey, &instructions, lookup_tables, recent_blockhash)?;
+            let versioned_message: VersionedMessage = VersionedMessage::V0(v0_message);
 
-        // Get the priority fee estimate based on the serialized transaction
-        let priority_fee_request: GetPriorityFeeEstimateRequest = GetPriorityFeeEstimateRequest {
-            transaction: Some(transaction_base64),
-            account_keys: None,
-            options: Some(GetPriorityFeeEstimateOptions {
-                recommended: Some(true),
-                ..Default::default()
-            }),
+            versioned_transaction = Some(VersionedTransaction {
+                signatures: vec![],
+                message: versioned_message,
+            });
+        } else {
+            // If no lookup tables are present, we build a regular transaction
+            let mut tx: Transaction = Transaction::new_with_payer(&config.instructions, Some(&pubkey));
+            tx.try_sign(&[config.from_keypair], recent_blockhash)?;
+            legacy_transaction = Some(tx);
+        }
+
+        let priority_fee: u64 = if let Some(tx) = &legacy_transaction {
+            // Serialize the transaction
+            let serialized_tx: Vec<u8> =
+                serialize(&tx).map_err(|e: Box<ErrorKind>| HeliusError::InvalidInput(e.to_string()))?;
+            let transaction_base64: String = STANDARD.encode(&serialized_tx);
+
+            // Get the priority fee estimate based on the serialized transaction
+            let priority_fee_request: GetPriorityFeeEstimateRequest = GetPriorityFeeEstimateRequest {
+                transaction: Some(transaction_base64),
+                account_keys: None,
+                options: Some(GetPriorityFeeEstimateOptions {
+                    recommended: Some(true),
+                    ..Default::default()
+                }),
+            };
+
+            let priority_fee_estimate: GetPriorityFeeEstimateResponse =
+                self.rpc().get_priority_fee_estimate(priority_fee_request).await?;
+
+            let priority_fee_f64: f64 =
+                priority_fee_estimate
+                    .priority_fee_estimate
+                    .ok_or(HeliusError::InvalidInput(
+                        "Priority fee estimate not available".to_string(),
+                    ))?;
+
+            priority_fee_f64 as u64
+        } else if let Some(tx) = &versioned_transaction {
+            // Serialize the transaction
+            let serialized_tx: Vec<u8> =
+                serialize(&tx).map_err(|e: Box<ErrorKind>| HeliusError::InvalidInput(e.to_string()))?;
+            let transaction_base64: String = STANDARD.encode(&serialized_tx);
+
+            // Get the priority fee estimate based on the serialized transaction
+            let priority_fee_request: GetPriorityFeeEstimateRequest = GetPriorityFeeEstimateRequest {
+                transaction: Some(transaction_base64),
+                account_keys: None,
+                options: Some(GetPriorityFeeEstimateOptions {
+                    recommended: Some(true),
+                    ..Default::default()
+                }),
+            };
+
+            let priority_fee_estimate: GetPriorityFeeEstimateResponse =
+                self.rpc().get_priority_fee_estimate(priority_fee_request).await?;
+
+            let priority_fee_f64: f64 =
+                priority_fee_estimate
+                    .priority_fee_estimate
+                    .ok_or(HeliusError::InvalidInput(
+                        "Priority fee estimate not available".to_string(),
+                    ))?;
+            priority_fee_f64 as u64
+        } else {
+            return Err(HeliusError::InvalidInput("No transaction available".to_string()));
         };
-
-        let priority_fee_estimate: GetPriorityFeeEstimateResponse =
-            self.rpc().get_priority_fee_estimate(priority_fee_request).await?;
-
-        let priority_fee_f64 = priority_fee_estimate
-            .priority_fee_estimate
-            .ok_or(HeliusError::InvalidInput(
-                "Priority fee estimate not available".to_string(),
-            ))?;
-
-        // Directly cast as u64
-        let priority_fee: u64 = priority_fee_f64 as u64;
 
         // Add the compute unit price instruction with the estimated fee
         let compute_budget_ix: Instruction = ComputeBudgetInstruction::set_compute_unit_price(priority_fee);
-        let mut final_instructions: Vec<Instruction> = vec![compute_budget_ix];
+        final_instructions.push(compute_budget_ix);
         final_instructions.extend(config.instructions.clone());
 
         // Get the optimal compute units
         if let Some(units) = self
-            .get_compute_units(final_instructions.clone(), pubkey, vec![])
+            .get_compute_units(
+                final_instructions.clone(),
+                pubkey,
+                config.lookup_tables.clone().unwrap_or_default(),
+            )
             .await?
         {
+            println!("Compute units: {}", units);
             // Add some margin to the compute units to ensure the transaction does not fail
             let compute_units_ix: Instruction =
                 ComputeBudgetInstruction::set_compute_unit_limit((units as f64 * 1.1).ceil() as u32);
             final_instructions.insert(0, compute_units_ix);
         }
 
-        // Build the optimized transaction
-        let mut optimized_transaction: Transaction = Transaction::new_with_payer(&final_instructions, Some(&pubkey));
-        optimized_transaction.try_sign(&[config.from_keypair], recent_blockhash)?;
+        // Rebuild the transaction with the final instructions
+        if is_versioned {
+            let lookup_tables: &[AddressLookupTableAccount] = config.lookup_tables.as_deref().unwrap();
+            let v0_message: v0::Message =
+                v0::Message::try_compile(&pubkey, &final_instructions, lookup_tables, recent_blockhash)?;
+            let versioned_message: VersionedMessage = VersionedMessage::V0(v0_message);
 
-        // Re-fetch the blockhash every 4 retries, or roughly once every minute
-        let blockhash_validity_threshold: usize = 4;
+            versioned_transaction = Some(VersionedTransaction {
+                signatures: vec![],
+                message: versioned_message,
+            });
+        } else {
+            let mut tx = Transaction::new_with_payer(&final_instructions, Some(&pubkey));
+            tx.try_sign(&[config.from_keypair], recent_blockhash)?;
+            legacy_transaction = Some(tx);
+        }
 
-        let mut retry_count: usize = 0;
-        let txt_sig: Signature;
+        // Re-fetch interval of 60 seconds
+        let blockhash_refetch_interval: Duration = Duration::from_secs(60);
+        let mut last_blockhash_refetch: Instant = Instant::now();
 
-        let skip_preflight_checks: bool = config.skip_preflight_checks.unwrap_or(true);
         let send_transaction_config: RpcSendTransactionConfig = RpcSendTransactionConfig {
-            skip_preflight: skip_preflight_checks,
+            skip_preflight: config.skip_preflight_checks.unwrap_or(true),
             ..Default::default()
         };
+
+        // Common logic for sending transactions
+        let send_result = |transaction: &Transaction| {
+            self.connection()
+                .send_transaction_with_config(transaction, send_transaction_config)
+        };
+        let send_versioned_result = |transaction: &VersionedTransaction| {
+            self.connection()
+                .send_transaction_with_config(transaction, send_transaction_config)
+        };
+
+        // Send the transaction with retries and preflight checks
+        let mut retry_count: usize = 0;
         let max_retries: usize = config.max_retries.unwrap_or(6);
 
-        // Send the transaction with configurable retries and preflight checks
         while retry_count <= max_retries {
-            if retry_count > 0 && retry_count % blockhash_validity_threshold == 0 {
+            if last_blockhash_refetch.elapsed() >= blockhash_refetch_interval {
                 recent_blockhash = self.connection().get_latest_blockhash()?;
-                optimized_transaction.try_sign(&[config.from_keypair], recent_blockhash)?;
+                if is_versioned {
+                    let signers: Vec<&dyn Signer> = vec![config.from_keypair];
+                    let signed_message = signers
+                        .iter()
+                        .map(|signer| {
+                            signer.try_sign_message(
+                                versioned_transaction.as_ref().unwrap().message.serialize().as_slice(),
+                            )
+                        })
+                        .collect::<std::result::Result<Vec<_>, _>>()?;
+                    versioned_transaction.as_mut().unwrap().signatures = signed_message;
+                } else {
+                    legacy_transaction
+                        .as_mut()
+                        .unwrap()
+                        .try_sign(&[config.from_keypair], recent_blockhash)?;
+                }
+
+                // Update the last refetch time
+                last_blockhash_refetch = Instant::now();
             }
 
-            match self
-                .connection()
-                .send_transaction_with_config(&optimized_transaction, send_transaction_config)
-            {
-                Ok(signature) => {
-                    txt_sig = signature;
-                    return self.poll_transaction_confirmation(txt_sig).await;
-                }
+            let result = if is_versioned {
+                send_versioned_result(versioned_transaction.as_ref().unwrap())
+            } else {
+                send_result(legacy_transaction.as_ref().unwrap())
+            };
+
+            match result {
+                Ok(signature) => return self.poll_transaction_confirmation(signature).await,
                 Err(error) => {
                     retry_count += 1;
-
                     if retry_count > max_retries {
                         return Err(HeliusError::ClientError(error));
                     }
-
                     continue;
                 }
             }
