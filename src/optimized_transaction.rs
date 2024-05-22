@@ -4,7 +4,7 @@ use crate::Helius;
 
 use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
-use bincode::{ErrorKind, serialize};
+use bincode::{serialize, ErrorKind};
 use reqwest::StatusCode;
 use solana_client::rpc_config::RpcSendTransactionConfig;
 use solana_client::rpc_response::{Response, RpcSimulateTransactionResult};
@@ -120,7 +120,8 @@ impl Helius {
         transaction.try_sign(&[config.from_keypair], recent_blockhash)?;
 
         // Serialize the transaction
-        let serialized_transaction: Vec<u8> = serialize(&transaction).map_err(|e: Box<ErrorKind>| HeliusError::InvalidInput(e.to_string()))?;
+        let serialized_transaction: Vec<u8> =
+            serialize(&transaction).map_err(|e: Box<ErrorKind>| HeliusError::InvalidInput(e.to_string()))?;
 
         // Convert the serialized transaction to a Base64 string
         let transaction_base64: String = STANDARD.encode(&serialized_transaction);
