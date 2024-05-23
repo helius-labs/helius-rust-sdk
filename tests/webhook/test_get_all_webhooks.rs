@@ -23,7 +23,7 @@ async fn test_get_all_webhooks_success() {
     }];
 
     server
-        .mock("GET", "/v0/webhooks/?api-key=fake_api_key")
+        .mock("GET", "/v0/webhooks?api-key=fake_api_key")
         .with_status(200)
         .with_header("Content-Type", "application/json")
         .with_body(serde_json::to_string(&mock_response).unwrap())
@@ -64,7 +64,7 @@ async fn test_get_all_webhooks_failure() {
     let url: String = format!("{}/", server.url());
 
     server
-        .mock("GET", "/v0/webhooks/?api-key=fake_api_key")
+        .mock("GET", "/v0/webhooks?api-key=fake_api_key")
         .with_status(500)
         .with_header("Content-Type", "application/json")
         .with_body(r#"{"error":"Internal Server Error"}"#)

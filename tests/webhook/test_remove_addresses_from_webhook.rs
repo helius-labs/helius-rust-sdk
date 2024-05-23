@@ -28,7 +28,7 @@ async fn test_remove_addresses_from_webhook_success() {
     };
 
     server
-        .mock("GET", "/v0/webhooks/0e8250a1-ceec-4757-ad69/?api-key=fake_api_key")
+        .mock("GET", "/v0/webhooks/0e8250a1-ceec-4757-ad69?api-key=fake_api_key")
         .with_status(200)
         .with_header("Content-Type", "application/json")
         .with_body(serde_json::to_string(&mock_get_webhook_by_id_response).unwrap())
@@ -46,7 +46,7 @@ async fn test_remove_addresses_from_webhook_success() {
     };
 
     server
-        .mock("PUT", "/v0/webhooks/0e8250a1-ceec-4757-ad69/?api-key=fake_api_key")
+        .mock("PUT", "/v0/webhooks/0e8250a1-ceec-4757-ad69?api-key=fake_api_key")
         .with_status(200)
         .with_header("Content-Type", "application/json")
         .with_body(serde_json::to_string(&mock_response).unwrap())
@@ -112,14 +112,14 @@ async fn test_remove_addresses_from_webhook_failure() {
     };
 
     server
-        .mock("GET", "/v0/webhooks/0e8250a1-ceec-4757-ad69/?api-key=fake_api_key")
+        .mock("GET", "/v0/webhooks/0e8250a1-ceec-4757-ad69?api-key=fake_api_key")
         .with_status(200)
         .with_header("Content-Type", "application/json")
         .with_body(serde_json::to_string(&mock_get_webhook_by_id_response).unwrap())
         .create();
 
     server
-        .mock("PUT", "/v0/webhooks/0e8250a1-ceec-4757-ad69/?api-key=fake_api_key")
+        .mock("PUT", "/v0/webhooks/0e8250a1-ceec-4757-ad69?api-key=fake_api_key")
         .with_status(500)
         .with_header("Content-Type", "application/json")
         .with_body(r#"{"error":"Internal Server Error"}"#)
