@@ -9,7 +9,7 @@ use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
 use bincode::{serialize, ErrorKind};
 use reqwest::StatusCode;
-use solana_client::rpc_config::RpcSendTransactionConfig;
+use solana_client::rpc_config::{RpcSendTransactionConfig, RpcSimulateTransactionConfig};
 use solana_client::rpc_response::{Response, RpcSimulateTransactionResult};
 use solana_sdk::{
     address_lookup_table::AddressLookupTableAccount,
@@ -19,7 +19,7 @@ use solana_sdk::{
     instruction::Instruction,
     message::{v0, VersionedMessage},
     pubkey::Pubkey,
-    signature::{Signature, Signer},
+    signature::{Keypair, Signature, Signer},
     transaction::{Transaction, VersionedTransaction},
 };
 use std::time::{Duration, Instant};
@@ -32,6 +32,7 @@ impl Helius {
     /// * `instructions` - The transaction instructions
     /// * `payer` - The public key of the payer
     /// * `lookup_tables` - The address lookup tables
+    /// * `from_keypair` - The keypair signing the transaction (needed to simulate the transaction)
     ///
     /// # Returns
     /// The compute units consumed, or None if unsuccessful
@@ -40,6 +41,7 @@ impl Helius {
         instructions: Vec<Instruction>,
         payer: Pubkey,
         lookup_tables: Vec<AddressLookupTableAccount>,
+        from_keypair: &Keypair,
     ) -> Result<Option<u64>> {
         // Set the compute budget limit
         let test_instructions: Vec<Instruction> = vec![ComputeBudgetInstruction::set_compute_unit_limit(1_400_000)]
@@ -55,14 +57,18 @@ impl Helius {
             v0::Message::try_compile(&payer, &test_instructions, &lookup_tables, recent_blockhash)?;
         let versioned_message: VersionedMessage = VersionedMessage::V0(v0_message);
 
-        // Create an unsigned VersionedTransaction
-        let transaction: VersionedTransaction = VersionedTransaction {
-            signatures: vec![],
-            message: versioned_message,
-        };
+        // Create a signed VersionedTransaction
+        let transaction: VersionedTransaction = VersionedTransaction::try_new(versioned_message, &[from_keypair])
+            .map_err(|e| HeliusError::InvalidInput(format!("Signing error: {:?}", e)))?;
 
         // Simulate the transaction
-        let result: Response<RpcSimulateTransactionResult> = self.connection().simulate_transaction(&transaction)?;
+        let config: RpcSimulateTransactionConfig = RpcSimulateTransactionConfig {
+            sig_verify: true,
+            ..Default::default()
+        };
+        let result: Response<RpcSimulateTransactionResult> = self
+            .connection()
+            .simulate_transaction_with_config(&transaction, config)?;
 
         // Return the units consumed or None if not available
         Ok(result.value.units_consumed)
@@ -126,7 +132,7 @@ impl Helius {
         // Build the initial transaction based on whether lookup tables are present
         if is_versioned {
             // If lookup tables are present, we build a versioned transaction
-            let lookup_tables: &[AddressLookupTableAccount] = config.lookup_tables.as_deref().unwrap();
+            let lookup_tables: &[AddressLookupTableAccount] = config.lookup_tables.as_deref().unwrap_or_default();
             let mut instructions: Vec<Instruction> = vec![ComputeBudgetInstruction::set_compute_unit_price(1)];
             instructions.extend(config.instructions.clone());
 
@@ -134,8 +140,15 @@ impl Helius {
                 v0::Message::try_compile(&pubkey, &instructions, lookup_tables, recent_blockhash)?;
             let versioned_message: VersionedMessage = VersionedMessage::V0(v0_message);
 
+            // Sign the versioned transaction
+            let signers: Vec<&dyn Signer> = vec![config.from_keypair];
+            let signatures: Vec<Signature> = signers
+                .iter()
+                .map(|signer| signer.try_sign_message(versioned_message.serialize().as_slice()))
+                .collect::<std::result::Result<Vec<_>, _>>()?;
+
             versioned_transaction = Some(VersionedTransaction {
-                signatures: vec![],
+                signatures,
                 message: versioned_message,
             });
         } else {
@@ -213,10 +226,10 @@ impl Helius {
                 final_instructions.clone(),
                 pubkey,
                 config.lookup_tables.clone().unwrap_or_default(),
+                &config.from_keypair,
             )
             .await?
         {
-            println!("Compute units: {}", units);
             // Add some margin to the compute units to ensure the transaction does not fail
             let compute_units_ix: Instruction =
                 ComputeBudgetInstruction::set_compute_unit_limit((units as f64 * 1.1).ceil() as u32);
@@ -229,9 +242,14 @@ impl Helius {
             let v0_message: v0::Message =
                 v0::Message::try_compile(&pubkey, &final_instructions, lookup_tables, recent_blockhash)?;
             let versioned_message: VersionedMessage = VersionedMessage::V0(v0_message);
+            let signers: Vec<&dyn Signer> = vec![config.from_keypair];
+            let signatures: Vec<Signature> = signers
+                .iter()
+                .map(|signer| signer.try_sign_message(versioned_message.serialize().as_slice()))
+                .collect::<std::result::Result<Vec<_>, _>>()?;
 
             versioned_transaction = Some(VersionedTransaction {
-                signatures: vec![],
+                signatures,
                 message: versioned_message,
             });
         } else {
@@ -268,7 +286,7 @@ impl Helius {
                 recent_blockhash = self.connection().get_latest_blockhash()?;
                 if is_versioned {
                     let signers: Vec<&dyn Signer> = vec![config.from_keypair];
-                    let signed_message = signers
+                    let signed_message: Vec<Signature> = signers
                         .iter()
                         .map(|signer| {
                             signer.try_sign_message(
