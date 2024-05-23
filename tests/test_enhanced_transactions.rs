@@ -180,7 +180,7 @@ async fn test_parse_transaction_history_success() {
         timestamp: 1656442333,
     }];
 
-    let mock = server
+    server
         .mock(
             "GET",
             "/v0/addresses/46tC8n6GyWvUjFxpTE9juG5WZ72RXADpPhY4S1d6wvTi/transactions?api-key=fake_api_key",
