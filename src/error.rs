@@ -1,5 +1,9 @@
 use reqwest::{Error as ReqwestError, StatusCode};
 use serde_json::Error as SerdeJsonError;
+use solana_client::client_error::ClientError;
+use solana_sdk::{
+    message::CompileError, sanitize::SanitizeError, signature::SignerError, transaction::TransactionError,
+};
 use thiserror::Error;
 
 /// Represents all possible errors returned by the `Helius` client
@@ -13,6 +17,18 @@ pub enum HeliusError {
     /// or contains invalid data
     #[error("Bad request to {path}: {text}")]
     BadRequest { path: String, text: String },
+
+    /// Represents errors from the Solana client
+    ///
+    /// This captures errors from the Solana client library
+    #[error("Solana client error: {0}")]
+    ClientError(#[from] ClientError),
+
+    /// Represents compile errors from the Solana SDK
+    ///
+    /// This captures all compile errors thrown by the Solana SDK
+    #[error("Compile error: {0}")]
+    CompileError(#[from] CompileError),
 
     /// Represents errors that occur internally with Helius and our servers
     ///
@@ -60,6 +76,24 @@ pub enum HeliusError {
     #[error("Serialization / Deserialization error: {0}")]
     SerdeJson(SerdeJsonError),
 
+    /// Represents errors from the Solana SDK for signing operations
+    ///
+    /// This captures errors from the signing operations in the Solana SDK
+    #[error("Signer error: {0}")]
+    SignerError(#[from] SignerError),
+
+    /// Indicates that the transaction confirmation timed out
+    ///
+    /// For polling a transaction's confirmation status
+    #[error("Transaction confirmation timed out with error code {code}: {text}")]
+    Timeout { code: StatusCode, text: String },
+
+    /// Represents transaction errors from the Solana SDK
+    ///
+    /// This captures errors that occur when processing transactions
+    #[error("Transaction error: {0}")]
+    TransactionError(#[from] TransactionError),
+
     /// Indicates the request lacked valid authentication credentials
     ///
     /// This error is returned in response to a missing, invalid, or expired API key
@@ -95,6 +129,12 @@ impl From<SerdeJsonError> for HeliusError {
     /// This allows for the seamless integration of JSON parsing errors into the broader error handling system
     fn from(err: SerdeJsonError) -> HeliusError {
         HeliusError::SerdeJson(err)
+    }
+}
+
+impl From<SanitizeError> for HeliusError {
+    fn from(err: SanitizeError) -> Self {
+        HeliusError::InvalidInput(err.to_string())
     }
 }
 
