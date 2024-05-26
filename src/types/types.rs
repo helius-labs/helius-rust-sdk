@@ -8,6 +8,8 @@ use crate::types::{DisplayOptions, GetAssetOptions};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+use solana_sdk::{address_lookup_table::AddressLookupTableAccount, instruction::Instruction, signature::Keypair};
+
 /// Defines the available clusters supported by Helius
 #[derive(Debug, Clone, PartialEq)]
 pub enum Cluster {
@@ -778,6 +780,7 @@ pub struct GetPriorityFeeEstimateOptions {
     pub transaction_encoding: Option<UiTransactionEncoding>,
     pub lookback_slots: Option<u8>,
     pub recommended: Option<bool>,
+    pub include_vote: Option<bool>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Default)]
@@ -938,4 +941,24 @@ pub struct EditWebhookRequest {
     pub txn_status: TransactionStatus,
     #[serde(default)]
     pub encoding: AccountWebhookEncoding,
+}
+
+pub struct SmartTransactionConfig<'a> {
+    pub instructions: Vec<Instruction>,
+    pub from_keypair: &'a Keypair,
+    pub skip_preflight_checks: Option<bool>,
+    pub max_retries: Option<usize>,
+    pub lookup_tables: Option<Vec<AddressLookupTableAccount>>,
+}
+
+impl<'a> SmartTransactionConfig<'a> {
+    pub fn new(instructions: Vec<Instruction>, from_keypair: &'a Keypair) -> Self {
+        Self {
+            instructions,
+            from_keypair,
+            skip_preflight_checks: None,
+            max_retries: None,
+            lookup_tables: None,
+        }
+    }
 }

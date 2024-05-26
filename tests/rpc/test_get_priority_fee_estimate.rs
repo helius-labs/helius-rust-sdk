@@ -63,6 +63,7 @@ async fn test_get_nft_editions_success() {
             transaction_encoding: None,
             lookback_slots: None,
             recommended: None,
+            include_vote: None,
         }),
     };
 
@@ -117,6 +118,7 @@ async fn test_get_nft_editions_failure() {
             transaction_encoding: None,
             lookback_slots: None,
             recommended: None,
+            include_vote: None,
         }),
     };
 
