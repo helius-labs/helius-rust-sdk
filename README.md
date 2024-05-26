@@ -17,6 +17,7 @@ where `x.y.z` is your desired version. Alternatively, use `cargo add helius` to 
 Remember to run `cargo update` regularly to fetch the latest version of the SDK.
 
 ## Usage
+### `Helius`
 The SDK provides a [`Helius`](https://github.com/helius-labs/helius-rust-sdk/blob/dev/src/client.rs) instance that can be configured with an API key and a given Solana cluster. Developers can generate a new API key on the [Helius Developer Dashboard](https://dev.helius.xyz/dashboard/app). This instance acts as the main entry point for interacting with the SDK by providing methods to access different Solana and RPC client functionalities. The following code is an example of how to use the SDK to fetch info on [Mad Lad #8420](https://xray.helius.xyz/token/F9Lw3ki3hJ7PF9HQXsBzoY8GyE6sPoEZZdXJBsTTD2rk?network=mainnet):
 ```rust
 use helius::error::HeliusError;
@@ -52,8 +53,16 @@ async fn main() -> Result<(), HeliusError> {
     Ok(())
 }
 ```
+### `HeliusFactory`
+The SDK also comes equipped with `HeliusFactory`, a factory for creating instances of `Helius`. This factory allows for a centralized configuration and creation of `Helius` clients so work can be done across multiple clusters at the same time. Using a factory simplifies client code and enhances maintainability by ensuring that all `Helius` clients are configured consistently. It has the following functionality:
+- A [`new` method](https://github.com/helius-labs/helius-rust-sdk/blob/a79a751e1a064125010bdb359068a366d635d005/src/factory.rs#L21-L36) used to create a new `HeliusFactory` capable of producing `Helius` clients. Note this method does not create a `reqwest` client
+- A [`with_client` method](https://github.com/helius-labs/helius-rust-sdk/blob/a79a751e1a064125010bdb359068a366d635d005/src/factory.rs#L38-L53) used to provide a given `HeliusFactory` created with the `new` method its own `reqwest` client
+- A [`create` method](https://github.com/helius-labs/helius-rust-sdk/blob/a79a751e1a064125010bdb359068a366d635d005/src/factory.rs#L55-L94) used to create multiple `Helius` clients in a thread-safe manner
+
+### Embedded Solana Client
 The `Helius` client has an embedded [Solana client](https://docs.rs/solana-client/latest/solana_client/rpc_client/struct.RpcClient.html) that can be accessed via `helius.connection().request_name()` where `request_name()` is a given [RPC method](https://docs.rs/solana-client/latest/solana_client/rpc_client/struct.RpcClient.html#implementations). A full list of all Solana RPC HTTP methods can be found [here](https://solana.com/docs/rpc/http).
 
+### Examples
 More examples of how to use the SDK can be found in the [`examples`](https://github.com/helius-labs/helius-rust-sdk/tree/dev/examples) directory.
 
 ## Error Handling
