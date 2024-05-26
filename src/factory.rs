@@ -10,7 +10,7 @@ use reqwest::Client;
 
 /// A factory for creating instances of `Helius`
 ///
-/// This factor allows for a centralized configuration and creation of `Helius` client so work can be done across multiple clusters at the same time.
+/// This factory allows for a centralized configuration and creation of `Helius` clients so work can be done across multiple clusters at the same time.
 /// Using a factory simplifies client code and enhances maintainability by ensuring that all `Helius` clients are configured consistently.
 pub struct HeliusFactory {
     api_key: String,
@@ -38,7 +38,7 @@ impl HeliusFactory {
     /// Use your own reqwest client
     ///
     /// # Arguments
-    /// * `client` - a [`request::Client`]
+    /// * `client` - a [`reqwest::Client`]
     ///
     /// # Example
     /// ```rust
