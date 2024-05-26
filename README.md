@@ -105,6 +105,11 @@ Our SDK is designed to provide a seamless developer experience when building on 
 - [`get_webhook_by_id`](https://docs.helius.dev/webhooks-and-websockets/api-reference/get-webhook) - Gets a webhook config given a webhook ID
 - [`remove_addresses_from_webhook`](https://github.com/helius-labs/helius-rust-sdk/blob/bf24259e3333ae93126bb65b342c2c63e80e07a6/src/webhook.rs#L75-L105) - Removes a list of addresses from an existing webhook by its ID
 
+### Smart Transactions
+- [`get_compute_units`](https://github.com/helius-labs/helius-rust-sdk/blob/a79a751e1a064125010bdb359068a366d635d005/src/optimized_transaction.rs#L29-L75) - Simulates a transaction to get the total compute units consumed
+- [`poll_transaction_confirmation`](https://github.com/helius-labs/helius-rust-sdk/blob/a79a751e1a064125010bdb359068a366d635d005/src/optimized_transaction.rs#L77-L112) - Polls a transaction to check whether it has been confirmed in 5 second intervals with a 15 second timeout
+- [`send_smart_transaction`](https://github.com/helius-labs/helius-rust-sdk/blob/a79a751e1a064125010bdb359068a366d635d005/src/optimized_transaction.rs#L114-L332) - Builds and sends an optimized transaction, and handles its confirmation status
+
 ### Helper Methods
 - [`get_priority_fee_estimate`](https://docs.helius.dev/solana-rpc-nodes/alpha-priority-fee-api) - Gets an estimate of the priority fees required for a transaction to be processed more quickly
 - [`deserialize_str_to_number`](https://github.com/helius-labs/helius-rust-sdk/blob/dev/src/utils/deserialize_str_to_number.rs) - Deserializes a `String` to a `Number`
