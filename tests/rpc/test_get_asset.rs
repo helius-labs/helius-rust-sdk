@@ -61,8 +61,8 @@ async fn test_get_asset_success() {
                             description: Some(
                                 "Apt323 the 36 page Collectors Edition.".to_string(),
                             ),
-                            name: "Apt323 Collectors Edition #72".to_string(),
-                            symbol: "".to_string(),
+                            name: Some("Apt323 Collectors Edition #72".to_string()),
+                            symbol: Some("".to_string()),
                         },
                         links: Some(
                             Links {

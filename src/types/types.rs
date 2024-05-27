@@ -572,8 +572,8 @@ pub struct FileQuality {
 pub struct Metadata {
     pub attributes: Option<Vec<Attribute>>,
     pub description: Option<String>,
-    pub name: String,
-    pub symbol: String,
+    pub name: Option<String>,
+    pub symbol: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
