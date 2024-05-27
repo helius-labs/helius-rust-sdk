@@ -72,16 +72,16 @@ pub enum HeliusError {
     #[error("Unknown error has occurred: HTTP {code} - {text}")]
     Unknown { code: StatusCode, text: String },
 
-    #[error("unable to connect to server: {0}")]
+    #[error("Unable to connect to server: {0}")]
     Tungstenite(#[from] tokio_tungstenite::tungstenite::Error),
 
-    #[error("websocket connection closed (({0})")]
+    #[error("Websocket connection closed (({0})")]
     WebsocketClosed(String),
 
-    #[error("enhanced websocket: {message}: {reason}")]
+    #[error("Enhanced websocket: {message}: {reason}")]
     EnhancedWebsocket { reason: String, message: String },
 
-    #[error("url parse error")]
+    #[error("Url parse error")]
     UrlParseError(#[from] url::ParseError),
 }
 

@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use helius::client::Helius;
 use helius::config::Config;
-use helius::error::HeliusError;
+use helius::error::Result;
 use helius::rpc_client::RpcClient;
 use helius::types::*;
 
@@ -63,7 +63,7 @@ async fn test_get_nft_editions_success() {
         limit: Some(1),
     };
 
-    let response: Result<EditionsList, HeliusError> = helius.rpc().get_nft_editions(request).await;
+    let response: Result<EditionsList> = helius.rpc().get_nft_editions(request).await;
     assert!(response.is_ok(), "API call failed with error: {:?}", response.err());
 
     let editions_list: EditionsList = response.unwrap();
@@ -115,6 +115,6 @@ async fn test_get_nft_editions_failure() {
         limit: Some(1),
     };
 
-    let response: Result<EditionsList, HeliusError> = helius.rpc().get_nft_editions(request).await;
+    let response: Result<EditionsList> = helius.rpc().get_nft_editions(request).await;
     assert!(response.is_err(), "Expected an error but got success");
 }

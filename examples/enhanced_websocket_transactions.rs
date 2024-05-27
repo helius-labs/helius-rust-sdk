@@ -1,11 +1,11 @@
-use helius::error::HeliusError;
+use helius::error::Result;
 use helius::types::{Cluster, RpcTransactionsConfig, TransactionSubscribeFilter, TransactionSubscribeOptions};
 use helius::Helius;
 use solana_sdk::pubkey;
 use tokio_stream::StreamExt;
 
 #[tokio::main]
-async fn main() -> Result<(), HeliusError> {
+async fn main() -> Result<()> {
     let api_key: &str = "your_api_key";
     let cluster: Cluster = Cluster::MainnetBeta;
 

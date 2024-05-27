@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use helius::client::Helius;
 use helius::config::Config;
-use helius::error::HeliusError;
+use helius::error::Result;
 use helius::rpc_client::RpcClient;
 use helius::types::{
     ApiResponse, Asset, Attribute, Authorities, Cluster, CollectionMetadata, Compression, Content, Creator, File,
@@ -280,7 +280,7 @@ async fn test_get_asset_batch_success() {
         }),
     };
 
-    let response: Result<Vec<Option<Asset>>, HeliusError> = helius.rpc().get_asset_batch(request).await;
+    let response: Result<Vec<Option<Asset>>> = helius.rpc().get_asset_batch(request).await;
     assert!(response.is_ok(), "API call failed with the error: {:?}", response.err());
 
     let assets: Vec<Option<Asset>> = response.unwrap();
@@ -325,6 +325,6 @@ async fn test_get_asset_batch_failure() {
         }),
     };
 
-    let response: Result<Vec<Option<Asset>>, HeliusError> = helius.rpc().get_asset_batch(request).await;
+    let response: Result<Vec<Option<Asset>>> = helius.rpc().get_asset_batch(request).await;
     assert!(response.is_err(), "Expected an error but got a successful response");
 }

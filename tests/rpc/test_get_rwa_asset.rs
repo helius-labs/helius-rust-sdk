@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use helius::client::Helius;
 use helius::config::Config;
-use helius::error::HeliusError;
+use helius::error::Result;
 use helius::rpc_client::RpcClient;
 use helius::types::*;
 
@@ -68,7 +68,7 @@ async fn test_get_rwa_asset_success() {
         id: "RadioactiveMan#1".to_string(),
     };
 
-    let response: Result<GetRwaAssetResponse, HeliusError> = helius.rpc().get_rwa_asset(request).await;
+    let response: Result<GetRwaAssetResponse> = helius.rpc().get_rwa_asset(request).await;
     assert!(response.is_ok());
     assert_eq!(
         response.unwrap().items.asset_controller.unwrap().address,
@@ -110,6 +110,6 @@ async fn test_get_rwa_asset_failure() {
         id: "Flanders'BookofFaith".to_string(),
     };
 
-    let response: Result<GetRwaAssetResponse, HeliusError> = helius.rpc().get_rwa_asset(request).await;
+    let response: Result<GetRwaAssetResponse> = helius.rpc().get_rwa_asset(request).await;
     assert!(response.is_err(), "Expected an error but got success");
 }

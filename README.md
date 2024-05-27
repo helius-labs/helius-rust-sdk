@@ -19,11 +19,11 @@ Remember to run `cargo update` regularly to fetch the latest version of the SDK.
 ## Usage
 The SDK provides a [`Helius`](https://github.com/helius-labs/helius-rust-sdk/blob/dev/src/client.rs) instance that can be configured with an API key and a given Solana cluster. Developers can generate a new API key on the [Helius Developer Dashboard](https://dev.helius.xyz/dashboard/app). This instance acts as the main entry point for interacting with the SDK by providing methods to access different Solana and RPC client functionalities. The following code is an example of how to use the SDK to fetch info on [Mad Lad #8420](https://xray.helius.xyz/token/F9Lw3ki3hJ7PF9HQXsBzoY8GyE6sPoEZZdXJBsTTD2rk?network=mainnet):
 ```rust
-use helius::error::HeliusError;
+use helius::error::Result;
 use helius::types::{Cluster, DisplayOptions, GetAssetRequest, GetAssetResponseForAsset};
 
 #[tokio::main]
-async fn main() -> Result<(), HeliusError> {
+async fn main() -> Result<()> {
     let api_key: &str = "YOUR_API_KEY";
     let cluster: Cluster = Cluster::MainnetBeta;
 
@@ -39,7 +39,7 @@ async fn main() -> Result<(), HeliusError> {
         }),
     };
 
-    let response: Result<Option<GetAssetResponseForAsset>, HeliusError> = helius.rpc().get_asset(request).await;
+    let response: Result<Option<GetAssetResponseForAsset>> = helius.rpc().get_asset(request).await;
 
     match response {
         Ok(Some(asset)) => {

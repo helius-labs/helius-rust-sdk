@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use helius::client::Helius;
 use helius::config::Config;
-use helius::error::HeliusError;
+use helius::error::Result;
 use helius::rpc_client::RpcClient;
 use helius::types::*;
 
@@ -80,7 +80,7 @@ async fn test_mint_compressed_nft() {
         confirm_transaction: Some(true),
     };
 
-    let result: Result<MintResponse, HeliusError> = helius.mint_compressed_nft(request).await;
+    let result: Result<MintResponse> = helius.mint_compressed_nft(request).await;
     assert!(result.is_ok(), "API call failed with error: {:?}", result.err());
 
     let mint_response: MintResponse = result.unwrap();
@@ -154,7 +154,7 @@ async fn test_get_asset_proof_failure() {
         confirm_transaction: Some(true),
     };
 
-    let result: Result<MintResponse, HeliusError> = helius.mint_compressed_nft(request).await;
+    let result: Result<MintResponse> = helius.mint_compressed_nft(request).await;
     assert!(result.is_err(), "Expected an error but got success");
 }
 
@@ -163,8 +163,9 @@ async fn test_mint_api_authority_from_cluster_success() {
     let devnet_cluster: Cluster = Cluster::Devnet;
     let mainnet_cluster: Cluster = Cluster::MainnetBeta;
 
-    let devnet_authority: Result<MintApiAuthority, &str> = MintApiAuthority::from_cluster(devnet_cluster);
-    let mainnet_authority: Result<MintApiAuthority, &str> = MintApiAuthority::from_cluster(mainnet_cluster);
+    let devnet_authority: std::result::Result<MintApiAuthority, &str> = MintApiAuthority::from_cluster(devnet_cluster);
+    let mainnet_authority: std::result::Result<MintApiAuthority, &str> =
+        MintApiAuthority::from_cluster(mainnet_cluster);
 
     assert_eq!(
         devnet_authority.unwrap(),
@@ -183,8 +184,9 @@ async fn test_mint_api_authority_from_cluster_failure() {
     let devnet_cluster: Cluster = Cluster::Devnet;
     let mainnet_cluster: Cluster = Cluster::MainnetBeta;
 
-    let devnet_authority: Result<MintApiAuthority, &str> = MintApiAuthority::from_cluster(devnet_cluster);
-    let mainnet_authority: Result<MintApiAuthority, &str> = MintApiAuthority::from_cluster(mainnet_cluster);
+    let devnet_authority: std::result::Result<MintApiAuthority, &str> = MintApiAuthority::from_cluster(devnet_cluster);
+    let mainnet_authority: std::result::Result<MintApiAuthority, &str> =
+        MintApiAuthority::from_cluster(mainnet_cluster);
 
     assert_ne!(
         devnet_authority.unwrap(),

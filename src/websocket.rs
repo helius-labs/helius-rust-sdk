@@ -1,6 +1,4 @@
-#![allow(dead_code)]
-
-use crate::error::HeliusError;
+use crate::error::{HeliusError, Result};
 use crate::types::{RpcTransactionsConfig, TransactionNotification};
 use futures_util::{
     future::{ready, BoxFuture, FutureExt},
@@ -10,13 +8,8 @@ use futures_util::{
 use serde::de::DeserializeOwned;
 use serde_json::{json, Map, Value};
 use solana_account_decoder::UiAccount;
-use solana_rpc_client_api::config::{RpcAccountInfoConfig, RpcProgramAccountsConfig};
-use solana_rpc_client_api::filter::maybe_map_filters;
-use solana_rpc_client_api::response::RpcKeyedAccount;
-use solana_rpc_client_api::{
-    error_object::RpcErrorObject,
-    response::{Response as RpcResponse, RpcVersionInfo},
-};
+use solana_rpc_client_api::config::RpcAccountInfoConfig;
+use solana_rpc_client_api::{error_object::RpcErrorObject, response::Response as RpcResponse};
 use solana_sdk::pubkey::Pubkey;
 use std::collections::BTreeMap;
 use std::fmt::Debug;
@@ -38,40 +31,38 @@ use tokio_tungstenite::{
 use url::Url;
 
 pub const ENHANCED_WEBSOCKET_URL: &str = "wss://atlas-mainnet.helius-rpc.com?api-key=";
+const DEFAULT_PING_DURATION_SECONDS: u64 = 10;
 
-pub type EnhancedWebsocketResult<T = ()> = Result<T, HeliusError>;
+// pub type Result<T = ()> = Result<T, HeliusError>;
 
 type UnsubscribeFn = Box<dyn FnOnce() -> BoxFuture<'static, ()> + Send>;
-type SubscribeResponseMsg = Result<(mpsc::UnboundedReceiver<Value>, UnsubscribeFn), HeliusError>;
+type SubscribeResponseMsg = Result<(mpsc::UnboundedReceiver<Value>, UnsubscribeFn)>;
 type SubscribeRequestMsg = (String, Value, oneshot::Sender<SubscribeResponseMsg>);
-type SubscribeResult<'a, T> = EnhancedWebsocketResult<(BoxStream<'a, T>, UnsubscribeFn)>;
-type RequestMsg = (String, Value, oneshot::Sender<Result<Value, HeliusError>>);
+type SubscribeResult<'a, T> = Result<(BoxStream<'a, T>, UnsubscribeFn)>;
+type RequestMsg = (String, Value, oneshot::Sender<Result<Value>>);
 
-/// A client for subscribing to messages from the RPC server.
+/// A client for subscribing to transaction or account updates from a Helius (geyser) enhanced websocket server.
 ///
-/// Forked from Solana's EnhancedWebsocket.
-#[derive(Debug)]
+/// Forked from Solana's [`PubsubClient`].
 pub struct EnhancedWebsocket {
     subscribe_sender: mpsc::UnboundedSender<SubscribeRequestMsg>,
-    request_sender: mpsc::UnboundedSender<RequestMsg>,
     shutdown_sender: oneshot::Sender<()>,
     node_version: RwLock<Option<semver::Version>>,
-    ws: JoinHandle<EnhancedWebsocketResult>,
+    ws: JoinHandle<Result<()>>,
 }
 
 impl EnhancedWebsocket {
     /// Expects enhanced websocket endpoint: wss://atlas-mainnet.helius-rpc.com?api-key=<API_KEY>
-    pub async fn new(url: &str) -> EnhancedWebsocketResult<Self> {
+    pub async fn new(url: &str) -> Result<Self> {
         let url = Url::parse(url)?;
         let (ws, _response) = connect_async(url).await.map_err(HeliusError::Tungstenite)?;
 
         let (subscribe_sender, subscribe_receiver) = mpsc::unbounded_channel();
-        let (request_sender, request_receiver) = mpsc::unbounded_channel();
+        let (_request_sender, request_receiver) = mpsc::unbounded_channel();
         let (shutdown_sender, shutdown_receiver) = oneshot::channel();
 
         Ok(Self {
             subscribe_sender,
-            request_sender,
             shutdown_sender,
             node_version: RwLock::new(None),
             ws: tokio::spawn(EnhancedWebsocket::run_ws(
@@ -79,49 +70,20 @@ impl EnhancedWebsocket {
                 subscribe_receiver,
                 request_receiver,
                 shutdown_receiver,
+                DEFAULT_PING_DURATION_SECONDS,
             )),
         })
     }
 
-    pub async fn shutdown(self) -> EnhancedWebsocketResult {
+    pub async fn shutdown(self) -> Result<()> {
         let _ = self.shutdown_sender.send(());
         self.ws.await.unwrap() // WS future should not be cancelled or panicked
     }
 
-    pub async fn set_node_version(&self, version: semver::Version) -> Result<(), ()> {
+    pub async fn set_node_version(&self, version: semver::Version) -> Result<()> {
         let mut w_node_version = self.node_version.write().await;
         *w_node_version = Some(version);
         Ok(())
-    }
-
-    async fn get_node_version(&self) -> EnhancedWebsocketResult<semver::Version> {
-        let r_node_version = self.node_version.read().await;
-        if let Some(version) = &*r_node_version {
-            Ok(version.clone())
-        } else {
-            drop(r_node_version);
-            let mut w_node_version = self.node_version.write().await;
-            let node_version = self.get_version().await?;
-            *w_node_version = Some(node_version.clone());
-            Ok(node_version)
-        }
-    }
-
-    async fn get_version(&self) -> EnhancedWebsocketResult<semver::Version> {
-        let (response_sender, response_receiver) = oneshot::channel();
-        self.request_sender
-            .send(("getVersion".to_string(), Value::Null, response_sender))
-            .map_err(|err| HeliusError::WebsocketClosed(err.to_string()))?;
-        let result = response_receiver
-            .await
-            .map_err(|err| HeliusError::WebsocketClosed(err.to_string()))??;
-        let node_version: RpcVersionInfo = serde_json::from_value(result)?;
-        let node_version =
-            semver::Version::parse(&node_version.solana_core).map_err(|e| HeliusError::EnhancedWebsocket {
-                reason: format!("failed to parse cluster version: {e}"),
-                message: "getVersion".to_string(),
-            })?;
-        Ok(node_version)
     }
 
     async fn subscribe<'a, T: DeserializeOwned + Send + Debug + 'a>(
@@ -154,6 +116,34 @@ impl EnhancedWebsocket {
         ))
     }
 
+    /// Stream transactions with numerous configurations and filters to choose from.
+    ///
+    /// # Example
+    /// ```rust
+    /// use helius::Helius;
+    /// use helius::error::Result;
+    /// use helius::types::{Cluster, RpcTransactionsConfig, TransactionSubscribeFilter, TransactionSubscribeOptions};
+    /// use solana_sdk::pubkey;
+    /// use tokio_stream::StreamExt;
+    ///
+    /// #[tokio::main]
+    /// async fn main() -> Result<()> {
+    ///   let helius = Helius::new("your_api_key", Cluster::MainnetBeta).expect("Failed to create a Helius client");
+    ///   // you may monitor transactions for any pubkey, this is just an example.
+    ///   let key = pubkey!("BtsmiEEvnSuUnKxqXj2PZRYpPJAc7C34mGz8gtJ1DAaH");
+    ///   let config = RpcTransactionsConfig {
+    ///     filter: TransactionSubscribeFilter::standard(&key),
+    ///     options: TransactionSubscribeOptions::default(),
+    ///   };
+    ///   if let Some(ws) = helius.ws() {
+    ///     let (mut stream, _unsub) = ws.transaction_subscribe(config).await?;
+    ///     while let Some(event) = stream.next().await {
+    ///       println!("{:#?}", event);
+    ///     }
+    ///   }
+    ///   Ok(())
+    /// }
+    /// ```
     pub async fn transaction_subscribe(
         &self,
         config: RpcTransactionsConfig,
@@ -162,6 +152,30 @@ impl EnhancedWebsocket {
         self.subscribe("transaction", params).await
     }
 
+    /// Stream accounts with numerous configurations and filters to choose from.
+    ///
+    /// # Example
+    /// ```rust
+    /// use helius::Helius;
+    /// use helius::error::Result;
+    /// use helius::types::{Cluster, RpcTransactionsConfig, TransactionSubscribeFilter, TransactionSubscribeOptions};
+    /// use solana_sdk::pubkey;
+    /// use tokio_stream::StreamExt;
+    ///
+    /// #[tokio::main]
+    /// async fn main() -> Result<()> {
+    ///   let helius = Helius::new("your_api_key", Cluster::MainnetBeta).expect("Failed to create a Helius client");
+    ///   // you may monitor updates for any account pubkey, this is just an example.
+    ///   let key = pubkey!("BtsmiEEvnSuUnKxqXj2PZRYpPJAc7C34mGz8gtJ1DAaH");
+    ///   if let Some(ws) = helius.ws() {
+    ///     let (mut stream, _unsub) = ws.account_subscribe(&key, None).await?;
+    ///     while let Some(event) = stream.next().await {
+    ///       println!("{:#?}", event);
+    ///     }
+    ///   }
+    ///   Ok(())
+    /// }
+    /// ```
     pub async fn account_subscribe(
         &self,
         pubkey: &Pubkey,
@@ -171,33 +185,13 @@ impl EnhancedWebsocket {
         self.subscribe("account", params).await
     }
 
-    pub async fn program_subscribe(
-        &self,
-        pubkey: &Pubkey,
-        mut config: Option<RpcProgramAccountsConfig>,
-    ) -> SubscribeResult<'_, RpcResponse<RpcKeyedAccount>> {
-        if let Some(ref mut config) = config {
-            if let Some(ref mut filters) = config.filters {
-                let node_version = self.get_node_version().await.ok();
-                // If node does not support the pubsub `getVersion` method, assume version is old
-                // and filters should be mapped (node_version.is_none()).
-                maybe_map_filters(node_version, filters).map_err(|e| HeliusError::EnhancedWebsocket {
-                    reason: e,
-                    message: "maybe_map_filters".to_string(),
-                })?;
-            }
-        }
-
-        let params = json!([pubkey.to_string(), config]);
-        self.subscribe("program", params).await
-    }
-
     async fn run_ws(
         mut ws: WebSocketStream<MaybeTlsStream<TcpStream>>,
         mut subscribe_receiver: mpsc::UnboundedReceiver<SubscribeRequestMsg>,
         mut request_receiver: mpsc::UnboundedReceiver<RequestMsg>,
         mut shutdown_receiver: oneshot::Receiver<()>,
-    ) -> EnhancedWebsocketResult {
+        ping_duration_seconds: u64,
+    ) -> Result<()> {
         let mut request_id: u64 = 0;
 
         let mut requests_subscribe = BTreeMap::new();
@@ -216,7 +210,7 @@ impl EnhancedWebsocket {
                 break;
               },
               // Send `Message::Ping` each 10s if no any other communication
-              () = sleep(Duration::from_secs(10)) => {
+              () = sleep(Duration::from_secs(ping_duration_seconds)) => {
                 ws.send(Message::Ping(Vec::new())).await?;
               },
               // Read message for subscribe

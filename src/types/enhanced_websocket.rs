@@ -19,6 +19,15 @@ pub struct TransactionSubscribeFilter {
     pub account_required: Option<Vec<String>>,
 }
 
+impl TransactionSubscribeFilter {
+    pub fn standard(key: &Pubkey) -> Self {
+        Self {
+            account_include: Some(vec![key.to_string()]),
+            ..Default::default()
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum UiEnhancedTransactionEncoding {
@@ -27,15 +36,6 @@ pub enum UiEnhancedTransactionEncoding {
     #[serde(rename = "base64+zstd")]
     Base64Zstd,
     JsonParsed,
-}
-
-impl TransactionSubscribeFilter {
-    pub fn standard(key: &Pubkey) -> Self {
-        Self {
-            account_include: Some(vec![key.to_string()]),
-            ..Default::default()
-        }
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
