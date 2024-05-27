@@ -169,7 +169,10 @@ async fn test_get_assets_by_group_success() {
 
     let asset: AssetList = response.unwrap();
     assert_eq!(asset.total, 1);
-    assert_eq!(asset.items[0].content.as_ref().unwrap().metadata.name, Some("Obi-Wan Kenobi".to_string()));
+    assert_eq!(
+        asset.items[0].content.as_ref().unwrap().metadata.name,
+        Some("Obi-Wan Kenobi".to_string())
+    );
 }
 
 #[tokio::test]
