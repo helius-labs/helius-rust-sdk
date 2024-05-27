@@ -67,8 +67,8 @@ async fn test_search_assets_success() {
                             "Visit the domain shown in the picture and claim your exclusive voucher 3000jup.com"
                                 .to_string(),
                         ),
-                        name: "3000Jup For You 3000Jup.com".to_string(),
-                        symbol: "JFY".to_string(),
+                        name: Some("3000Jup For You 3000Jup.com".to_string()),
+                        symbol: Some("JFY".to_string()),
                     },
                     links: Some(Links {
                         external_url: Some("https://3000jup.com".to_string()),

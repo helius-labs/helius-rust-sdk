@@ -51,8 +51,8 @@ async fn test_get_assets_by_group_success() {
                                 trait_type: "Affiliation".to_string(),
                             }]),
                             description: Some("Obi-Wan Kenobi was a legendary Force-sensitive human male Jedi Master who served on the Jedi High Council during the final years of the Republic Era".to_string()),
-                            name: "Obi-Wan Kenobi".to_string(),
-                            symbol:"Guiding Light".to_string(),
+                            name: Some("Obi-Wan Kenobi".to_string()),
+                            symbol: Some("Guiding Light".to_string()),
                         },
                         links: Some(Links {
                             external_url: Some("https://example.com".to_string()),
@@ -170,7 +170,10 @@ async fn test_get_assets_by_group_success() {
 
     let asset: AssetList = response.unwrap();
     assert_eq!(asset.total, 1);
-    assert_eq!(asset.items[0].content.as_ref().unwrap().metadata.name, "Obi-Wan Kenobi");
+    assert_eq!(
+        asset.items[0].content.as_ref().unwrap().metadata.name,
+        Some("Obi-Wan Kenobi".to_string())
+    );
 }
 
 #[tokio::test]

@@ -154,7 +154,7 @@ impl MintApiAuthority {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub enum PriorityLevel {
-    None,
+    Min,
     Low,
     Medium,
     High,

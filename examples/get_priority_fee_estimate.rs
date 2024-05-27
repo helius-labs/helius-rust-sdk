@@ -17,6 +17,8 @@ async fn main() -> Result<()> {
             include_all_priority_fee_levels: None,
             transaction_encoding: None,
             lookback_slots: None,
+            recommended: None,
+            include_vote: None,
         }),
     };
 

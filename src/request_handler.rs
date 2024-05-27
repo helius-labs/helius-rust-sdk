@@ -65,9 +65,6 @@ impl RequestHandler {
         }
 
         let response: Response = self.send_request(request_builder).await?;
-
-        print!("RESPONSE {:?}", response);
-
         self.handle_response(response).await
     }
 
@@ -84,16 +81,16 @@ impl RequestHandler {
     ///
     /// # Errors
     /// Returns an error if deserialization fails or if the response status indicates a failure (e.g., 404 Not Found)
-    async fn handle_response<T: for<'de> Deserialize<'de>>(&self, response: Response) -> Result<T> {
+    async fn handle_response<T: for<'de> Deserialize<'de> + Default>(&self, response: Response) -> Result<T> {
         let status: StatusCode = response.status();
         let path: String = response.url().path().to_string();
         let body_text: String = response.text().await.unwrap_or_default();
 
-        println!("STATUS {}", status);
-        println!("PATH {}", path);
-        println!("BODY {}", body_text);
-
         if status.is_success() {
+            if body_text.is_empty() {
+                return Ok(T::default());
+            }
+
             match serde_json::from_str::<T>(&body_text) {
                 Ok(data) => Ok(data),
                 Err(e) => {

@@ -100,8 +100,8 @@ async fn test_get_assets_by_creator_success() {
                         description: Some(
                             "Fock it.".to_string(),
                         ),
-                        name: "Mad Lads #6867".to_string(),
-                        symbol: "MAD".to_string(),
+                        name: Some("Mad Lads #6867".to_string()),
+                        symbol: Some("MAD".to_string()),
                     },
                     links: Some(
                         Links {
