@@ -1,4 +1,5 @@
 use helius::config::Config;
+use helius::error::Result;
 use helius::rpc_client::RpcClient;
 use helius::types::{
     AccountData, Cluster, EnhancedTransaction, HeliusEndpoints, InnerInstruction, Instruction,
@@ -16,7 +17,7 @@ async fn test_parse_transactions_success() {
     let mut server: Server = Server::new_with_opts_async(mockito::ServerOpts::default()).await;
     let url: String = format!("{}/", server.url());
 
-    let mock_response = vec![EnhancedTransaction {
+    let mock_response: Vec<EnhancedTransaction> = vec![EnhancedTransaction {
         account_data: vec![AccountData {
             account: "".to_string(),
             native_token_balance: Some(Number::from(10)),
@@ -75,22 +76,24 @@ async fn test_parse_transactions_success() {
 
     let client: Client = Client::new();
     let rpc_client: Arc<RpcClient> = Arc::new(RpcClient::new(Arc::new(client.clone()), Arc::clone(&config)).unwrap());
-    let helius = Helius {
+    let helius: Helius = Helius {
         config,
         client,
         rpc_client,
+        ws_client: None,
     };
 
-    let request = ParseTransactionsRequest {
+    let request: ParseTransactionsRequest = ParseTransactionsRequest {
         transactions: vec![
             "DiG7v24AXRQqGagDx8pcVxRgVrgFoXUpJgp7xb62ycG9".to_string(),
             "46tC8n6GyWvUjFxpTE9juG5WZ72RXADpPhY4S1d6wvTi".to_string(),
         ],
     };
 
-    let response = helius.parse_transactions(request).await;
+    let response: Result<Vec<EnhancedTransaction>> = helius.parse_transactions(request).await;
     assert!(response.is_ok(), "The API call failed: {:?}", response.err());
-    let tx_response = response.unwrap();
+
+    let tx_response: Vec<EnhancedTransaction> = response.unwrap();
     assert_eq!(
         tx_response[0].signature,
         "yy5BT9benHhx8fGCvhcAfTtLEHAtRJ3hRTzVL16bdrTCWm63t2vapfrZQZLJC3RcuagekaXjSs2zUGQvbcto8DK".to_string()
@@ -113,12 +116,13 @@ async fn test_parse_transactions_failure() {
     });
     let client: Client = Client::new();
     let rpc_client: Arc<RpcClient> = Arc::new(RpcClient::new(Arc::new(client.clone()), Arc::clone(&config)).unwrap());
-    let helius = Helius {
+    let helius: Helius = Helius {
         config,
         client,
         rpc_client,
+        ws_client: None,
     };
-    let request = ParseTransactionsRequest {
+    let request: ParseTransactionsRequest = ParseTransactionsRequest {
         transactions: vec![
             "DiG7v24AXRQqGagDx8pcVxRgVrgFoXUpJgp7xb62ycG9".to_string(),
             "46tC8n6GyWvUjFxpTE9juG5WZ72RXADpPhY4S1d6wvTi".to_string(),
@@ -131,7 +135,7 @@ async fn test_parse_transactions_failure() {
         .with_body(r#"{"error":"Internal Server Error"}"#)
         .create();
 
-    let response = helius.parse_transactions(request).await;
+    let response: Result<Vec<EnhancedTransaction>> = helius.parse_transactions(request).await;
     assert!(response.is_err(), "Expected an error due to server failure");
 }
 #[tokio::test]
@@ -139,7 +143,7 @@ async fn test_parse_transaction_history_success() {
     let mut server: Server = Server::new_with_opts_async(mockito::ServerOpts::default()).await;
     let url: String = format!("{}/", server.url());
 
-    let mock_response = vec![EnhancedTransaction {
+    let mock_response: Vec<EnhancedTransaction> = vec![EnhancedTransaction {
         account_data: vec![AccountData {
             account: "".to_string(),
             native_token_balance: Some(Number::from(10)),
@@ -201,21 +205,22 @@ async fn test_parse_transaction_history_success() {
 
     let client: Client = Client::new();
     let rpc_client: Arc<RpcClient> = Arc::new(RpcClient::new(Arc::new(client.clone()), Arc::clone(&config)).unwrap());
-    let helius = Helius {
+    let helius: Helius = Helius {
         config,
         client,
         rpc_client,
+        ws_client: None,
     };
 
-    let request = ParsedTransactionHistoryRequest {
+    let request: ParsedTransactionHistoryRequest = ParsedTransactionHistoryRequest {
         address: "46tC8n6GyWvUjFxpTE9juG5WZ72RXADpPhY4S1d6wvTi".to_string(),
         before: None,
     };
 
-    let response = helius.parsed_transaction_history(request).await;
-
+    let response: Result<Vec<EnhancedTransaction>> = helius.parsed_transaction_history(request).await;
     assert!(response.is_ok(), "The API call failed: {:?}", response.err());
-    let tx_response = response.unwrap();
+
+    let tx_response: Vec<EnhancedTransaction> = response.unwrap();
     assert_eq!(
         tx_response[0].signature,
         "yy5BT9benHhx8fGCvhcAfTtLEHAtRJ3hRTzVL16bdrTCWm63t2vapfrZQZLJC3RcuagekaXjSs2zUGQvbcto8DK".to_string()
@@ -238,12 +243,13 @@ async fn test_parse_transaction_history_failure() {
     });
     let client: Client = Client::new();
     let rpc_client: Arc<RpcClient> = Arc::new(RpcClient::new(Arc::new(client.clone()), Arc::clone(&config)).unwrap());
-    let helius = Helius {
+    let helius: Helius = Helius {
         config,
         client,
         rpc_client,
+        ws_client: None,
     };
-    let request = ParsedTransactionHistoryRequest {
+    let request: ParsedTransactionHistoryRequest = ParsedTransactionHistoryRequest {
         address: "46tC8n6GyWvUjFxpTE9juG5WZ72RXADpPhY4S1d6wvTi".to_string(),
         before: None,
     };
@@ -257,6 +263,6 @@ async fn test_parse_transaction_history_failure() {
         .with_body(r#"{"error":"Internal Server Error"}"#)
         .create();
 
-    let response = helius.parsed_transaction_history(request).await;
+    let response: Result<Vec<EnhancedTransaction>> = helius.parsed_transaction_history(request).await;
     assert!(response.is_err(), "Expected an error due to server failure");
 }

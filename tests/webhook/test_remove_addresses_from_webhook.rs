@@ -1,5 +1,5 @@
 use helius::config::Config;
-use helius::error::HeliusError;
+use helius::error::Result;
 use helius::rpc_client::RpcClient;
 use helius::types::{Cluster, HeliusEndpoints, TransactionType, Webhook, WebhookType};
 use helius::Helius;
@@ -63,13 +63,14 @@ async fn test_remove_addresses_from_webhook_success() {
 
     let client: Client = Client::new();
     let rpc_client: Arc<RpcClient> = Arc::new(RpcClient::new(Arc::new(client.clone()), Arc::clone(&config)).unwrap());
-    let helius = Helius {
+    let helius: Helius = Helius {
         config,
         client,
         rpc_client,
+        ws_client: None,
     };
 
-    let response = helius
+    let response: Result<Webhook> = helius
         .remove_addresses_from_webhook(
             "0e8250a1-ceec-4757-ad69",
             &[
@@ -80,7 +81,8 @@ async fn test_remove_addresses_from_webhook_success() {
         .await;
 
     assert!(response.is_ok(), "The API call failed: {:?}", response.err());
-    let webhook_response = response.unwrap();
+    let webhook_response: Webhook = response.unwrap();
+
     assert_eq!(webhook_response.webhook_id, "0e8250a1-ceec-4757-ad69");
     assert_eq!(
         webhook_response.webhook_url,
@@ -136,12 +138,14 @@ async fn test_remove_addresses_from_webhook_failure() {
 
     let client: Client = Client::new();
     let rpc_client: Arc<RpcClient> = Arc::new(RpcClient::new(Arc::new(client.clone()), Arc::clone(&config)).unwrap());
-    let helius = Helius {
+    let helius: Helius = Helius {
         config,
         client,
         rpc_client,
+        ws_client: None,
     };
-    let response: Result<Webhook, HeliusError> = helius
+
+    let response: Result<Webhook> = helius
         .remove_addresses_from_webhook(
             "0e8250a1-ceec-4757-ad69",
             &[

@@ -1,5 +1,5 @@
 use helius::config::Config;
-use helius::error::HeliusError;
+use helius::error::Result;
 use helius::rpc_client::RpcClient;
 use helius::types::{Cluster, EditWebhookRequest, HeliusEndpoints, TransactionType, Webhook, WebhookType};
 use helius::Helius;
@@ -42,13 +42,14 @@ async fn test_edit_webhook_success() {
 
     let client: Client = Client::new();
     let rpc_client: Arc<RpcClient> = Arc::new(RpcClient::new(Arc::new(client.clone()), Arc::clone(&config)).unwrap());
-    let helius = Helius {
+    let helius: Helius = Helius {
         config,
         client,
         rpc_client,
+        ws_client: None,
     };
 
-    let request = EditWebhookRequest {
+    let request: EditWebhookRequest = EditWebhookRequest {
         webhook_id: "0e8250a1-ceec-4757-ad69".to_string(),
         webhook_url: "https://webhook.site/0e8250a1-ceec-4757-ad69-cc6473085bfc".to_string(),
         transaction_types: vec![TransactionType::Any],
@@ -58,10 +59,11 @@ async fn test_edit_webhook_success() {
         txn_status: Default::default(),
         encoding: Default::default(),
     };
-    let response = helius.edit_webhook(request).await;
+    let response: Result<Webhook> = helius.edit_webhook(request).await;
 
     assert!(response.is_ok(), "The API call failed: {:?}", response.err());
-    let webhook_response = response.unwrap();
+    let webhook_response: Webhook = response.unwrap();
+
     assert_eq!(webhook_response.webhook_id, "0e8250a1-ceec-4757-ad69");
     assert_eq!(
         webhook_response.webhook_url,
@@ -84,6 +86,7 @@ async fn test_edit_webhook_failure() {
         .with_header("Content-Type", "application/json")
         .with_body(r#"{"error":"Internal Server Error"}"#)
         .create();
+
     let config: Arc<Config> = Arc::new(Config {
         api_key: "fake_api_key".to_string(),
         cluster: Cluster::Devnet,
@@ -92,7 +95,16 @@ async fn test_edit_webhook_failure() {
             rpc: url.to_string(),
         },
     });
-    let request = EditWebhookRequest {
+    let client: Client = Client::new();
+    let rpc_client: Arc<RpcClient> = Arc::new(RpcClient::new(Arc::new(client.clone()), Arc::clone(&config)).unwrap());
+    let helius: Helius = Helius {
+        config,
+        client,
+        rpc_client,
+        ws_client: None,
+    };
+
+    let request: EditWebhookRequest = EditWebhookRequest {
         webhook_id: "0e8250a1-ceec-4757-ad69".to_string(),
         webhook_url: "https://webhook.site/0e8250a1-ceec-4757-ad69-cc6473085bfc".to_string(),
         transaction_types: vec![TransactionType::Any],
@@ -103,13 +115,6 @@ async fn test_edit_webhook_failure() {
         encoding: Default::default(),
     };
 
-    let client: Client = Client::new();
-    let rpc_client: Arc<RpcClient> = Arc::new(RpcClient::new(Arc::new(client.clone()), Arc::clone(&config)).unwrap());
-    let helius = Helius {
-        config,
-        client,
-        rpc_client,
-    };
-    let response: Result<Webhook, HeliusError> = helius.edit_webhook(request).await;
+    let response: Result<Webhook> = helius.edit_webhook(request).await;
     assert!(response.is_err(), "Expected an error due to server failure");
 }

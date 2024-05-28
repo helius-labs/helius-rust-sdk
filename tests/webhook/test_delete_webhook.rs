@@ -1,4 +1,5 @@
 use helius::config::Config;
+use helius::error::Result;
 use helius::rpc_client::RpcClient;
 use helius::types::{Cluster, HeliusEndpoints};
 use helius::Helius;
@@ -28,13 +29,14 @@ async fn test_delete_webhook_success() {
 
     let client: Client = Client::new();
     let rpc_client: Arc<RpcClient> = Arc::new(RpcClient::new(Arc::new(client.clone()), Arc::clone(&config)).unwrap());
-    let helius = Helius {
+    let helius: Helius = Helius {
         config,
         client,
         rpc_client,
+        ws_client: None,
     };
 
-    let response = helius.delete_webhook("0e8250a1-ceec-4757-ad69").await;
+    let response: Result<()> = helius.delete_webhook("0e8250a1-ceec-4757-ad69").await;
     assert!(response.is_ok(), "The API call failed: {:?}", response.err());
 }
 
@@ -61,11 +63,12 @@ async fn test_delete_webhook_failure() {
 
     let client: Client = Client::new();
     let rpc_client: Arc<RpcClient> = Arc::new(RpcClient::new(Arc::new(client.clone()), Arc::clone(&config)).unwrap());
-    let helius = Helius {
+    let helius: Helius = Helius {
         config,
         client,
         rpc_client,
+        ws_client: None,
     };
-    let response = helius.delete_webhook("0e8250a1-ceec-4757-ad69").await;
+    let response: Result<()> = helius.delete_webhook("0e8250a1-ceec-4757-ad69").await;
     assert!(response.is_err(), "Expected an error due to server failure");
 }

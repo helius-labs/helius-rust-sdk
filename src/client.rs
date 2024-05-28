@@ -56,38 +56,17 @@ impl Helius {
     /// The enhanced websocket is optional, and this method is used to create a new instance of `Helius` with an enhanced websocket client.
     /// Upon calling this method, the websocket will connect hence the asynchronous function definition omission from the default `new` method.
     ///
-    /// # Example
-    /// ```rust
-    /// use helius::Helius;
-    /// use helius::error::Result;
-    /// use helius::types::{Cluster, RpcTransactionsConfig, TransactionSubscribeFilter, TransactionSubscribeOptions};
-    /// use solana_sdk::pubkey;
-    /// use tokio_stream::StreamExt;
-    ///
-    /// #[tokio::main]
-    /// async fn main() -> Result<()> {
-    ///   let helius = Helius::new("your_api_key", Cluster::MainnetBeta).expect("Failed to create a Helius client");
-    ///   // you may monitor transactions for any pubkey, this is just an example.
-    ///   let key = pubkey!("BtsmiEEvnSuUnKxqXj2PZRYpPJAc7C34mGz8gtJ1DAaH");
-    ///   let config = RpcTransactionsConfig {
-    ///     filter: TransactionSubscribeFilter::standard(&key),
-    ///     options: TransactionSubscribeOptions::default(),
-    ///   };
-    ///   if let Some(ws) = helius.ws() {
-    ///     let (mut stream, _unsub) = ws.transaction_subscribe(config).await?;
-    ///     while let Some(event) = stream.next().await {
-    ///       println!("{:#?}", event);
-    ///     }
-    ///   }
-    ///   Ok(())
-    /// }
-    /// ```
+    /// # Arguments
+    /// * `api_key` - The API key required for authenticating requests made
+    /// * `cluster` - The Solana cluster (Devnet or MainnetBeta) that defines the given network environment
+    /// # Returns
+    /// An instance of `Helius` if successful. A `HeliusError` is returned if an error occurs during configuration or initialization of the HTTP, RPC, or WS client
     pub async fn new_with_ws(api_key: &str, cluster: Cluster) -> Result<Self> {
         let config: Arc<Config> = Arc::new(Config::new(api_key, cluster)?);
         let client: Client = Client::new();
         let rpc_client: Arc<RpcClient> = Arc::new(RpcClient::new(Arc::new(client.clone()), config.clone())?);
-        let wss = format!("{}{}", ENHANCED_WEBSOCKET_URL, api_key);
-        let ws_client = Arc::new(EnhancedWebsocket::new(&wss).await?);
+        let wss: String = format!("{}{}", ENHANCED_WEBSOCKET_URL, api_key);
+        let ws_client: Arc<EnhancedWebsocket> = Arc::new(EnhancedWebsocket::new(&wss).await?);
         Ok(Helius {
             config,
             client,
