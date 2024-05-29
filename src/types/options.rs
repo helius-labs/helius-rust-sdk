@@ -47,4 +47,6 @@ pub struct SearchAssetsOptions {
     pub show_zero_balance: bool,
     #[serde(default)]
     pub show_closed_accounts: bool,
+    #[serde(default)]
+    pub show_native_balance: bool,
 }

@@ -47,8 +47,8 @@ async fn test_get_asset_batch_success() {
                             }
                         ]),
                         description: Some("A hotspot NFT on Helium".to_string()),
-                        name: "gentle-mandarin-ferret".to_string(),
-                        symbol: "HOTSPOT".to_string(),
+                        name: Some("gentle-mandarin-ferret".to_string()),
+                        symbol: Some("HOTSPOT".to_string()),
                     },
                     links: Some(Links {
                         external_url: None,
@@ -156,8 +156,8 @@ async fn test_get_asset_batch_success() {
                             }
                         ]),
                         description: Some("Aerial photograph of a parking structure in LA depicting the photographer, Andrew Mason, \"sliding\" through the image.".to_string()),
-                        name: "Slide".to_string(),
-                        symbol: "".to_string(),
+                        name: Some("Slide".to_string()),
+                        symbol: Some("".to_string()),
                     },
                     links: Some(Links {
                         external_url: Some("".to_string()),
