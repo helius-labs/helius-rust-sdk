@@ -160,6 +160,7 @@ async fn test_get_assets_by_owner_success() {
         config,
         client,
         rpc_client,
+        async_rpc_client: None,
     };
 
     let request: GetAssetsByOwner = GetAssetsByOwner {
@@ -209,6 +210,7 @@ async fn test_get_assets_by_owner_failure() {
         config,
         client,
         rpc_client,
+        async_rpc_client: None,
     };
 
     let request: GetAssetsByOwner = GetAssetsByOwner {
