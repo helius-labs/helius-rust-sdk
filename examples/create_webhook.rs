@@ -1,4 +1,4 @@
-use helius::error::HeliusError;
+use helius::error::Result;
 use helius::types::{Cluster, Webhook, WebhookType};
 use helius::{
     types::{CreateWebhookRequest, TransactionType},
@@ -6,7 +6,7 @@ use helius::{
 };
 
 #[tokio::main]
-async fn main() -> Result<(), HeliusError> {
+async fn main() -> Result<()> {
     let api_key: &str = "your_api_key";
     let cluster: Cluster = Cluster::MainnetBeta;
 
@@ -22,7 +22,7 @@ async fn main() -> Result<(), HeliusError> {
         encoding: Default::default(),
     };
 
-    let response: Result<Webhook, HeliusError> = helius.create_webhook(request).await;
+    let response: Result<Webhook> = helius.create_webhook(request).await;
     println!("Webhook created {:?}", response);
     Ok(())
 }
