@@ -48,6 +48,7 @@ async fn test_mint_compressed_nft() {
         config,
         client,
         rpc_client,
+        async_rpc_client: None,
     };
 
     let request: MintCompressedNftRequest = MintCompressedNftRequest {
@@ -121,6 +122,7 @@ async fn test_get_asset_proof_failure() {
         config,
         client,
         rpc_client,
+        async_rpc_client: None,
     };
 
     let request: MintCompressedNftRequest = MintCompressedNftRequest {

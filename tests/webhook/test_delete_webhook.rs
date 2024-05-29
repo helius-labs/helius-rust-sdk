@@ -32,6 +32,7 @@ async fn test_delete_webhook_success() {
         config,
         client,
         rpc_client,
+        async_rpc_client: None,
     };
 
     let response = helius.delete_webhook("0e8250a1-ceec-4757-ad69").await;
@@ -65,6 +66,7 @@ async fn test_delete_webhook_failure() {
         config,
         client,
         rpc_client,
+        async_rpc_client: None,
     };
     let response = helius.delete_webhook("0e8250a1-ceec-4757-ad69").await;
     assert!(response.is_err(), "Expected an error due to server failure");

@@ -45,6 +45,7 @@ async fn test_get_webhook_by_id_success() {
         config,
         client,
         rpc_client,
+        async_rpc_client: None,
     };
 
     let response = helius.get_webhook_by_id("0e8250a1-ceec-4757-ad69").await;
@@ -85,6 +86,7 @@ async fn test_get_webhook_by_id_failure() {
         config,
         client,
         rpc_client,
+        async_rpc_client: None,
     };
     let response: Result<Webhook, HeliusError> = helius.get_webhook_by_id("0e8250a1-ceec-4757-ad69").await;
     assert!(response.is_err(), "Expected an error due to server failure");

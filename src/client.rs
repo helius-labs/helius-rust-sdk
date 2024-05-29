@@ -7,6 +7,7 @@ use crate::types::Cluster;
 
 use reqwest::Client;
 use solana_client::rpc_client::RpcClient as SolanaRpcClient;
+use solana_client::nonblocking::rpc_client::RpcClient as AsyncSolanaRpcClient;
 
 /// The `Helius` struct is the main entry point to interacting with the SDK
 ///
@@ -19,6 +20,8 @@ pub struct Helius {
     pub client: Client,
     /// A reference-counted RPC client tailored for making requests in a thread-safe manner
     pub rpc_client: Arc<RpcClient>,
+    /// An optional asynchronous Solana client for async operations
+    pub async_rpc_client: Option<Arc<AsyncSolanaRpcClient>>,
 }
 
 impl Helius {
@@ -47,6 +50,7 @@ impl Helius {
             config,
             client,
             rpc_client,
+            async_rpc_client: None,
         })
     }
 
