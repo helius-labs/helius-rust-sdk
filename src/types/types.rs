@@ -8,6 +8,7 @@ use crate::types::{DisplayOptions, GetAssetOptions};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+use solana_client::rpc_config::RpcSendTransactionConfig;
 use solana_sdk::{address_lookup_table::AddressLookupTableAccount, instruction::Instruction, signature::Keypair};
 
 /// Defines the available clusters supported by Helius
@@ -946,8 +947,7 @@ pub struct EditWebhookRequest {
 pub struct SmartTransactionConfig<'a> {
     pub instructions: Vec<Instruction>,
     pub from_keypair: &'a Keypair,
-    pub skip_preflight_checks: Option<bool>,
-    pub max_retries: Option<usize>,
+    pub send_options: RpcSendTransactionConfig,
     pub lookup_tables: Option<Vec<AddressLookupTableAccount>>,
 }
 
@@ -956,8 +956,7 @@ impl<'a> SmartTransactionConfig<'a> {
         Self {
             instructions,
             from_keypair,
-            skip_preflight_checks: None,
-            max_retries: None,
+            send_options: RpcSendTransactionConfig::default(),
             lookup_tables: None,
         }
     }
