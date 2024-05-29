@@ -1,13 +1,13 @@
-use std::sync::Arc;
+use std::{ops::Deref, sync::Arc};
 
 use crate::config::Config;
-use crate::error::Result;
+use crate::error::{HeliusError, Result};
 use crate::rpc_client::RpcClient;
 use crate::types::Cluster;
 
 use reqwest::Client;
-use solana_client::rpc_client::RpcClient as SolanaRpcClient;
 use solana_client::nonblocking::rpc_client::RpcClient as AsyncSolanaRpcClient;
+use solana_client::rpc_client::RpcClient as SolanaRpcClient;
 
 /// The `Helius` struct is the main entry point to interacting with the SDK
 ///
@@ -55,23 +55,33 @@ impl Helius {
     }
 
     /// Creates a new instance of `Helius` with an asynchronous Solana client
-    /// 
+    ///
     /// # Arguments
     /// * `api_key` - The API key required for authenticating the requests made
     /// * `cluster` - The Solana cluster (Devnet or MainnetBeta) that defines the given network environment
-    /// 
+    ///
     /// # Returns
     /// An instance of `Helius` if successful. A `HeliusError` is returned if an error occurs during configuration or initialization of the HTTP or RPC client
-    /// 
+    ///
     /// # Example
     /// ```rust
     /// use helius::Helius;
     /// use helius::types::Cluster;
-    /// 
+    ///
     /// let helius = Helius::new_with_async_solana("your_api_key", Cluster::Devnet).expect("Failed to create a Helius client");
     /// ```
     pub fn new_with_async_solana(api_key: &str, cluster: Cluster) -> Result<Self> {
-        
+        let config: Arc<Config> = Arc::new(Config::new(api_key, cluster)?);
+        let client: Client = Client::new();
+        let url: String = format!("{}/?api-key={}", config.endpoints.rpc, config.api_key);
+        let async_solana_client: Arc<AsyncSolanaRpcClient> = Arc::new(AsyncSolanaRpcClient::new(url));
+
+        Ok(Helius {
+            config: config.clone(),
+            client: client.clone(),
+            rpc_client: Arc::new(RpcClient::new(Arc::new(client), config.clone())?),
+            async_rpc_client: Some(async_solana_client),
+        })
     }
 
     /// Provides a thread-safe way to access RPC functionalities
@@ -82,7 +92,34 @@ impl Helius {
         self.rpc_client.clone()
     }
 
+    pub fn async_connection(&self) -> Result<HeliusAsyncSolanaClient> {
+        match &self.async_rpc_client {
+            Some(client) => Ok(HeliusAsyncSolanaClient::new(client.clone())),
+            None => Err(HeliusError::ClientNotInitialized {
+                text: "An asynchronous Solana RPC client is not initialized".to_string(),
+            }),
+        }
+    }
+
     pub fn connection(&self) -> Arc<SolanaRpcClient> {
         self.rpc_client.solana_client.clone()
+    }
+}
+
+pub struct HeliusAsyncSolanaClient {
+    client: Arc<AsyncSolanaRpcClient>,
+}
+
+impl HeliusAsyncSolanaClient {
+    pub fn new(client: Arc<AsyncSolanaRpcClient>) -> Self {
+        Self { client }
+    }
+}
+
+impl Deref for HeliusAsyncSolanaClient {
+    type Target = AsyncSolanaRpcClient;
+
+    fn deref(&self) -> &Self::Target {
+        &self.client
     }
 }
