@@ -28,7 +28,7 @@ impl Helius {
     /// Creates a new instance of `Helius` configured with a specific API key and a target cluster
     ///
     /// # Arguments
-    /// * `api_key` - The API key required for authenticating requests made
+    /// * `api_key` - The API key required for authenticating the requests made
     /// * `cluster` - The Solana cluster (Devnet or MainnetBeta) that defines the given network environment
     ///
     /// # Returns
@@ -52,6 +52,26 @@ impl Helius {
             rpc_client,
             async_rpc_client: None,
         })
+    }
+
+    /// Creates a new instance of `Helius` with an asynchronous Solana client
+    /// 
+    /// # Arguments
+    /// * `api_key` - The API key required for authenticating the requests made
+    /// * `cluster` - The Solana cluster (Devnet or MainnetBeta) that defines the given network environment
+    /// 
+    /// # Returns
+    /// An instance of `Helius` if successful. A `HeliusError` is returned if an error occurs during configuration or initialization of the HTTP or RPC client
+    /// 
+    /// # Example
+    /// ```rust
+    /// use helius::Helius;
+    /// use helius::types::Cluster;
+    /// 
+    /// let helius = Helius::new_with_async_solana("your_api_key", Cluster::Devnet).expect("Failed to create a Helius client");
+    /// ```
+    pub fn new_with_async_solana(api_key: &str, cluster: Cluster) -> Result<Self> {
+        
     }
 
     /// Provides a thread-safe way to access RPC functionalities
