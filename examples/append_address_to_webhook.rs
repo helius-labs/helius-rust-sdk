@@ -1,8 +1,9 @@
-use helius::types::Cluster;
+use helius::error::HeliusError;
+use helius::types::{Cluster, Webhook};
 use helius::Helius;
 
 #[tokio::main]
-async fn main() {
+async fn main() -> Result<(), HeliusError> {
     let api_key: &str = "your_api_key";
     let cluster: Cluster = Cluster::MainnetBeta;
 
@@ -10,6 +11,8 @@ async fn main() {
 
     let webhook_id = "your_webhook_id";
     let new_addresses = ["your_address1".to_string(), "your_address2".to_string()];
-    let response = helius.append_addresses_to_webhook(webhook_id, &new_addresses).await;
+    let response: Result<Webhook, HeliusError> = helius.append_addresses_to_webhook(webhook_id, &new_addresses).await;
     println!("Addresses appended  {:?}", response);
+
+    Ok(())
 }

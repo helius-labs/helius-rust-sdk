@@ -1,8 +1,9 @@
-use helius::types::{Cluster, EditWebhookRequest, TransactionType, WebhookType};
+use helius::error::HeliusError;
+use helius::types::{Cluster, EditWebhookRequest, TransactionType, Webhook, WebhookType};
 use helius::Helius;
 
 #[tokio::main]
-async fn main() {
+async fn main() -> Result<(), HeliusError> {
     let api_key: &str = "your_api_key";
     let cluster: Cluster = Cluster::MainnetBeta;
 
@@ -18,6 +19,7 @@ async fn main() {
         encoding: Default::default(),
     };
 
-    let response = helius.edit_webhook(request).await;
+    let response: Result<Webhook, HeliusError> = helius.edit_webhook(request).await;
     println!("Webhook edited {:?}", response);
+    Ok(())
 }
