@@ -100,7 +100,8 @@ impl Helius {
         match &self.async_rpc_client {
             Some(client) => Ok(HeliusAsyncSolanaClient::new(client.clone())),
             None => Err(HeliusError::ClientNotInitialized {
-                text: "An asynchronous Solana RPC client is not initialized".to_string(),
+                text: "An asynchronous Solana RPC client must be initialized before trying to access async_connection"
+                    .to_string(),
             }),
         }
     }
