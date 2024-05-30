@@ -62,6 +62,8 @@ The SDK also comes equipped with `HeliusFactory`, a factory for creating instanc
 ### Embedded Solana Client
 The `Helius` client has an embedded [Solana client](https://docs.rs/solana-client/latest/solana_client/rpc_client/struct.RpcClient.html) that can be accessed via `helius.connection().request_name()` where `request_name()` is a given [RPC method](https://docs.rs/solana-client/latest/solana_client/rpc_client/struct.RpcClient.html#implementations). A full list of all Solana RPC HTTP methods can be found [here](https://solana.com/docs/rpc/http).
 
+Note that this Solana client is synchronous by default. An asynchronous client can be created using the `new_with_async_solana` in place of the `new` method. The asynchronous client can be accessed via `helius.async_connection()?.some_async_method().await?` where `some_async_method()` is a given async RPC method.
+
 ### Examples
 More examples of how to use the SDK can be found in the [`examples`](https://github.com/helius-labs/helius-rust-sdk/tree/dev/examples) directory.
 

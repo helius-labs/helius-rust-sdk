@@ -92,6 +92,10 @@ impl Helius {
         self.rpc_client.clone()
     }
 
+    /// Provides a thread-safe way to access asynchronous Solana client functionalities
+    ///
+    /// # Returns
+    /// A `Result` containing a `HeliusAsyncSolanaClient` if an `async_rpc_client` exists, otherwise a `HeliusError`
     pub fn async_connection(&self) -> Result<HeliusAsyncSolanaClient> {
         match &self.async_rpc_client {
             Some(client) => Ok(HeliusAsyncSolanaClient::new(client.clone())),
@@ -101,16 +105,28 @@ impl Helius {
         }
     }
 
+    /// Provides a thread-safe way to access synchronous Solana client functionalities
+    ///
+    /// # Returns
+    /// A cloned `Arc<SolanaRpcClient>` that can be safely shared across threads
     pub fn connection(&self) -> Arc<SolanaRpcClient> {
         self.rpc_client.solana_client.clone()
     }
 }
 
+/// A wrapper around the asynchronous Solana RPC client that provides thread-safe access
 pub struct HeliusAsyncSolanaClient {
     client: Arc<AsyncSolanaRpcClient>,
 }
 
 impl HeliusAsyncSolanaClient {
+    /// Creates a new instance of `HeliusAsyncSolanaClient`
+    ///
+    /// # Arguments
+    /// * `client` - The asynchronous Solana RPC client to wrap
+    ///
+    /// # Returns
+    /// An instance of `HeliusAsyncSolanaClient`
     pub fn new(client: Arc<AsyncSolanaRpcClient>) -> Self {
         Self { client }
     }
@@ -119,6 +135,7 @@ impl HeliusAsyncSolanaClient {
 impl Deref for HeliusAsyncSolanaClient {
     type Target = AsyncSolanaRpcClient;
 
+    /// Dereferences the wrapper to provide access to the underlying asynchronous Solana RPC client
     fn deref(&self) -> &Self::Target {
         &self.client
     }
