@@ -46,6 +46,7 @@ async fn test_create_webhook_success() {
         config,
         client,
         rpc_client,
+        async_rpc_client: None,
     };
 
     let request = CreateWebhookRequest {
@@ -101,6 +102,7 @@ async fn test_create_webhook_failure() {
         config,
         client,
         rpc_client,
+        async_rpc_client: None,
     };
     let response: Result<Webhook, HeliusError> = helius.create_webhook(request).await;
     assert!(response.is_err(), "Expected an error due to server failure");

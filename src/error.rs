@@ -24,6 +24,12 @@ pub enum HeliusError {
     #[error("Solana client error: {0}")]
     ClientError(#[from] ClientError),
 
+    /// Indicates if a client is not already initialized
+    ///
+    /// Useful for the new_with_async_solana method on the `Helius` client
+    #[error("Client not initialized: {text}")]
+    ClientNotInitialized { text: String },
+
     /// Represents compile errors from the Solana SDK
     ///
     /// This captures all compile errors thrown by the Solana SDK

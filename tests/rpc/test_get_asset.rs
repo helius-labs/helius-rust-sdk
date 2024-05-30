@@ -173,6 +173,7 @@ async fn test_get_asset_success() {
         config,
         client,
         rpc_client,
+        async_rpc_client: None,
     };
 
     let request: GetAsset = GetAsset {
@@ -228,6 +229,7 @@ async fn test_get_asset_failure() {
         config,
         client,
         rpc_client,
+        async_rpc_client: None,
     };
 
     let request: GetAsset = GetAsset {

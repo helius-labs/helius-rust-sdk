@@ -44,6 +44,7 @@ async fn test_get_all_webhooks_success() {
         config,
         client,
         rpc_client,
+        async_rpc_client: None,
     };
 
     let response = helius.get_all_webhooks().await;
@@ -85,6 +86,7 @@ async fn test_get_all_webhooks_failure() {
         config,
         client,
         rpc_client,
+        async_rpc_client: None,
     };
     let response: Result<Vec<Webhook>, HeliusError> = helius.get_all_webhooks().await;
     assert!(response.is_err(), "Expected an error due to server failure");

@@ -67,6 +67,7 @@ async fn test_remove_addresses_from_webhook_success() {
         config,
         client,
         rpc_client,
+        async_rpc_client: None,
     };
 
     let response = helius
@@ -140,6 +141,7 @@ async fn test_remove_addresses_from_webhook_failure() {
         config,
         client,
         rpc_client,
+        async_rpc_client: None,
     };
     let response: Result<Webhook, HeliusError> = helius
         .remove_addresses_from_webhook(

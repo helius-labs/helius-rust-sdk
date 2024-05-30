@@ -46,6 +46,7 @@ async fn test_edit_webhook_success() {
         config,
         client,
         rpc_client,
+        async_rpc_client: None,
     };
 
     let request = EditWebhookRequest {
@@ -109,6 +110,7 @@ async fn test_edit_webhook_failure() {
         config,
         client,
         rpc_client,
+        async_rpc_client: None,
     };
     let response: Result<Webhook, HeliusError> = helius.edit_webhook(request).await;
     assert!(response.is_err(), "Expected an error due to server failure");

@@ -63,6 +63,7 @@ async fn test_append_addresses_to_webhook_success() {
         config,
         client,
         rpc_client,
+        async_rpc_client: None,
     };
 
     let response = helius
@@ -129,6 +130,7 @@ async fn test_append_addresses_to_webhook_failure() {
         config,
         client,
         rpc_client,
+        async_rpc_client: None,
     };
     let response: Result<Webhook, HeliusError> = helius
         .append_addresses_to_webhook(

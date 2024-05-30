@@ -79,6 +79,7 @@ async fn test_parse_transactions_success() {
         config,
         client,
         rpc_client,
+        async_rpc_client: None,
     };
 
     let request = ParseTransactionsRequest {
@@ -117,6 +118,7 @@ async fn test_parse_transactions_failure() {
         config,
         client,
         rpc_client,
+        async_rpc_client: None,
     };
     let request = ParseTransactionsRequest {
         transactions: vec![
@@ -205,6 +207,7 @@ async fn test_parse_transaction_history_success() {
         config,
         client,
         rpc_client,
+        async_rpc_client: None,
     };
 
     let request = ParsedTransactionHistoryRequest {
@@ -242,6 +245,7 @@ async fn test_parse_transaction_history_failure() {
         config,
         client,
         rpc_client,
+        async_rpc_client: None,
     };
     let request = ParsedTransactionHistoryRequest {
         address: "46tC8n6GyWvUjFxpTE9juG5WZ72RXADpPhY4S1d6wvTi".to_string(),

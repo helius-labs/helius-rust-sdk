@@ -54,9 +54,10 @@ async fn test_get_nft_editions_success() {
         config,
         client,
         rpc_client,
+        async_rpc_client: None,
     };
 
-    let request = GetNftEditions {
+    let request: GetNftEditions = GetNftEditions {
         mint: Some("Ey2Qb8kLctbchQsMnhZs5DjY32To2QtPuXNwWvk4NosL".to_string()),
         page: Some(1),
         limit: Some(1),
@@ -105,6 +106,7 @@ async fn test_get_nft_editions_failure() {
         config,
         client,
         rpc_client,
+        async_rpc_client: None,
     };
 
     let request = GetNftEditions {

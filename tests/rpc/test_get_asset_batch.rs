@@ -266,6 +266,7 @@ async fn test_get_asset_batch_success() {
         config,
         client,
         rpc_client,
+        async_rpc_client: None,
     };
 
     let request: GetAssetBatch = GetAssetBatch {
@@ -313,6 +314,7 @@ async fn test_get_asset_batch_failure() {
         config,
         client,
         rpc_client,
+        async_rpc_client: None,
     };
 
     let request: GetAssetBatch = GetAssetBatch {
