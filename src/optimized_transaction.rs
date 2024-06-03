@@ -18,7 +18,7 @@ use solana_sdk::{
     instruction::Instruction,
     message::{v0, VersionedMessage},
     pubkey::Pubkey,
-    signature::{Signer, Signature},
+    signature::{Signature, Signer},
     transaction::{Transaction, VersionedTransaction},
 };
 use std::time::{Duration, Instant};
@@ -120,7 +120,9 @@ impl Helius {
     /// The transaction signature, if successful
     pub async fn send_smart_transaction(&self, config: SmartTransactionConfig<'_>) -> Result<Signature> {
         if config.signers.is_empty() {
-            return Err(HeliusError::InvalidInput("The fee payer must sign the transaction".to_string()));
+            return Err(HeliusError::InvalidInput(
+                "The fee payer must sign the transaction".to_string(),
+            ));
         }
 
         let payer_pubkey: Pubkey = config.signers[0].pubkey();
@@ -179,7 +181,8 @@ impl Helius {
             let versioned_message: VersionedMessage = VersionedMessage::V0(v0_message);
 
             // Sign the versioned transaction
-            let signatures: Vec<Signature> = config.signers
+            let signatures: Vec<Signature> = config
+                .signers
                 .iter()
                 .map(|signer| signer.try_sign_message(versioned_message.serialize().as_slice()))
                 .collect::<std::result::Result<Vec<_>, _>>()?;
@@ -248,7 +251,8 @@ impl Helius {
             let v0_message: v0::Message =
                 v0::Message::try_compile(&payer_pubkey, &final_instructions, lookup_tables, recent_blockhash)?;
             let versioned_message: VersionedMessage = VersionedMessage::V0(v0_message);
-            let signatures: Vec<Signature> = config.signers
+            let signatures: Vec<Signature> = config
+                .signers
                 .iter()
                 .map(|signer| signer.try_sign_message(versioned_message.serialize().as_slice()))
                 .collect::<std::result::Result<Vec<_>, _>>()?;
