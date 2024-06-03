@@ -18,7 +18,7 @@ use solana_sdk::{
     instruction::Instruction,
     message::{v0, VersionedMessage},
     pubkey::Pubkey,
-    signature::{Keypair, Signature, Signer},
+    signature::{Signer, Signature},
     transaction::{Transaction, VersionedTransaction},
 };
 use std::time::{Duration, Instant};
@@ -40,7 +40,7 @@ impl Helius {
         instructions: Vec<Instruction>,
         payer: Pubkey,
         lookup_tables: Vec<AddressLookupTableAccount>,
-        from_keypair: &Keypair,
+        signers: &[&dyn Signer],
     ) -> Result<Option<u64>> {
         // Set the compute budget limit
         let test_instructions: Vec<Instruction> = vec![ComputeBudgetInstruction::set_compute_unit_limit(1_400_000)]
@@ -57,7 +57,7 @@ impl Helius {
         let versioned_message: VersionedMessage = VersionedMessage::V0(v0_message);
 
         // Create a signed VersionedTransaction
-        let transaction: VersionedTransaction = VersionedTransaction::try_new(versioned_message, &[from_keypair])
+        let transaction: VersionedTransaction = VersionedTransaction::try_new(versioned_message, signers)
             .map_err(|e| HeliusError::InvalidInput(format!("Signing error: {:?}", e)))?;
 
         // Simulate the transaction
@@ -119,7 +119,11 @@ impl Helius {
     /// # Returns
     /// The transaction signature, if successful
     pub async fn send_smart_transaction(&self, config: SmartTransactionConfig<'_>) -> Result<Signature> {
-        let pubkey: Pubkey = config.from_keypair.pubkey();
+        if config.signers.is_empty() {
+            return Err(HeliusError::InvalidInput("The fee payer must sign the transaction".to_string()));
+        }
+
+        let payer_pubkey: Pubkey = config.signers[0].pubkey();
         let recent_blockhash: Hash = self.connection().get_latest_blockhash()?;
         let mut final_instructions: Vec<Instruction> = vec![];
 
@@ -139,9 +143,9 @@ impl Helius {
         let units: Option<u64> = self
             .get_compute_units(
                 config.instructions.clone(),
-                pubkey,
+                payer_pubkey,
                 config.lookup_tables.clone().unwrap_or_default(),
-                &config.from_keypair,
+                &config.signers,
             )
             .await?;
 
@@ -171,12 +175,11 @@ impl Helius {
         if is_versioned {
             let lookup_tables: &[AddressLookupTableAccount] = config.lookup_tables.as_deref().unwrap_or_default();
             let v0_message: v0::Message =
-                v0::Message::try_compile(&pubkey, &config.instructions, lookup_tables, recent_blockhash)?;
+                v0::Message::try_compile(&payer_pubkey, &config.instructions, lookup_tables, recent_blockhash)?;
             let versioned_message: VersionedMessage = VersionedMessage::V0(v0_message);
 
             // Sign the versioned transaction
-            let signers: Vec<&dyn Signer> = vec![config.from_keypair];
-            let signatures: Vec<Signature> = signers
+            let signatures: Vec<Signature> = config.signers
                 .iter()
                 .map(|signer| signer.try_sign_message(versioned_message.serialize().as_slice()))
                 .collect::<std::result::Result<Vec<_>, _>>()?;
@@ -187,8 +190,8 @@ impl Helius {
             });
         } else {
             // If no lookup tables are present, we build a regular transaction
-            let mut tx: Transaction = Transaction::new_with_payer(&config.instructions, Some(&pubkey));
-            tx.try_sign(&[config.from_keypair], recent_blockhash)?;
+            let mut tx: Transaction = Transaction::new_with_payer(&config.instructions, Some(&payer_pubkey));
+            tx.try_sign(&config.signers, recent_blockhash)?;
             legacy_transaction = Some(tx);
         }
 
@@ -243,10 +246,9 @@ impl Helius {
         if is_versioned {
             let lookup_tables: &[AddressLookupTableAccount] = config.lookup_tables.as_deref().unwrap();
             let v0_message: v0::Message =
-                v0::Message::try_compile(&pubkey, &final_instructions, lookup_tables, recent_blockhash)?;
+                v0::Message::try_compile(&payer_pubkey, &final_instructions, lookup_tables, recent_blockhash)?;
             let versioned_message: VersionedMessage = VersionedMessage::V0(v0_message);
-            let signers: Vec<&dyn Signer> = vec![config.from_keypair];
-            let signatures: Vec<Signature> = signers
+            let signatures: Vec<Signature> = config.signers
                 .iter()
                 .map(|signer| signer.try_sign_message(versioned_message.serialize().as_slice()))
                 .collect::<std::result::Result<Vec<_>, _>>()?;
@@ -256,8 +258,8 @@ impl Helius {
                 message: versioned_message,
             });
         } else {
-            let mut tx: Transaction = Transaction::new_with_payer(&final_instructions, Some(&pubkey));
-            tx.try_sign(&[config.from_keypair], recent_blockhash)?;
+            let mut tx: Transaction = Transaction::new_with_payer(&final_instructions, Some(&payer_pubkey));
+            tx.try_sign(&config.signers, recent_blockhash)?;
             legacy_transaction = Some(tx);
         }
 
