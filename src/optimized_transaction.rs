@@ -18,7 +18,7 @@ use solana_sdk::{
     instruction::Instruction,
     message::{v0, VersionedMessage},
     pubkey::Pubkey,
-    signature::{Keypair, Signature},
+    signature::{Signer, Signature},
     transaction::{Transaction, VersionedTransaction},
 };
 use std::time::{Duration, Instant};
@@ -40,7 +40,7 @@ impl Helius {
         instructions: Vec<Instruction>,
         payer: Pubkey,
         lookup_tables: Vec<AddressLookupTableAccount>,
-        from_keypair: &Keypair,
+        signers: &[&dyn Signer],
     ) -> Result<Option<u64>> {
         // Set the compute budget limit
         let test_instructions: Vec<Instruction> = vec![ComputeBudgetInstruction::set_compute_unit_limit(1_400_000)]
@@ -57,7 +57,7 @@ impl Helius {
         let versioned_message: VersionedMessage = VersionedMessage::V0(v0_message);
 
         // Create a signed VersionedTransaction
-        let transaction: VersionedTransaction = VersionedTransaction::try_new(versioned_message, &[from_keypair])
+        let transaction: VersionedTransaction = VersionedTransaction::try_new(versioned_message, signers)
             .map_err(|e| HeliusError::InvalidInput(format!("Signing error: {:?}", e)))?;
 
         // Simulate the transaction
