@@ -1,6 +1,6 @@
 [package]
 name = "helius"
-version = "0.1.5"
+version = "0.2.0"
 edition = "2021"
 description = "An asynchronous Helius Rust SDK for building the future of Solana"
 keywords = ["helius", "solana", "asynchronous-sdk", "das", "cryptocurrency"]
