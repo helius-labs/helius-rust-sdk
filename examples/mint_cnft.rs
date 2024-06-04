@@ -1,10 +1,10 @@
-use helius::error::HeliusError;
+use helius::error::Result;
 use helius::types::*;
 use helius::Helius;
 use serde_json::Value;
 
 #[tokio::main]
-async fn main() -> Result<(), HeliusError> {
+async fn main() -> Result<()> {
     let api_key: &str = "your_api_key";
     let cluster: Cluster = Cluster::MainnetBeta;
 
@@ -39,7 +39,7 @@ async fn main() -> Result<(), HeliusError> {
         confirm_transaction: Some(true),
     };
 
-    let response: Result<MintResponse, HeliusError> = helius.mint_compressed_nft(request).await;
+    let response: Result<MintResponse> = helius.mint_compressed_nft(request).await;
     println!("Assets: {:?}", response);
 
     Ok(())
