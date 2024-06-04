@@ -1,7 +1,7 @@
 use crate::error::{HeliusError, Result};
 use crate::types::{
-    GetPriorityFeeEstimateOptions, GetPriorityFeeEstimateRequest, GetPriorityFeeEstimateResponse,
-    SmartTransactionConfig, SmartTransaction,
+    GetPriorityFeeEstimateOptions, GetPriorityFeeEstimateRequest, GetPriorityFeeEstimateResponse, SmartTransaction,
+    SmartTransactionConfig,
 };
 use crate::Helius;
 
@@ -111,11 +111,11 @@ impl Helius {
     }
 
     /// Creates an optimized transaction based on the provided configuration
-    /// 
+    ///
     /// # Arguments
-    /// * `config` - The configuration for the smart transaction, which includes the transaction's instructions, signers, and lookup tables, depending on 
+    /// * `config` - The configuration for the smart transaction, which includes the transaction's instructions, signers, and lookup tables, depending on
     /// whether it's a legacy or versioned smart transaction. The transaction's send configuration can also be changed, if provided
-    /// 
+    ///
     /// # Returns
     /// An optimized `Transaction` or `VersionedTransaction`
     pub async fn create_smart_transaction(&self, config: &SmartTransactionConfig<'_>) -> Result<SmartTransaction> {
@@ -271,18 +271,18 @@ impl Helius {
             Ok(SmartTransaction::Legacy(legacy_transaction.unwrap()))
         }
     }
-    
+
     /// Builds and sends an optimized transaction, and handles its confirmation status
     ///
     /// # Arguments
-    /// * `config` - The configuration for the smart transaction, which includes the transaction's instructions, and the user's keypair. If provided, it also
-    /// includes whether preflight checks should be skipped, how many times to retry the transaction, and any address lookup tables to be included in the transaction
+    /// * `config` - The configuration for the smart transaction, which includes the transaction's instructions, signers, and lookup tables, depending on
+    /// whether it's a legacy or versioned smart transaction. The transaction's send configuration can also be changed, if provided
     ///
     /// # Returns
     /// The transaction signature, if successful
     pub async fn send_smart_transaction(&self, config: SmartTransactionConfig<'_>) -> Result<Signature> {
         let transaction: SmartTransaction = self.create_smart_transaction(&config).await?;
-        
+
         // Common logic for sending transactions
         let send_transaction_config: RpcSendTransactionConfig = RpcSendTransactionConfig {
             skip_preflight: config.send_options.skip_preflight,

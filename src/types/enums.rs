@@ -737,5 +737,5 @@ pub enum CollectionIdentifier {
 #[derive(Serialize, Deserialize, Debug)]
 pub enum SmartTransaction {
     Legacy(Transaction),
-    Versioned(VersionedTransaction)
+    Versioned(VersionedTransaction),
 }
