@@ -141,33 +141,6 @@ impl Helius {
             ));
         }
 
-        // Get the optimal compute units
-        let units: Option<u64> = self
-            .get_compute_units(
-                config.instructions.clone(),
-                payer_pubkey,
-                config.lookup_tables.clone().unwrap_or_default(),
-                &config.signers,
-            )
-            .await?;
-
-        if units.is_none() {
-            return Err(HeliusError::InvalidInput(
-                "Error fetching compute units for the instructions provided".to_string(),
-            ));
-        }
-
-        let compute_units: u64 = units.unwrap();
-        let customers_cu: u32 = if compute_units < 1000 {
-            1000
-        } else {
-            (compute_units as f64 * 1.5).ceil() as u32
-        };
-
-        // Add the compute unit limit instruction with a margin
-        let compute_units_ix: Instruction = ComputeBudgetInstruction::set_compute_unit_limit(customers_cu);
-        final_instructions.push(compute_units_ix);
-
         // Determine if we need to use a versioned transaction
         let is_versioned: bool = config.lookup_tables.is_some();
         let mut legacy_transaction: Option<Transaction> = None;
@@ -230,17 +203,39 @@ impl Helius {
                     "Priority fee estimate not available".to_string(),
                 ))? as u64;
 
-        let lamports_to_micro_lamports: u64 = 10_u64.pow(6);
-        let minimum_total_pfee_lamports: u64 = 10_000;
-        let microlamports_per_cu: u64 = std::cmp::max(
-            priority_fee_recommendation,
-            ((minimum_total_pfee_lamports as f64 / customers_cu as f64) * lamports_to_micro_lamports as f64).round()
-                as u64,
-        );
-
         // Add the compute unit price instruction with the estimated fee
-        let compute_budget_ix: Instruction = ComputeBudgetInstruction::set_compute_unit_price(microlamports_per_cu);
+        let compute_budget_ix: Instruction = ComputeBudgetInstruction::set_compute_unit_price(priority_fee_recommendation);
+        let mut updated_instructions: Vec<Instruction> = config.instructions.clone();
+        updated_instructions.push(compute_budget_ix.clone());
         final_instructions.push(compute_budget_ix);
+
+        // Get the optimal compute units
+        let units: Option<u64> = self
+            .get_compute_units(
+                updated_instructions,
+                payer_pubkey,
+                config.lookup_tables.clone().unwrap_or_default(),
+                &config.signers,
+            )
+            .await?;
+
+        if units.is_none() {
+            return Err(HeliusError::InvalidInput(
+                "Error fetching compute units for the instructions provided".to_string(),
+            ));
+        }
+
+        let compute_units: u64 = units.unwrap();
+        println!("{}", compute_units);
+        let customers_cu: u32 = if compute_units < 1000 {
+            1000
+        } else {
+            (compute_units as f64 * 1.1).ceil() as u32
+        };
+
+        // Add the compute unit limit instruction with a margin
+        let compute_units_ix: Instruction = ComputeBudgetInstruction::set_compute_unit_limit(customers_cu);
+        final_instructions.push(compute_units_ix);
 
         // Add the original instructions back
         final_instructions.extend(config.instructions.clone());
