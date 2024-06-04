@@ -12,18 +12,27 @@ readme = "README.md"
 homepage = "https://www.helius.dev/"
 
 [dependencies]
-reqwest = { version = "0.12.3", features = ["json"] }
-serde = "1.0.198"
-serde_json = "1.0.116"
-solana-sdk = "1.18.11"
-thiserror = "1.0.58"
-tokio = { version = "1.37.0", features = ["macros", "rt-multi-thread", "net"] }
+base64 = "0.22.1"
+bincode = "1.3.3"
 chrono = { version = "0.4.11", features = ["serde"] }
+futures = "0.3.30"
+futures-util = "0.3.30"
+reqwest = { version = "0.12.3", features = ["json"] }
+semver = "1.0.23"
+serde = "1.0.198"
+serde-enum-str = "0.4.0"
+serde_json = "1.0.116"
+solana-account-decoder = "1.18.12"
 solana-client = "1.18.12"
 solana-program = "1.18.12"
-serde-enum-str = "0.4.0"
-bincode = "1.3.3"
-base64 = "0.22.1"
+solana-rpc-client-api = "1.18.12"
+solana-sdk = "1.18.11"
+solana-transaction-status = "1.18.12"
+thiserror = "1.0.58"
+tokio = { version = "1.37.0", features = ["macros", "rt-multi-thread", "net"] }
+tokio-stream = "0.1.15"
+tokio-tungstenite = { version = "0.21.0", features = ["native-tls", "handshake"] }
+url = "2.5.0"
 
 [dev-dependencies]
 mockito = "1.4.0"

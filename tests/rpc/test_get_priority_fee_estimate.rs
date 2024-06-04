@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use helius::client::Helius;
 use helius::config::Config;
-use helius::error::HeliusError;
+use helius::error::Result;
 use helius::rpc_client::RpcClient;
 use helius::types::*;
 
@@ -52,6 +52,8 @@ async fn test_get_nft_editions_success() {
         config,
         client,
         rpc_client,
+        async_rpc_client: None,
+        ws_client: None,
     };
 
     let request: GetPriorityFeeEstimateRequest = GetPriorityFeeEstimateRequest {
@@ -67,8 +69,7 @@ async fn test_get_nft_editions_success() {
         }),
     };
 
-    let response: Result<GetPriorityFeeEstimateResponse, HeliusError> =
-        helius.rpc().get_priority_fee_estimate(request).await;
+    let response: Result<GetPriorityFeeEstimateResponse> = helius.rpc().get_priority_fee_estimate(request).await;
     assert!(response.is_ok(), "API call failed with error: {:?}", response.err());
 
     let fee_estimate = response.unwrap();
@@ -107,6 +108,8 @@ async fn test_get_nft_editions_failure() {
         config,
         client,
         rpc_client,
+        async_rpc_client: None,
+        ws_client: None,
     };
 
     let request: GetPriorityFeeEstimateRequest = GetPriorityFeeEstimateRequest {
@@ -122,7 +125,6 @@ async fn test_get_nft_editions_failure() {
         }),
     };
 
-    let response: Result<GetPriorityFeeEstimateResponse, HeliusError> =
-        helius.rpc().get_priority_fee_estimate(request).await;
+    let response: Result<GetPriorityFeeEstimateResponse> = helius.rpc().get_priority_fee_estimate(request).await;
     assert!(response.is_err(), "Expected an error but got success");
 }

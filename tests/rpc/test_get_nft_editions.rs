@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use helius::client::Helius;
 use helius::config::Config;
-use helius::error::HeliusError;
+use helius::error::Result;
 use helius::rpc_client::RpcClient;
 use helius::types::*;
 
@@ -54,15 +54,17 @@ async fn test_get_nft_editions_success() {
         config,
         client,
         rpc_client,
+        async_rpc_client: None,
+        ws_client: None,
     };
 
-    let request = GetNftEditions {
+    let request: GetNftEditions = GetNftEditions {
         mint: Some("Ey2Qb8kLctbchQsMnhZs5DjY32To2QtPuXNwWvk4NosL".to_string()),
         page: Some(1),
         limit: Some(1),
     };
 
-    let response: Result<EditionsList, HeliusError> = helius.rpc().get_nft_editions(request).await;
+    let response: Result<EditionsList> = helius.rpc().get_nft_editions(request).await;
     assert!(response.is_ok(), "API call failed with error: {:?}", response.err());
 
     let editions_list: EditionsList = response.unwrap();
@@ -105,6 +107,8 @@ async fn test_get_nft_editions_failure() {
         config,
         client,
         rpc_client,
+        async_rpc_client: None,
+        ws_client: None,
     };
 
     let request = GetNftEditions {
@@ -113,6 +117,6 @@ async fn test_get_nft_editions_failure() {
         limit: Some(1),
     };
 
-    let response: Result<EditionsList, HeliusError> = helius.rpc().get_nft_editions(request).await;
+    let response: Result<EditionsList> = helius.rpc().get_nft_editions(request).await;
     assert!(response.is_err(), "Expected an error but got success");
 }

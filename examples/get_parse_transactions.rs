@@ -1,9 +1,9 @@
-use helius::error::HeliusError;
+use helius::error::Result;
 use helius::types::*;
 use helius::Helius;
 
 #[tokio::main]
-async fn main() -> Result<(), HeliusError> {
+async fn main() -> Result<()> {
     let api_key: &str = "your_api_key";
     let cluster: Cluster = Cluster::MainnetBeta;
 
@@ -15,7 +15,7 @@ async fn main() -> Result<(), HeliusError> {
         ],
     };
 
-    let response: Result<Vec<EnhancedTransaction>, HeliusError> = helius.parse_transactions(request).await;
+    let response: Result<Vec<EnhancedTransaction>> = helius.parse_transactions(request).await;
     println!("Assets: {:?}", response);
 
     Ok(())

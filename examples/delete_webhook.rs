@@ -1,9 +1,6 @@
 use helius::error::Result;
-use helius::types::*;
+use helius::types::Cluster;
 use helius::Helius;
-
-use solana_client::client_error::ClientError;
-use solana_sdk::hash::Hash;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -12,8 +9,9 @@ async fn main() -> Result<()> {
 
     let helius: Helius = Helius::new(api_key, cluster).unwrap();
 
-    let result: std::result::Result<Hash, ClientError> = helius.connection().get_latest_blockhash();
-    println!("{:?}", result);
+    let webhook_id = "your_webhook_id";
 
+    let response: Result<()> = helius.delete_webhook(webhook_id).await;
+    println!("Webhook deleted  {:?}", response);
     Ok(())
 }

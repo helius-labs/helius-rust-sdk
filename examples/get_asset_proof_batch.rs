@@ -1,11 +1,11 @@
-use helius::error::HeliusError;
+use helius::error::Result;
 use helius::types::{AssetProof, Cluster, GetAssetProofBatch};
 use helius::Helius;
 
 use std::collections::HashMap;
 
 #[tokio::main]
-async fn main() -> Result<(), HeliusError> {
+async fn main() -> Result<()> {
     let api_key: &str = "your_api_key";
     let cluster: Cluster = Cluster::MainnetBeta;
 
@@ -18,8 +18,7 @@ async fn main() -> Result<(), HeliusError> {
         ],
     };
 
-    let response: Result<HashMap<String, Option<AssetProof>>, HeliusError> =
-        helius.rpc().get_asset_proof_batch(request).await;
+    let response: Result<HashMap<String, Option<AssetProof>>> = helius.rpc().get_asset_proof_batch(request).await;
     println!("Assets: {:?}", response);
 
     Ok(())

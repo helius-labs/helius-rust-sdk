@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use helius::client::Helius;
 use helius::config::Config;
-use helius::error::HeliusError;
+use helius::error::Result;
 use helius::rpc_client::RpcClient;
 use helius::types::*;
 
@@ -145,6 +145,8 @@ async fn test_get_assets_by_group_success() {
         config,
         client,
         rpc_client,
+        async_rpc_client: None,
+        ws_client: None,
     };
 
     let sorting: AssetSorting = AssetSorting {
@@ -164,7 +166,7 @@ async fn test_get_assets_by_group_success() {
         cursor: None,
     };
 
-    let response: Result<AssetList, HeliusError> = helius.rpc().get_assets_by_group(request).await;
+    let response: Result<AssetList> = helius.rpc().get_assets_by_group(request).await;
     assert!(response.is_ok(), "Expected an error due to server failure");
 
     let asset: AssetList = response.unwrap();
@@ -203,6 +205,8 @@ async fn test_get_assets_by_group_failure() {
         config,
         client,
         rpc_client,
+        async_rpc_client: None,
+        ws_client: None,
     };
 
     let sorting: AssetSorting = AssetSorting {
@@ -219,6 +223,6 @@ async fn test_get_assets_by_group_failure() {
         ..Default::default()
     };
 
-    let response: Result<AssetList, HeliusError> = helius.rpc().get_assets_by_group(request).await;
+    let response: Result<AssetList> = helius.rpc().get_assets_by_group(request).await;
     assert!(response.is_err(), "Expected an error due to server failure");
 }

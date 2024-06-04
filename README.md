@@ -20,11 +20,11 @@ Remember to run `cargo update` regularly to fetch the latest version of the SDK.
 ### `Helius`
 The SDK provides a [`Helius`](https://github.com/helius-labs/helius-rust-sdk/blob/dev/src/client.rs) instance that can be configured with an API key and a given Solana cluster. Developers can generate a new API key on the [Helius Developer Dashboard](https://dev.helius.xyz/dashboard/app). This instance acts as the main entry point for interacting with the SDK by providing methods to access different Solana and RPC client functionalities. The following code is an example of how to use the SDK to fetch info on [Mad Lad #8420](https://xray.helius.xyz/token/F9Lw3ki3hJ7PF9HQXsBzoY8GyE6sPoEZZdXJBsTTD2rk?network=mainnet):
 ```rust
-use helius::error::HeliusError;
+use helius::error::Result;
 use helius::types::{Cluster, DisplayOptions, GetAssetRequest, GetAssetResponseForAsset};
 
 #[tokio::main]
-async fn main() -> Result<(), HeliusError> {
+async fn main() -> Result<()> {
     let api_key: &str = "YOUR_API_KEY";
     let cluster: Cluster = Cluster::MainnetBeta;
 
@@ -40,7 +40,7 @@ async fn main() -> Result<(), HeliusError> {
         }),
     };
 
-    let response: Result<Option<GetAssetResponseForAsset>, HeliusError> = helius.rpc().get_asset(request).await;
+    let response: Result<Option<GetAssetResponseForAsset>> = helius.rpc().get_asset(request).await;
 
     match response {
         Ok(Some(asset)) => {
@@ -62,6 +62,11 @@ The SDK also comes equipped with `HeliusFactory`, a factory for creating instanc
 ### Embedded Solana Client
 The `Helius` client has an embedded [Solana client](https://docs.rs/solana-client/latest/solana_client/rpc_client/struct.RpcClient.html) that can be accessed via `helius.connection().request_name()` where `request_name()` is a given [RPC method](https://docs.rs/solana-client/latest/solana_client/rpc_client/struct.RpcClient.html#implementations). A full list of all Solana RPC HTTP methods can be found [here](https://solana.com/docs/rpc/http).
 
+Note that this Solana client is synchronous by default. An asynchronous client can be created using the `new_with_async_solana` method in place of the `new` method. The asynchronous client can be accessed via `helius.async_connection()?.some_async_method().await?` where `some_async_method()` is a given async RPC method.
+
+### Enhanced WebSockets
+The `Helius` client can also be created with the `new_with_ws()` method in place of the `new` method. This will create a WebSocket client, adding support for the [Geyser Enhanced WebSocket methods](https://docs.helius.dev/webhooks-and-websockets/websockets#helius-geyser-enhanced-websockets-beta) [`transactionSubscribe`](https://docs.helius.dev/webhooks-and-websockets/websockets#transaction-subscribe) and [`accountSubscribe`](https://docs.helius.dev/webhooks-and-websockets/websockets#account-subscribe)
+
 ### Examples
 More examples of how to use the SDK can be found in the [`examples`](https://github.com/helius-labs/helius-rust-sdk/tree/dev/examples) directory.
 
@@ -79,6 +84,9 @@ If you encounter any of these errors:
 - Refer to [`errors.rs`](https://github.com/helius-labs/helius-rust-sdk/blob/dev/src/error.rs) for a list of all possible errors returned by the `Helius` client
 - Refer to the [Helius documentation](https://docs.helius.dev/) for further guidance
 - Reach out to the Helius support team for more detailed assistance
+
+### Result Type Alias
+The SDK also has [a handy type alias for `Result`](https://github.com/helius-labs/helius-rust-sdk/blob/c24bdf3179998895e73fe455d38bd7faa2c50df5/src/error.rs#L147-L148) where `Result<(some type), HeliusError>` and be simplified to `Result<(some type)>`
 
 ## Methods
 Our SDK is designed to provide a seamless developer experience when building on Solana. We've separated the core functionality into various segments:

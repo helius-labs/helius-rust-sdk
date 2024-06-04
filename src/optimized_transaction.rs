@@ -1,6 +1,6 @@
 use crate::error::{HeliusError, Result};
 use crate::types::{
-    GetPriorityFeeEstimateOptions, GetPriorityFeeEstimateRequest, GetPriorityFeeEstimateResponse,
+    GetPriorityFeeEstimateOptions, GetPriorityFeeEstimateRequest, GetPriorityFeeEstimateResponse, SmartTransaction,
     SmartTransactionConfig,
 };
 use crate::Helius;
@@ -18,7 +18,7 @@ use solana_sdk::{
     instruction::Instruction,
     message::{v0, VersionedMessage},
     pubkey::Pubkey,
-    signature::{Keypair, Signature, Signer},
+    signature::{Signature, Signer},
     transaction::{Transaction, VersionedTransaction},
 };
 use std::time::{Duration, Instant};
@@ -40,7 +40,7 @@ impl Helius {
         instructions: Vec<Instruction>,
         payer: Pubkey,
         lookup_tables: Vec<AddressLookupTableAccount>,
-        from_keypair: &Keypair,
+        signers: &[&dyn Signer],
     ) -> Result<Option<u64>> {
         // Set the compute budget limit
         let test_instructions: Vec<Instruction> = vec![ComputeBudgetInstruction::set_compute_unit_limit(1_400_000)]
@@ -57,7 +57,7 @@ impl Helius {
         let versioned_message: VersionedMessage = VersionedMessage::V0(v0_message);
 
         // Create a signed VersionedTransaction
-        let transaction: VersionedTransaction = VersionedTransaction::try_new(versioned_message, &[from_keypair])
+        let transaction: VersionedTransaction = VersionedTransaction::try_new(versioned_message, signers)
             .map_err(|e| HeliusError::InvalidInput(format!("Signing error: {:?}", e)))?;
 
         // Simulate the transaction
@@ -110,16 +110,22 @@ impl Helius {
         }
     }
 
-    /// Builds and sends an optimized transaction, and handles its confirmation status
+    /// Creates an optimized transaction based on the provided configuration
     ///
     /// # Arguments
-    /// * `config` - The configuration for the smart transaction, which includes the transaction's instructions, and the user's keypair. If provided, it also
-    /// includes whether preflight checks should be skipped, how many times to retry the transaction, and any address lookup tables to be included in the transaction
+    /// * `config` - The configuration for the smart transaction, which includes the transaction's instructions, signers, and lookup tables, depending on
+    /// whether it's a legacy or versioned smart transaction. The transaction's send configuration can also be changed, if provided
     ///
     /// # Returns
-    /// The transaction signature, if successful
-    pub async fn send_smart_transaction(&self, config: SmartTransactionConfig<'_>) -> Result<Signature> {
-        let pubkey: Pubkey = config.from_keypair.pubkey();
+    /// An optimized `Transaction` or `VersionedTransaction`
+    pub async fn create_smart_transaction(&self, config: &SmartTransactionConfig<'_>) -> Result<SmartTransaction> {
+        if config.signers.is_empty() {
+            return Err(HeliusError::InvalidInput(
+                "The fee payer must sign the transaction".to_string(),
+            ));
+        }
+
+        let payer_pubkey: Pubkey = config.signers[0].pubkey();
         let recent_blockhash: Hash = self.connection().get_latest_blockhash()?;
         let mut final_instructions: Vec<Instruction> = vec![];
 
@@ -135,35 +141,8 @@ impl Helius {
             ));
         }
 
-        // Get the optimal compute units
-        let units: Option<u64> = self
-            .get_compute_units(
-                config.instructions.clone(),
-                pubkey,
-                config.lookup_tables.clone().unwrap_or_default(),
-                &config.from_keypair,
-            )
-            .await?;
-
-        if units.is_none() {
-            return Err(HeliusError::InvalidInput(
-                "Error fetching compute units for the instructions provided".to_string(),
-            ));
-        }
-
-        let compute_units: u64 = units.unwrap();
-        let customers_cu: u32 = if compute_units < 1000 {
-            1000
-        } else {
-            (compute_units as f64 * 1.5).ceil() as u32
-        };
-
-        // Add the compute unit limit instruction with a margin
-        let compute_units_ix: Instruction = ComputeBudgetInstruction::set_compute_unit_limit(customers_cu);
-        final_instructions.push(compute_units_ix);
-
         // Determine if we need to use a versioned transaction
-        let is_versioned: bool = false; //config.lookup_tables.is_some();
+        let is_versioned: bool = config.lookup_tables.is_some();
         let mut legacy_transaction: Option<Transaction> = None;
         let mut versioned_transaction: Option<VersionedTransaction> = None;
 
@@ -171,12 +150,12 @@ impl Helius {
         if is_versioned {
             let lookup_tables: &[AddressLookupTableAccount] = config.lookup_tables.as_deref().unwrap_or_default();
             let v0_message: v0::Message =
-                v0::Message::try_compile(&pubkey, &config.instructions, lookup_tables, recent_blockhash)?;
+                v0::Message::try_compile(&payer_pubkey, &config.instructions, lookup_tables, recent_blockhash)?;
             let versioned_message: VersionedMessage = VersionedMessage::V0(v0_message);
 
             // Sign the versioned transaction
-            let signers: Vec<&dyn Signer> = vec![config.from_keypair];
-            let signatures: Vec<Signature> = signers
+            let signatures: Vec<Signature> = config
+                .signers
                 .iter()
                 .map(|signer| signer.try_sign_message(versioned_message.serialize().as_slice()))
                 .collect::<std::result::Result<Vec<_>, _>>()?;
@@ -187,8 +166,8 @@ impl Helius {
             });
         } else {
             // If no lookup tables are present, we build a regular transaction
-            let mut tx: Transaction = Transaction::new_with_payer(&config.instructions, Some(&pubkey));
-            tx.try_sign(&[config.from_keypair], recent_blockhash)?;
+            let mut tx: Transaction = Transaction::new_with_payer(&config.instructions, Some(&payer_pubkey));
+            tx.try_sign(&config.signers, recent_blockhash)?;
             legacy_transaction = Some(tx);
         }
 
@@ -224,17 +203,40 @@ impl Helius {
                     "Priority fee estimate not available".to_string(),
                 ))? as u64;
 
-        let lamports_to_micro_lamports: u64 = 10_u64.pow(6);
-        let minimum_total_pfee_lamports: u64 = 10_000;
-        let microlamports_per_cu: u64 = std::cmp::max(
-            priority_fee_recommendation,
-            ((minimum_total_pfee_lamports as f64 / customers_cu as f64) * lamports_to_micro_lamports as f64).round()
-                as u64,
-        );
-
         // Add the compute unit price instruction with the estimated fee
-        let compute_budget_ix: Instruction = ComputeBudgetInstruction::set_compute_unit_price(microlamports_per_cu);
+        let compute_budget_ix: Instruction =
+            ComputeBudgetInstruction::set_compute_unit_price(priority_fee_recommendation);
+        let mut updated_instructions: Vec<Instruction> = config.instructions.clone();
+        updated_instructions.push(compute_budget_ix.clone());
         final_instructions.push(compute_budget_ix);
+
+        // Get the optimal compute units
+        let units: Option<u64> = self
+            .get_compute_units(
+                updated_instructions,
+                payer_pubkey,
+                config.lookup_tables.clone().unwrap_or_default(),
+                &config.signers,
+            )
+            .await?;
+
+        if units.is_none() {
+            return Err(HeliusError::InvalidInput(
+                "Error fetching compute units for the instructions provided".to_string(),
+            ));
+        }
+
+        let compute_units: u64 = units.unwrap();
+        println!("{}", compute_units);
+        let customers_cu: u32 = if compute_units < 1000 {
+            1000
+        } else {
+            (compute_units as f64 * 1.1).ceil() as u32
+        };
+
+        // Add the compute unit limit instruction with a margin
+        let compute_units_ix: Instruction = ComputeBudgetInstruction::set_compute_unit_limit(customers_cu);
+        final_instructions.push(compute_units_ix);
 
         // Add the original instructions back
         final_instructions.extend(config.instructions.clone());
@@ -243,10 +245,10 @@ impl Helius {
         if is_versioned {
             let lookup_tables: &[AddressLookupTableAccount] = config.lookup_tables.as_deref().unwrap();
             let v0_message: v0::Message =
-                v0::Message::try_compile(&pubkey, &final_instructions, lookup_tables, recent_blockhash)?;
+                v0::Message::try_compile(&payer_pubkey, &final_instructions, lookup_tables, recent_blockhash)?;
             let versioned_message: VersionedMessage = VersionedMessage::V0(v0_message);
-            let signers: Vec<&dyn Signer> = vec![config.from_keypair];
-            let signatures: Vec<Signature> = signers
+            let signatures: Vec<Signature> = config
+                .signers
                 .iter()
                 .map(|signer| signer.try_sign_message(versioned_message.serialize().as_slice()))
                 .collect::<std::result::Result<Vec<_>, _>>()?;
@@ -255,11 +257,27 @@ impl Helius {
                 signatures,
                 message: versioned_message,
             });
+
+            Ok(SmartTransaction::Versioned(versioned_transaction.unwrap()))
         } else {
-            let mut tx: Transaction = Transaction::new_with_payer(&final_instructions, Some(&pubkey));
-            tx.try_sign(&[config.from_keypair], recent_blockhash)?;
+            let mut tx: Transaction = Transaction::new_with_payer(&final_instructions, Some(&payer_pubkey));
+            tx.try_sign(&config.signers, recent_blockhash)?;
             legacy_transaction = Some(tx);
+
+            Ok(SmartTransaction::Legacy(legacy_transaction.unwrap()))
         }
+    }
+
+    /// Builds and sends an optimized transaction, and handles its confirmation status
+    ///
+    /// # Arguments
+    /// * `config` - The configuration for the smart transaction, which includes the transaction's instructions, signers, and lookup tables, depending on
+    /// whether it's a legacy or versioned smart transaction. The transaction's send configuration can also be changed, if provided
+    ///
+    /// # Returns
+    /// The transaction signature, if successful
+    pub async fn send_smart_transaction(&self, config: SmartTransactionConfig<'_>) -> Result<Signature> {
+        let transaction: SmartTransaction = self.create_smart_transaction(&config).await?;
 
         // Common logic for sending transactions
         let send_transaction_config: RpcSendTransactionConfig = RpcSendTransactionConfig {
@@ -284,10 +302,9 @@ impl Helius {
         let start_time: Instant = Instant::now();
 
         while Instant::now().duration_since(start_time) < timeout {
-            let result = if is_versioned {
-                send_versioned_result(versioned_transaction.as_ref().unwrap())
-            } else {
-                send_result(legacy_transaction.as_ref().unwrap())
+            let result = match &transaction {
+                SmartTransaction::Legacy(tx) => send_result(tx),
+                SmartTransaction::Versioned(tx) => send_versioned_result(tx),
             };
 
             match result {

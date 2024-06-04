@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use helius::client::Helius;
 use helius::config::Config;
-use helius::error::HeliusError;
+use helius::error::Result;
 use helius::rpc_client::RpcClient;
 use helius::types::*;
 
@@ -173,6 +173,8 @@ async fn test_get_asset_success() {
         config,
         client,
         rpc_client,
+        async_rpc_client: None,
+        ws_client: None,
     };
 
     let request: GetAsset = GetAsset {
@@ -183,7 +185,7 @@ async fn test_get_asset_success() {
         }),
     };
 
-    let response: Result<Option<Asset>, HeliusError> = helius.rpc().get_asset(request).await;
+    let response: Result<Option<Asset>> = helius.rpc().get_asset(request).await;
     assert!(response.is_ok(), "API call failed with error: {:?}", response.err());
 
     let asset_response: Option<Asset> = response.unwrap();
@@ -228,6 +230,8 @@ async fn test_get_asset_failure() {
         config,
         client,
         rpc_client,
+        async_rpc_client: None,
+        ws_client: None,
     };
 
     let request: GetAsset = GetAsset {
@@ -238,6 +242,6 @@ async fn test_get_asset_failure() {
         }),
     };
 
-    let response: Result<Option<Asset>, HeliusError> = helius.rpc().get_asset(request).await;
+    let response: Result<Option<Asset>> = helius.rpc().get_asset(request).await;
     assert!(response.is_err(), "Expected an error but got success");
 }

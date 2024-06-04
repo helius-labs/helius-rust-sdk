@@ -10,6 +10,7 @@ pub mod rpc_client;
 pub mod types;
 pub mod utils;
 pub mod webhook;
+pub mod websocket;
 
 pub use client::Helius;
 pub use factory::HeliusFactory;

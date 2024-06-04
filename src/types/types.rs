@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use solana_client::rpc_config::RpcSendTransactionConfig;
-use solana_sdk::{address_lookup_table::AddressLookupTableAccount, instruction::Instruction, signature::Keypair};
+use solana_sdk::{address_lookup_table::AddressLookupTableAccount, instruction::Instruction, signature::Signer};
 
 /// Defines the available clusters supported by Helius
 #[derive(Debug, Clone, PartialEq)]
@@ -946,16 +946,16 @@ pub struct EditWebhookRequest {
 
 pub struct SmartTransactionConfig<'a> {
     pub instructions: Vec<Instruction>,
-    pub from_keypair: &'a Keypair,
+    pub signers: Vec<&'a dyn Signer>,
     pub send_options: RpcSendTransactionConfig,
     pub lookup_tables: Option<Vec<AddressLookupTableAccount>>,
 }
 
 impl<'a> SmartTransactionConfig<'a> {
-    pub fn new(instructions: Vec<Instruction>, from_keypair: &'a Keypair) -> Self {
+    pub fn new(instructions: Vec<Instruction>, signers: Vec<&'a dyn Signer>) -> Self {
         Self {
             instructions,
-            from_keypair,
+            signers,
             send_options: RpcSendTransactionConfig::default(),
             lookup_tables: None,
         }

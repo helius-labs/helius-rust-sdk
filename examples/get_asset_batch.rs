@@ -1,9 +1,9 @@
-use helius::error::HeliusError;
+use helius::error::Result;
 use helius::types::{Asset, Cluster, GetAssetBatch, GetAssetOptions};
 use helius::Helius;
 
 #[tokio::main]
-async fn main() -> Result<(), HeliusError> {
+async fn main() -> Result<()> {
     let api_key: &str = "your_api_key";
     let cluster: Cluster = Cluster::MainnetBeta;
 
@@ -20,7 +20,7 @@ async fn main() -> Result<(), HeliusError> {
         }),
     };
 
-    let response: Result<Vec<Option<Asset>>, HeliusError> = helius.rpc().get_asset_batch(request).await;
+    let response: Result<Vec<Option<Asset>>> = helius.rpc().get_asset_batch(request).await;
     println!("Assets: {:?}", response);
 
     Ok(())

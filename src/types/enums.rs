@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 use serde_enum_str::{Deserialize_enum_str, Serialize_enum_str};
+use solana_sdk::transaction::{Transaction, VersionedTransaction};
 
 use super::*;
 
@@ -731,4 +732,10 @@ pub enum CollectionIdentifier {
     FirstVerifiedCreators(Vec<String>),
     #[serde(rename = "verifiedCollectionAddress")]
     VerifiedCollectionAddress(Vec<String>),
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub enum SmartTransaction {
+    Legacy(Transaction),
+    Versioned(VersionedTransaction),
 }

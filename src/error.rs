@@ -24,6 +24,12 @@ pub enum HeliusError {
     #[error("Solana client error: {0}")]
     ClientError(#[from] ClientError),
 
+    /// Indicates if a client is not already initialized
+    ///
+    /// Useful for the new_with_async_solana method on the `Helius` client
+    #[error("Client not initialized: {text}")]
+    ClientNotInitialized { text: String },
+
     /// Represents compile errors from the Solana SDK
     ///
     /// This captures all compile errors thrown by the Solana SDK
@@ -105,6 +111,18 @@ pub enum HeliusError {
     /// This error includes the HTTP status code and message to help with debugging, acting as a generic catch-all for all other errors
     #[error("Unknown error has occurred: HTTP {code} - {text}")]
     Unknown { code: StatusCode, text: String },
+
+    #[error("Unable to connect to server: {0}")]
+    Tungstenite(#[from] tokio_tungstenite::tungstenite::Error),
+
+    #[error("Websocket connection closed (({0})")]
+    WebsocketClosed(String),
+
+    #[error("Enhanced websocket: {message}: {reason}")]
+    EnhancedWebsocket { reason: String, message: String },
+
+    #[error("Url parse error")]
+    UrlParseError(#[from] url::ParseError),
 }
 
 impl HeliusError {

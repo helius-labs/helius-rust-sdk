@@ -230,6 +230,8 @@ async fn test_get_assets_by_creator_success() {
         config,
         client,
         rpc_client,
+        async_rpc_client: None,
+        ws_client: None,
     };
 
     let request: GetAssetsByCreator = GetAssetsByCreator {
@@ -275,6 +277,8 @@ async fn test_get_assets_by_creator_failure() {
         config,
         client,
         rpc_client,
+        async_rpc_client: None,
+        ws_client: None,
     };
 
     let request: GetAssetsByCreator = GetAssetsByCreator {
