@@ -204,7 +204,8 @@ impl Helius {
                 ))? as u64;
 
         // Add the compute unit price instruction with the estimated fee
-        let compute_budget_ix: Instruction = ComputeBudgetInstruction::set_compute_unit_price(priority_fee_recommendation);
+        let compute_budget_ix: Instruction =
+            ComputeBudgetInstruction::set_compute_unit_price(priority_fee_recommendation);
         let mut updated_instructions: Vec<Instruction> = config.instructions.clone();
         updated_instructions.push(compute_budget_ix.clone());
         final_instructions.push(compute_budget_ix);

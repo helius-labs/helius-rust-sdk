@@ -1,16 +1,16 @@
 use helius::config::Config;
-use helius::error::HeliusError;
+use helius::error::{HeliusError, Result};
 use helius::types::Cluster;
 
 #[test]
 fn test_config_new_with_empty_api_key() {
-    let result: Result<Config, HeliusError> = Config::new("", Cluster::Devnet);
+    let result: Result<Config> = Config::new("", Cluster::Devnet);
     assert!(matches!(result, Err(HeliusError::InvalidInput(_))));
 }
 
 #[test]
 fn test_config_new_with_valid_api_key() {
-    let result: Result<Config, HeliusError> = Config::new("valid-api-key", Cluster::Devnet);
+    let result: Result<Config> = Config::new("valid-api-key", Cluster::Devnet);
     assert!(result.is_ok());
 
     let config: Config = result.unwrap();

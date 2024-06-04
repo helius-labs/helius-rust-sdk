@@ -1,5 +1,5 @@
 use helius::config::Config;
-use helius::error::HeliusError;
+use helius::error::Result;
 use helius::rpc_client::RpcClient;
 use helius::types::{
     ApiResponse, Asset, AssetList, Attribute, Authorities, Cluster, Compression, Content, Creator, File, Group,
@@ -161,6 +161,7 @@ async fn test_search_assets_success() {
         client,
         rpc_client,
         async_rpc_client: None,
+        ws_client: None,
     };
 
     let request: SearchAssets = SearchAssets {
@@ -171,7 +172,7 @@ async fn test_search_assets_success() {
         ..Default::default()
     };
 
-    let response: Result<AssetList, HeliusError> = helius.rpc().search_assets(request).await;
+    let response: Result<AssetList> = helius.rpc().search_assets(request).await;
     assert!(response.is_ok(), "The API call failed: {:?}", response.err());
 
     let api_response: AssetList = response.unwrap();
@@ -208,6 +209,7 @@ async fn test_search_assets_failure() {
         client,
         rpc_client,
         async_rpc_client: None,
+        ws_client: None,
     };
 
     let request: SearchAssets = SearchAssets {
@@ -218,6 +220,6 @@ async fn test_search_assets_failure() {
         ..Default::default()
     };
 
-    let response: Result<AssetList, HeliusError> = helius.rpc().search_assets(request).await;
+    let response: Result<AssetList> = helius.rpc().search_assets(request).await;
     assert!(response.is_err(), "Expected an error due to server failure");
 }

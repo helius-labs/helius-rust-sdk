@@ -231,6 +231,7 @@ async fn test_get_assets_by_authority_success() {
         client,
         rpc_client,
         async_rpc_client: None,
+        ws_client: None,
     };
 
     let request: GetAssetsByAuthority = GetAssetsByAuthority {
@@ -277,6 +278,7 @@ async fn test_get_assets_by_authority_failure() {
         client,
         rpc_client,
         async_rpc_client: None,
+        ws_client: None,
     };
 
     let request: GetAssetsByAuthority = GetAssetsByAuthority {

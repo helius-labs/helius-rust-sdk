@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use helius::client::Helius;
 use helius::config::Config;
-use helius::error::HeliusError;
+use helius::error::Result;
 use helius::rpc_client::RpcClient;
 use helius::types::*;
 
@@ -67,6 +67,7 @@ async fn test_get_asset_proof_batch_success() {
         client,
         rpc_client,
         async_rpc_client: None,
+        ws_client: None,
     };
 
     let request: GetAssetProofBatch = GetAssetProofBatch {
@@ -76,8 +77,7 @@ async fn test_get_asset_proof_batch_success() {
         ],
     };
 
-    let response: Result<HashMap<String, Option<AssetProof>>, HeliusError> =
-        helius.rpc().get_asset_proof_batch(request).await;
+    let response: Result<HashMap<String, Option<AssetProof>>> = helius.rpc().get_asset_proof_batch(request).await;
     assert!(response.is_ok(), "API call failed with error: {:?}", response.err());
 
     let proofs: HashMap<String, Option<AssetProof>> = response.unwrap();
@@ -123,13 +123,13 @@ async fn test_get_asset_proof_failure() {
         client,
         rpc_client,
         async_rpc_client: None,
+        ws_client: None,
     };
 
     let request: GetAssetProofBatch = GetAssetProofBatch {
         ids: vec!["Hello there".to_string(), "General Kenobi".to_string()],
     };
 
-    let response: Result<HashMap<String, Option<AssetProof>>, HeliusError> =
-        helius.rpc().get_asset_proof_batch(request).await;
+    let response: Result<HashMap<String, Option<AssetProof>>> = helius.rpc().get_asset_proof_batch(request).await;
     assert!(response.is_err(), "Expected an error but got success");
 }

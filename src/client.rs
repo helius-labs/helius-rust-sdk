@@ -4,6 +4,7 @@ use crate::config::Config;
 use crate::error::{HeliusError, Result};
 use crate::rpc_client::RpcClient;
 use crate::types::Cluster;
+use crate::websocket::{EnhancedWebsocket, ENHANCED_WEBSOCKET_URL};
 
 use reqwest::Client;
 use solana_client::nonblocking::rpc_client::RpcClient as AsyncSolanaRpcClient;
@@ -22,6 +23,8 @@ pub struct Helius {
     pub rpc_client: Arc<RpcClient>,
     /// An optional asynchronous Solana client for async operations
     pub async_rpc_client: Option<Arc<AsyncSolanaRpcClient>>,
+    /// A reference-counted enhanced (geyser) websocket client
+    pub ws_client: Option<Arc<EnhancedWebsocket>>,
 }
 
 impl Helius {
@@ -45,12 +48,12 @@ impl Helius {
         let config: Arc<Config> = Arc::new(Config::new(api_key, cluster)?);
         let client: Client = Client::new();
         let rpc_client: Arc<RpcClient> = Arc::new(RpcClient::new(Arc::new(client.clone()), config.clone())?);
-
         Ok(Helius {
             config,
             client,
             rpc_client,
             async_rpc_client: None,
+            ws_client: None,
         })
     }
 
@@ -81,6 +84,30 @@ impl Helius {
             client: client.clone(),
             rpc_client: Arc::new(RpcClient::new(Arc::new(client), config.clone())?),
             async_rpc_client: Some(async_solana_client),
+            ws_client: None,
+        })
+    }
+
+    /// The enhanced websocket is optional, and this method is used to create a new instance of `Helius` with an enhanced websocket client.
+    /// Upon calling this method, the websocket will connect hence the asynchronous function definition omission from the default `new` method.
+    ///
+    /// # Arguments
+    /// * `api_key` - The API key required for authenticating requests made
+    /// * `cluster` - The Solana cluster (Devnet or MainnetBeta) that defines the given network environment
+    /// # Returns
+    /// An instance of `Helius` if successful. A `HeliusError` is returned if an error occurs during configuration or initialization of the HTTP, RPC, or WS client
+    pub async fn new_with_ws(api_key: &str, cluster: Cluster) -> Result<Self> {
+        let config: Arc<Config> = Arc::new(Config::new(api_key, cluster)?);
+        let client: Client = Client::new();
+        let rpc_client: Arc<RpcClient> = Arc::new(RpcClient::new(Arc::new(client.clone()), config.clone())?);
+        let wss: String = format!("{}{}", ENHANCED_WEBSOCKET_URL, api_key);
+        let ws_client: Arc<EnhancedWebsocket> = Arc::new(EnhancedWebsocket::new(&wss).await?);
+        Ok(Helius {
+            config,
+            client,
+            rpc_client,
+            async_rpc_client: None,
+            ws_client: Some(ws_client),
         })
     }
 
@@ -112,6 +139,10 @@ impl Helius {
     /// A cloned `Arc<SolanaRpcClient>` that can be safely shared across threads
     pub fn connection(&self) -> Arc<SolanaRpcClient> {
         self.rpc_client.solana_client.clone()
+    }
+
+    pub fn ws(&self) -> Option<Arc<EnhancedWebsocket>> {
+        self.ws_client.clone()
     }
 }
 
