@@ -169,7 +169,7 @@ impl Helius {
         final_instructions.push(compute_units_ix);
 
         // Determine if we need to use a versioned transaction
-        let is_versioned: bool = false; //config.lookup_tables.is_some();
+        let is_versioned: bool = config.lookup_tables.is_some();
         let mut legacy_transaction: Option<Transaction> = None;
         let mut versioned_transaction: Option<VersionedTransaction> = None;
 
