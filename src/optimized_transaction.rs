@@ -1,7 +1,7 @@
 use crate::error::{HeliusError, Result};
 use crate::types::{
     GetPriorityFeeEstimateOptions, GetPriorityFeeEstimateRequest, GetPriorityFeeEstimateResponse,
-    SmartTransactionConfig,
+    SmartTransactionConfig, SmartTransaction,
 };
 use crate::Helius;
 
@@ -110,15 +110,15 @@ impl Helius {
         }
     }
 
-    /// Builds and sends an optimized transaction, and handles its confirmation status
-    ///
+    /// Creates an optimized transaction based on the provided configuration
+    /// 
     /// # Arguments
-    /// * `config` - The configuration for the smart transaction, which includes the transaction's instructions, and the user's keypair. If provided, it also
-    /// includes whether preflight checks should be skipped, how many times to retry the transaction, and any address lookup tables to be included in the transaction
-    ///
+    /// * `config` - The configuration for the smart transaction, which includes the transaction's instructions, signers, and lookup tables, depending on 
+    /// whether it's a legacy or versioned smart transaction. The transaction's send configuration can also be changed, if provided
+    /// 
     /// # Returns
-    /// The transaction signature, if successful
-    pub async fn send_smart_transaction(&self, config: SmartTransactionConfig<'_>) -> Result<Signature> {
+    /// An optimized `Transaction` or `VersionedTransaction`
+    pub async fn create_smart_transaction(&self, config: &SmartTransactionConfig<'_>) -> Result<SmartTransaction> {
         if config.signers.is_empty() {
             return Err(HeliusError::InvalidInput(
                 "The fee payer must sign the transaction".to_string(),
@@ -261,12 +261,28 @@ impl Helius {
                 signatures,
                 message: versioned_message,
             });
+
+            Ok(SmartTransaction::Versioned(versioned_transaction.unwrap()))
         } else {
             let mut tx: Transaction = Transaction::new_with_payer(&final_instructions, Some(&payer_pubkey));
             tx.try_sign(&config.signers, recent_blockhash)?;
             legacy_transaction = Some(tx);
-        }
 
+            Ok(SmartTransaction::Legacy(legacy_transaction.unwrap()))
+        }
+    }
+    
+    /// Builds and sends an optimized transaction, and handles its confirmation status
+    ///
+    /// # Arguments
+    /// * `config` - The configuration for the smart transaction, which includes the transaction's instructions, and the user's keypair. If provided, it also
+    /// includes whether preflight checks should be skipped, how many times to retry the transaction, and any address lookup tables to be included in the transaction
+    ///
+    /// # Returns
+    /// The transaction signature, if successful
+    pub async fn send_smart_transaction(&self, config: SmartTransactionConfig<'_>) -> Result<Signature> {
+        let transaction: SmartTransaction = self.create_smart_transaction(&config).await?;
+        
         // Common logic for sending transactions
         let send_transaction_config: RpcSendTransactionConfig = RpcSendTransactionConfig {
             skip_preflight: config.send_options.skip_preflight,
@@ -290,10 +306,9 @@ impl Helius {
         let start_time: Instant = Instant::now();
 
         while Instant::now().duration_since(start_time) < timeout {
-            let result = if is_versioned {
-                send_versioned_result(versioned_transaction.as_ref().unwrap())
-            } else {
-                send_result(legacy_transaction.as_ref().unwrap())
+            let result = match &transaction {
+                SmartTransaction::Legacy(tx) => send_result(tx),
+                SmartTransaction::Versioned(tx) => send_versioned_result(tx),
             };
 
             match result {
