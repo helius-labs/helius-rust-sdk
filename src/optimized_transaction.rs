@@ -308,7 +308,15 @@ impl Helius {
             };
 
             match result {
-                Ok(signature) => return self.poll_transaction_confirmation(signature).await,
+                Ok(signature) => {
+                    // Poll for transaction confirmation
+                    match self.poll_transaction_confirmation(signature).await {
+                        Ok(sig) => return Ok(sig),
+                        // Retry on polling failure
+                        Err(_) => continue,
+                    }
+                },
+                // Retry on send failure
                 Err(_) => continue,
             }
         }
