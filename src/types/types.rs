@@ -411,7 +411,7 @@ pub struct TransferFeeConfig {
     pub withdraw_withheld_authority: String,
     pub withheld_amount: i32,
     pub older_transfer_fee: OlderTransferFee,
-    pub new_trasfer_fee: NewTransferFee,
+    pub new_trasnfer_fee: NewTransferFee,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
