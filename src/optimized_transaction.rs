@@ -315,7 +315,7 @@ impl Helius {
                         // Retry on polling failure
                         Err(_) => continue,
                     }
-                },
+                }
                 // Retry on send failure
                 Err(_) => continue,
             }
