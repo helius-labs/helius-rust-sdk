@@ -949,6 +949,7 @@ pub struct SmartTransactionConfig<'a> {
     pub signers: Vec<&'a dyn Signer>,
     pub send_options: RpcSendTransactionConfig,
     pub lookup_tables: Option<Vec<AddressLookupTableAccount>>,
+    pub fee_payer : Option<&'a dyn Signer>,
 }
 
 impl<'a> SmartTransactionConfig<'a> {
@@ -958,6 +959,7 @@ impl<'a> SmartTransactionConfig<'a> {
             signers,
             send_options: RpcSendTransactionConfig::default(),
             lookup_tables: None,
+            fee_payer: None,
         }
     }
 }
