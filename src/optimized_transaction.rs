@@ -1,6 +1,7 @@
 use crate::error::{HeliusError, Result};
 use crate::types::{
-    CreateSmartTransactionConfig, GetPriorityFeeEstimateOptions, GetPriorityFeeEstimateRequest, GetPriorityFeeEstimateResponse, SmartTransaction, SmartTransactionConfig
+    CreateSmartTransactionConfig, GetPriorityFeeEstimateOptions, GetPriorityFeeEstimateRequest,
+    GetPriorityFeeEstimateResponse, SmartTransaction, SmartTransactionConfig,
 };
 use crate::Helius;
 
@@ -117,14 +118,19 @@ impl Helius {
     ///
     /// # Returns
     /// An optimized `Transaction` or `VersionedTransaction`
-    pub async fn create_smart_transaction(&self, config: &CreateSmartTransactionConfig<'_>) -> Result<SmartTransaction> {
+    pub async fn create_smart_transaction(
+        &self,
+        config: &CreateSmartTransactionConfig<'_>,
+    ) -> Result<SmartTransaction> {
         if config.signers.is_empty() {
             return Err(HeliusError::InvalidInput(
                 "The fee payer must sign the transaction".to_string(),
             ));
         }
 
-        let payer_pubkey: Pubkey = config.fee_payer.map_or(config.signers[0].pubkey(), |signer| signer.pubkey());
+        let payer_pubkey: Pubkey = config
+            .fee_payer
+            .map_or(config.signers[0].pubkey(), |signer| signer.pubkey());
         let recent_blockhash: Hash = self.connection().get_latest_blockhash()?;
         let mut final_instructions: Vec<Instruction> = vec![];
 
@@ -286,11 +292,11 @@ impl Helius {
         } else {
             let mut tx: Transaction = Transaction::new_with_payer(&final_instructions, Some(&payer_pubkey));
             tx.try_partial_sign(&config.signers, recent_blockhash)?;
-            
+
             if let Some(fee_payer) = config.fee_payer {
                 tx.try_partial_sign(&[fee_payer], recent_blockhash)?;
             }
-            
+
             legacy_transaction = Some(tx);
 
             Ok(SmartTransaction::Legacy(legacy_transaction.unwrap()))

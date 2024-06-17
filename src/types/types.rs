@@ -948,7 +948,7 @@ pub struct CreateSmartTransactionConfig<'a> {
     pub instructions: Vec<Instruction>,
     pub signers: Vec<&'a dyn Signer>,
     pub lookup_tables: Option<Vec<AddressLookupTableAccount>>,
-    pub fee_payer : Option<&'a dyn Signer>, 
+    pub fee_payer: Option<&'a dyn Signer>,
 }
 
 impl<'a> CreateSmartTransactionConfig<'a> {
