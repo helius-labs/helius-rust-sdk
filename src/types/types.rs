@@ -975,3 +975,11 @@ impl<'a> SmartTransactionConfig<'a> {
         }
     }
 }
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct BasicRequest {
+    pub jsonrpc: String,
+    pub id: u32,
+    pub method: String,
+    pub params: Vec<Vec<String>>,
+}
