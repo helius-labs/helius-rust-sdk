@@ -139,7 +139,7 @@ impl Helius {
             params: vec![serialized_transactions],
         };
 
-        let parsed_url: Url = Url::parse(&jito_api_url).expect("Failed to parse URL");
+        let parsed_url: Url = Url::parse(jito_api_url).expect("Failed to parse URL");
 
         let response: Value = self
             .rpc_client
@@ -182,7 +182,7 @@ impl Helius {
             params: vec![bundle_ids],
         };
 
-        let parsed_url: Url = Url::parse(&jito_api_url).expect("Failed to parse URL");
+        let parsed_url: Url = Url::parse(jito_api_url).expect("Failed to parse URL");
 
         let response: Value = self
             .rpc_client
