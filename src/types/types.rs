@@ -944,20 +944,34 @@ pub struct EditWebhookRequest {
     pub encoding: AccountWebhookEncoding,
 }
 
-pub struct SmartTransactionConfig<'a> {
+pub struct CreateSmartTransactionConfig<'a> {
     pub instructions: Vec<Instruction>,
     pub signers: Vec<&'a dyn Signer>,
-    pub send_options: RpcSendTransactionConfig,
     pub lookup_tables: Option<Vec<AddressLookupTableAccount>>,
+    pub fee_payer: Option<&'a dyn Signer>,
+}
+
+impl<'a> CreateSmartTransactionConfig<'a> {
+    pub fn new(instructions: Vec<Instruction>, signers: Vec<&'a dyn Signer>) -> Self {
+        Self {
+            instructions,
+            signers,
+            lookup_tables: None,
+            fee_payer: None,
+        }
+    }
+}
+
+pub struct SmartTransactionConfig<'a> {
+    pub create_config: CreateSmartTransactionConfig<'a>,
+    pub send_options: RpcSendTransactionConfig,
 }
 
 impl<'a> SmartTransactionConfig<'a> {
     pub fn new(instructions: Vec<Instruction>, signers: Vec<&'a dyn Signer>) -> Self {
         Self {
-            instructions,
-            signers,
+            create_config: CreateSmartTransactionConfig::new(instructions, signers),
             send_options: RpcSendTransactionConfig::default(),
-            lookup_tables: None,
         }
     }
 }

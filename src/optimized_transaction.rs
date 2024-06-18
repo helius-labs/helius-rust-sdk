@@ -1,7 +1,7 @@
 use crate::error::{HeliusError, Result};
 use crate::types::{
-    GetPriorityFeeEstimateOptions, GetPriorityFeeEstimateRequest, GetPriorityFeeEstimateResponse, SmartTransaction,
-    SmartTransactionConfig,
+    CreateSmartTransactionConfig, GetPriorityFeeEstimateOptions, GetPriorityFeeEstimateRequest,
+    GetPriorityFeeEstimateResponse, SmartTransaction, SmartTransactionConfig,
 };
 use crate::Helius;
 
@@ -118,14 +118,19 @@ impl Helius {
     ///
     /// # Returns
     /// An optimized `Transaction` or `VersionedTransaction`
-    pub async fn create_smart_transaction(&self, config: &SmartTransactionConfig<'_>) -> Result<SmartTransaction> {
+    pub async fn create_smart_transaction(
+        &self,
+        config: &CreateSmartTransactionConfig<'_>,
+    ) -> Result<SmartTransaction> {
         if config.signers.is_empty() {
             return Err(HeliusError::InvalidInput(
                 "The fee payer must sign the transaction".to_string(),
             ));
         }
 
-        let payer_pubkey: Pubkey = config.signers[0].pubkey();
+        let payer_pubkey: Pubkey = config
+            .fee_payer
+            .map_or(config.signers[0].pubkey(), |signer| signer.pubkey());
         let recent_blockhash: Hash = self.connection().get_latest_blockhash()?;
         let mut final_instructions: Vec<Instruction> = vec![];
 
@@ -153,9 +158,19 @@ impl Helius {
                 v0::Message::try_compile(&payer_pubkey, &config.instructions, lookup_tables, recent_blockhash)?;
             let versioned_message: VersionedMessage = VersionedMessage::V0(v0_message);
 
+            let all_signers = if let Some(fee_payer) = config.fee_payer {
+                let mut all_signers: Vec<&dyn Signer> = config.signers.clone();
+                if !all_signers.iter().any(|signer| signer.pubkey() == fee_payer.pubkey()) {
+                    all_signers.push(fee_payer);
+                }
+
+                all_signers
+            } else {
+                config.signers.clone()
+            };
+
             // Sign the versioned transaction
-            let signatures: Vec<Signature> = config
-                .signers
+            let signatures: Vec<Signature> = all_signers
                 .iter()
                 .map(|signer| signer.try_sign_message(versioned_message.serialize().as_slice()))
                 .collect::<std::result::Result<Vec<_>, _>>()?;
@@ -167,7 +182,12 @@ impl Helius {
         } else {
             // If no lookup tables are present, we build a regular transaction
             let mut tx: Transaction = Transaction::new_with_payer(&config.instructions, Some(&payer_pubkey));
-            tx.try_sign(&config.signers, recent_blockhash)?;
+            tx.try_partial_sign(&config.signers, recent_blockhash)?;
+
+            if let Some(fee_payer) = config.fee_payer {
+                tx.try_partial_sign(&[fee_payer], recent_blockhash)?;
+            }
+
             legacy_transaction = Some(tx);
         }
 
@@ -247,8 +267,18 @@ impl Helius {
             let v0_message: v0::Message =
                 v0::Message::try_compile(&payer_pubkey, &final_instructions, lookup_tables, recent_blockhash)?;
             let versioned_message: VersionedMessage = VersionedMessage::V0(v0_message);
-            let signatures: Vec<Signature> = config
-                .signers
+
+            let all_signers: Vec<&dyn Signer> = if let Some(fee_payer) = config.fee_payer {
+                let mut all_signers = config.signers.clone();
+                if !all_signers.iter().any(|signer| signer.pubkey() == fee_payer.pubkey()) {
+                    all_signers.push(fee_payer);
+                }
+                all_signers
+            } else {
+                config.signers.clone()
+            };
+
+            let signatures: Vec<Signature> = all_signers
                 .iter()
                 .map(|signer| signer.try_sign_message(versioned_message.serialize().as_slice()))
                 .collect::<std::result::Result<Vec<_>, _>>()?;
@@ -261,7 +291,12 @@ impl Helius {
             Ok(SmartTransaction::Versioned(versioned_transaction.unwrap()))
         } else {
             let mut tx: Transaction = Transaction::new_with_payer(&final_instructions, Some(&payer_pubkey));
-            tx.try_sign(&config.signers, recent_blockhash)?;
+            tx.try_partial_sign(&config.signers, recent_blockhash)?;
+
+            if let Some(fee_payer) = config.fee_payer {
+                tx.try_partial_sign(&[fee_payer], recent_blockhash)?;
+            }
+
             legacy_transaction = Some(tx);
 
             Ok(SmartTransaction::Legacy(legacy_transaction.unwrap()))
@@ -277,7 +312,7 @@ impl Helius {
     /// # Returns
     /// The transaction signature, if successful
     pub async fn send_smart_transaction(&self, config: SmartTransactionConfig<'_>) -> Result<Signature> {
-        let transaction: SmartTransaction = self.create_smart_transaction(&config).await?;
+        let transaction: SmartTransaction = self.create_smart_transaction(&config.create_config).await?;
 
         // Common logic for sending transactions
         let send_transaction_config: RpcSendTransactionConfig = RpcSendTransactionConfig {
