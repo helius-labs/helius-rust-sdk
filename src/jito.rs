@@ -13,6 +13,7 @@ use crate::types::{
 use crate::Helius;
 
 use bincode::{serialize, ErrorKind};
+use chrono::format::parse;
 use phf::phf_map;
 use rand::seq::SliceRandom;
 use reqwest::{Method, StatusCode, Url};
@@ -101,16 +102,22 @@ impl Helius {
         }
 
         let tip_amount: u64 = tip_amount.unwrap_or(1000);
-        let random_tip_account = JITO_TIP_ACCOUNTS.choose(&mut rand::thread_rng()).unwrap();
-        let payer_key = config
+        let random_tip_account: &str = *JITO_TIP_ACCOUNTS.choose(&mut rand::thread_rng()).unwrap();
+        let payer_key: Pubkey = config
             .fee_payer
             .map_or_else(|| config.signers[0].pubkey(), |signer| signer.pubkey());
 
         self.add_tip_instruction(&mut config.instructions, payer_key, random_tip_account, tip_amount);
 
         let smart_transaction: SmartTransaction = self.create_smart_transaction(&config).await?;
-        let serialized_transaction: Vec<u8> =
-            serialize(&smart_transaction).map_err(|e: Box<ErrorKind>| HeliusError::InvalidInput(e.to_string()))?;
+        let serialized_transaction: Vec<u8> = match smart_transaction {
+            SmartTransaction::Legacy(tx) => {
+                serialize(&tx).map_err(|e: Box<ErrorKind>| HeliusError::InvalidInput(e.to_string()))?
+            }
+            SmartTransaction::Versioned(tx) => {
+                serialize(&tx).map_err(|e: Box<ErrorKind>| HeliusError::InvalidInput(e.to_string()))?
+            }
+        };
         let transaction_base58: String = encode(&serialized_transaction).into_string();
 
         Ok(transaction_base58)
@@ -134,23 +141,41 @@ impl Helius {
 
         let parsed_url: Url = Url::parse(&jito_api_url).expect("Failed to parse URL");
 
-        self.rpc_client.handler.send(Method::POST, parsed_url, Some(&request)).await
+        let response: Value = self
+            .rpc_client
+            .handler
+            .send(Method::POST, parsed_url, Some(&request))
+            .await?;
+
+        if let Some(error) = response.get("error") {
+            return Err(HeliusError::BadRequest {
+                path: jito_api_url.to_string(),
+                text: format!("Error sending bundles: {:?}", error),
+            });
+        }
+
+        if let Some(result) = response.get("result") {
+            if let Some(bundle_id) = result.as_str() {
+                return Ok(bundle_id.to_string());
+            }
+        }
+
+        Err(HeliusError::Unknown {
+            code: StatusCode::INTERNAL_SERVER_ERROR,
+            text: "Unexpected response format".to_string(),
+        })
     }
 
     /// Get the status of Jito bundles
-    /// 
+    ///
     /// # Arguments
     /// * `bundle_ids` - An array of bundle IDs to check the status for
     /// * `jito_api_url` - The Jito Block Engine API URL
-    /// 
+    ///
     /// # Returns
     /// A `Result` containing the status of the bundles as a `serde_json::Value`
-    pub async fn get_bundle_statuses(
-        &self,
-        bundle_ids: Vec<String>,
-        jito_api_url: &str,
-    ) -> Result<Value> {
-        let request = BasicRequest {
+    pub async fn get_bundle_statuses(&self, bundle_ids: Vec<String>, jito_api_url: &str) -> Result<Value> {
+        let request: BasicRequest = BasicRequest {
             jsonrpc: "2.0".to_string(),
             id: 1,
             method: "getBundleStatuses".to_string(),
@@ -159,18 +184,32 @@ impl Helius {
 
         let parsed_url: Url = Url::parse(&jito_api_url).expect("Failed to parse URL");
 
-        self.rpc_client.handler.send(Method::POST, parsed_url, Some(&request)).await
+        let response: Value = self
+            .rpc_client
+            .handler
+            .send(Method::POST, parsed_url, Some(&request))
+            .await?;
+
+        if let Some(error) = response.get("error") {
+            return Err(HeliusError::BadRequest {
+                path: jito_api_url.to_string(),
+                text: format!("Error getting bundle statuses: {:?}", error),
+            });
+        }
+
+        // Return the response value
+        Ok(response)
     }
 
     /// Sends a smart transaction as a Jito bundle with a tip
-    /// 
-    /// # Arguments 
+    ///
+    /// # Arguments
     /// * `config` - The configuration for sending the smart transaction
     /// * `tip_amount` - The amount of lamports tp tip. Defaults to `1000`
     /// * `region` - The Jito Block Engine region. Defaults to `"Default"`
-    /// 
+    ///
     /// # Returns
-    /// A `Result` containing the bundle ID
+    /// A `Result` containing the bundle IDc
     pub async fn send_smart_transaction_with_tip(
         &self,
         config: SmartTransactionConfig<'_>,
@@ -178,28 +217,47 @@ impl Helius {
         region: Option<JitoRegion>,
     ) -> Result<String> {
         if config.create_config.signers.is_empty() {
-            return Err(HeliusError::InvalidInput("The transaction must have at least one signer".to_string()));
+            return Err(HeliusError::InvalidInput(
+                "The transaction must have at least one signer".to_string(),
+            ));
         }
 
         let tip: u64 = tip_amount.unwrap_or(1000);
         let user_provided_region: &str = region.unwrap_or("Default");
-        let jito_api_url: &str = *JITO_API_URLS.get(user_provided_region).ok_or_else(|| HeliusError::InvalidInput("Invalid Jito region".to_string()))?;
+        let jito_region: &str = *JITO_API_URLS
+            .get(user_provided_region)
+            .ok_or_else(|| HeliusError::InvalidInput("Invalid Jito region".to_string()))?;
+        let jito_api_url_string: String = format!("{}/api/v1/bundles", jito_region);
+        let jito_api_url: &str = jito_api_url_string.as_str();
 
-        let serialized_transaction = self.create_smart_transaction_with_tip(config.create_config, Some(tip)).await?;
-        let bundle_id = self.send_jito_bundle(vec![serialized_transaction], jito_api_url).await?;
+        // Create the smart transaction with tip
+        let serialized_transaction: String = self
+            .create_smart_transaction_with_tip(config.create_config, Some(tip))
+            .await?;
 
-        let timeout = Duration::from_secs(60);
-        let interval = Duration::from_secs(5);
-        let start = tokio::time::Instant::now();
+        // Send the transaction as a Jito bundle
+        let bundle_id: String = self
+            .send_jito_bundle(vec![serialized_transaction], jito_api_url)
+            .await?;
+
+        // Poll for confirmation status
+        let timeout: Duration = Duration::from_secs(60);
+        let interval: Duration = Duration::from_secs(5);
+        let start: tokio::time::Instant = tokio::time::Instant::now();
 
         while start.elapsed() < timeout {
-            let bundle_statuses = self.get_bundle_statuses(vec![bundle_id.clone()], jito_api_url).await?;
+            let bundle_statuses: Value = self.get_bundle_statuses(vec![bundle_id.clone()], jito_api_url).await?;
 
-            if let Some(status) = bundle_statuses[0]["confirmation_status"].as_str() {
-                if status == "confirmed" {
-                    return Ok(bundle_statuses[0]["transactions"][0].as_str().unwrap().to_string());
+            if let Some(values) = bundle_statuses["result"]["value"].as_array() {
+                if !values.is_empty() {
+                    if let Some(status) = values[0]["confirmation_status"].as_str() {
+                        if status == "confirmed" {
+                            return Ok(values[0]["transactions"][0].as_str().unwrap().to_string());
+                        }
+                    }
                 }
             }
+
             sleep(interval).await;
         }
 
@@ -208,5 +266,4 @@ impl Helius {
             text: "Bundle failed to confirm within the timeout period".to_string(),
         })
     }
-
 }
