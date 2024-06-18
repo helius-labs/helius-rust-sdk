@@ -17,6 +17,7 @@ use phf::phf_map;
 use rand::seq::SliceRandom;
 use reqwest::{Method, StatusCode, Url};
 use serde::Serialize;
+use serde_json::Value;
 use solana_client::rpc_config::{RpcSendTransactionConfig, RpcSimulateTransactionConfig};
 use solana_client::rpc_response::{Response, RpcSimulateTransactionResult};
 use solana_sdk::system_instruction;
@@ -129,6 +130,31 @@ impl Helius {
             id: 1,
             method: "sendBundle".to_string(),
             params: vec![serialized_transactions],
+        };
+
+        let parsed_url: Url = Url::parse(&jito_api_url).expect("Failed to parse URL");
+
+        self.rpc_client.handler.send(Method::POST, parsed_url, Some(&request)).await
+    }
+
+    /// Get the status of Jito bundles
+    /// 
+    /// # Arguments
+    /// * `bundle_ids` - An array of bundle IDs to check the status for
+    /// * `jito_api_url` - The Jito Block Engine API URL
+    /// 
+    /// # Returns
+    /// A `Result` containing the status of the bundles as a `serde_json::Value`
+    pub async fn get_bundle_statuses(
+        &self,
+        bundle_ids: Vec<String>,
+        jito_api_url: &str,
+    ) -> Result<Value> {
+        let request = BasicRequest {
+            jsonrpc: "2.0".to_string(),
+            id: 1,
+            method: "getBundleStatuses".to_string(),
+            params: vec![bundle_ids],
         };
 
         let parsed_url: Url = Url::parse(&jito_api_url).expect("Failed to parse URL");
