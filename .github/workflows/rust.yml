@@ -81,6 +81,27 @@ jobs:
     - name: Run tests
       run: cargo test --verbose
     
+    - name: Post Cache target directory
+      if: always()
+      uses: actions/cache@v3
+      with:
+          path: target
+          key: ${{ runner.os }}-target-${{ hashFiles('**/Cargo.lock') }}
+
+    - name: Post Cache cargo registry
+      if: always()
+      uses: actions/cache@v3
+      with:
+          path: ~/.cargo/registry
+          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+    
+    - name: Post Cache cargo index
+      if: always()
+      uses: actions/cache@v3
+      with:
+          path: ~/.cargo/git
+          key: ${{ runner.os }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
+
     - name: Clean up target directory after build
-      if: success()
+      if: always()
       run: rm -rf target
