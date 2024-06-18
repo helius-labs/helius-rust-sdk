@@ -51,6 +51,14 @@ jobs:
     
     - name: Install Protobuf Compiler
       run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
+    
+    - name: Clean up disk space
+      run: |
+        sudo apt-get clean
+        sudo rm -rf /var/lib/apt/lists/*
+        sudo rm -rf /usr/share/dotnet
+        sudo rm -rf /usr/local/lib/android
+        sudo rm -rf /opt/ghc
       
     - name: Check formatting
       run: cargo fmt --all -- --check
@@ -63,6 +71,16 @@ jobs:
       
     - name: Build
       run: cargo build --verbose
+    
+    - name: Save build artifacts
+      uses: actions/upload-artifact@v2
+      with:
+        name: build
+        path: target
       
     - name: Run tests
       run: cargo test --verbose
+    
+    - name: Clean up target directory after build
+      if: success()
+      run: rm -rf target
