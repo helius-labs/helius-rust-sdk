@@ -162,4 +162,51 @@ impl Helius {
         self.rpc_client.handler.send(Method::POST, parsed_url, Some(&request)).await
     }
 
+    /// Sends a smart transaction as a Jito bundle with a tip
+    /// 
+    /// # Arguments 
+    /// * `config` - The configuration for sending the smart transaction
+    /// * `tip_amount` - The amount of lamports tp tip. Defaults to `1000`
+    /// * `region` - The Jito Block Engine region. Defaults to `"Default"`
+    /// 
+    /// # Returns
+    /// A `Result` containing the bundle ID
+    pub async fn send_smart_transaction_with_tip(
+        &self,
+        config: SmartTransactionConfig<'_>,
+        tip_amount: Option<u64>,
+        region: Option<JitoRegion>,
+    ) -> Result<String> {
+        if config.create_config.signers.is_empty() {
+            return Err(HeliusError::InvalidInput("The transaction must have at least one signer".to_string()));
+        }
+
+        let tip: u64 = tip_amount.unwrap_or(1000);
+        let user_provided_region: &str = region.unwrap_or("Default");
+        let jito_api_url: &str = *JITO_API_URLS.get(user_provided_region).ok_or_else(|| HeliusError::InvalidInput("Invalid Jito region".to_string()))?;
+
+        let serialized_transaction = self.create_smart_transaction_with_tip(config.create_config, Some(tip)).await?;
+        let bundle_id = self.send_jito_bundle(vec![serialized_transaction], jito_api_url).await?;
+
+        let timeout = Duration::from_secs(60);
+        let interval = Duration::from_secs(5);
+        let start = tokio::time::Instant::now();
+
+        while start.elapsed() < timeout {
+            let bundle_statuses = self.get_bundle_statuses(vec![bundle_id.clone()], jito_api_url).await?;
+
+            if let Some(status) = bundle_statuses[0]["confirmation_status"].as_str() {
+                if status == "confirmed" {
+                    return Ok(bundle_statuses[0]["transactions"][0].as_str().unwrap().to_string());
+                }
+            }
+            sleep(interval).await;
+        }
+
+        Err(HeliusError::Timeout {
+            code: StatusCode::REQUEST_TIMEOUT,
+            text: "Bundle failed to confirm within the timeout period".to_string(),
+        })
+    }
+
 }
