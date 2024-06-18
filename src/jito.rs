@@ -14,7 +14,9 @@ use crate::types::{
 use crate::Helius;
 
 use bincode::{serialize, ErrorKind};
+use rand::seq::SliceRandom;
 use reqwest::StatusCode;
+use serde::Serialize;
 use solana_client::rpc_config::{RpcSendTransactionConfig, RpcSimulateTransactionConfig};
 use solana_client::rpc_response::{Response, RpcSimulateTransactionResult};
 use solana_sdk::system_instruction;
@@ -32,7 +34,7 @@ use solana_sdk::{
 };
 use std::str::FromStr;
 use std::time::{Duration, Instant};
-use tokio::time::sleep;
+use tokio::time::{sleep, timeout_at};
 use phf::phf_map;
 
 /// Jito tip accounts
@@ -76,5 +78,36 @@ impl Helius {
     ) {
         let tip_instruction: Instruction = system_instruction::transfer(&fee_payer, &Pubkey::from_str(tip_account).unwrap(), tip_amount);
         instructions.push(tip_instruction);
+    }
+
+    /// Creates a smart transaction with a Jito tip
+    /// 
+    /// # Arguments
+    /// * `config` - The configuration for creating the smart transaction
+    /// * `tip_amount` - The amount of lamports to tip. Defaults to `1000`
+    /// 
+    /// # Returns
+    /// A `Result` containing the serialized transaction as a base58-encoded string
+    pub async fn create_smart_transaction_with_tip(
+        &self,
+        mut config: CreateSmartTransactionConfig<'_>,
+        tip_amount: Option<u64>
+    ) -> Result<String> {
+        if config.signers.is_empty() {
+            return Err(HeliusError::InvalidInput("The transaction must have at least one signer".to_string()));
+        }
+
+        let tip_amount: u64 = tip_amount.unwrap_or(1000);
+        let random_tip_account = JITO_TIP_ACCOUNTS.choose(&mut rand::thread_rng()).unwrap();
+        let payer_key = config.fee_payer.map_or_else(|| config.signers[0].pubkey(), |signer| signer.pubkey());
+
+        self.add_tip_instruction(&mut config.instructions, payer_key, random_tip_account, tip_amount);
+
+        let smart_transaction: SmartTransaction = self.create_smart_transaction(&config).await?;
+        let serialized_transaction: Vec<u8> = serialize(&smart_transaction).map_err(|e: Box<ErrorKind>| HeliusError::InvalidInput(e.to_string()))?;
+        let transaction_base58: String = encode(&serialized_transaction).into_string();
+
+        Ok(transaction_base58)
+
     }
 }
