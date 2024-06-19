@@ -127,6 +127,13 @@ Our SDK is designed to provide a seamless developer experience when building on 
 - [`poll_transaction_confirmation`](https://github.com/helius-labs/helius-rust-sdk/blob/a79a751e1a064125010bdb359068a366d635d005/src/optimized_transaction.rs#L77-L112) - Polls a transaction to check whether it has been confirmed in 5 second intervals with a 15 second timeout
 - [`send_smart_transaction`](https://github.com/helius-labs/helius-rust-sdk/blob/a79a751e1a064125010bdb359068a366d635d005/src/optimized_transaction.rs#L114-L332) - Builds and sends an optimized transaction, and handles its confirmation status
 
+### Jito Smart Transactions and Helper Methods
+- [`add_tip_instruction`](https://github.com/helius-labs/helius-rust-sdk/blob/02b351a5ee3fe16a36078b40f92dc72d0ad077ed/src/jito.rs#L66-L83) - Adds a tip instruction to the instructions provided
+- [`create_smart_transaction_with_tip`](https://github.com/helius-labs/helius-rust-sdk/blob/02b351a5ee3fe16a36078b40f92dc72d0ad077ed/src/jito.rs#L85-L124) - Creates a smart transaction with a Jito tip
+- [`get_bundle_statuses`](https://github.com/helius-labs/helius-rust-sdk/blob/02b351a5ee3fe16a36078b40f92dc72d0ad077ed/src/jito.rs#L169-L202) - Get the status of Jito bundles
+- [`send_jito_bundle`](https://github.com/helius-labs/helius-rust-sdk/blob/02b351a5ee3fe16a36078b40f92dc72d0ad077ed/src/jito.rs#L126-L167) - Sends a bundle of transactions to the Jito Block Engine
+- [`send_smart_transaction_with_tip`](https://github.com/helius-labs/helius-rust-sdk/blob/02b351a5ee3fe16a36078b40f92dc72d0ad077ed/src/jito.rs#L204-L269) - Sends a smart transaction as a Jito bundle with a tip
+
 ### Helper Methods
 - [`get_priority_fee_estimate`](https://docs.helius.dev/solana-rpc-nodes/alpha-priority-fee-api) - Gets an estimate of the priority fees required for a transaction to be processed more quickly
 - [`deserialize_str_to_number`](https://github.com/helius-labs/helius-rust-sdk/blob/dev/src/utils/deserialize_str_to_number.rs) - Deserializes a `String` to a `Number`
