@@ -2,7 +2,8 @@ use helius::types::*;
 use helius::Helius;
 use solana_client::rpc_config::RpcSendTransactionConfig;
 use solana_sdk::{
-    native_token::LAMPORTS_PER_SOL, pubkey::Pubkey, signature::Keypair, signer::Signer, system_instruction,
+    instruction::Instruction, native_token::LAMPORTS_PER_SOL, pubkey::Pubkey, signature::Keypair, signer::Signer,
+    system_instruction::transfer,
 };
 use std::str::FromStr;
 use std::time::Duration;
@@ -15,15 +16,15 @@ async fn main() {
     let helius: Helius = Helius::new(api_key, cluster).unwrap();
 
     // Replace with your actual keypair
-    let from_keypair: Keypair = Keypair::new(); // Placeholder: Replace with your keypair
+    let from_keypair: Keypair = Keypair::new();
     let from_pubkey: Pubkey = from_keypair.pubkey();
 
     // Replace with the recipient's public key
-    let to_pubkey: Pubkey = Pubkey::from_str("RecipientPublicKeyHere").unwrap(); // Placeholder: Replace with the recipient's public key
+    let to_pubkey: Pubkey = Pubkey::from_str("RecipientPublicKeyHere").unwrap();
 
     // Create a simple instruction (transfer 0.01 SOL from from_pubkey to to_pubkey)
     let transfer_amount: u64 = 100_000; // 0.01 SOL in lamports
-    let instructions = vec![system_instruction::transfer(&from_pubkey, &to_pubkey, transfer_amount)];
+    let instructions: Vec<Instruction> = vec![transfer(&from_pubkey, &to_pubkey, transfer_amount)];
 
     let create_config: CreateSmartTransactionConfig = CreateSmartTransactionConfig {
         instructions,
