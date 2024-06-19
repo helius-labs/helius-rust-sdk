@@ -89,12 +89,12 @@ impl Helius {
     /// * `tip_amount` - The amount of lamports to tip. Defaults to `1000`
     ///
     /// # Returns
-    /// A `Result` containing the serialized transaction as a base58-encoded string
+    /// A `Result` containing the serialized transaction as a base58-encoded string and the last valid block height
     pub async fn create_smart_transaction_with_tip(
         &self,
         mut config: CreateSmartTransactionConfig<'_>,
         tip_amount: Option<u64>,
-    ) -> Result<String> {
+    ) -> Result<(String, u64)> {
         if config.signers.is_empty() {
             return Err(HeliusError::InvalidInput(
                 "The transaction must have at least one signer".to_string(),
@@ -109,7 +109,7 @@ impl Helius {
 
         self.add_tip_instruction(&mut config.instructions, payer_key, random_tip_account, tip_amount);
 
-        let smart_transaction: SmartTransaction = self.create_smart_transaction(&config).await?;
+        let (smart_transaction, last_valid_block_height) = self.create_smart_transaction(&config).await?;
         let serialized_transaction: Vec<u8> = match smart_transaction {
             SmartTransaction::Legacy(tx) => {
                 serialize(&tx).map_err(|e: Box<ErrorKind>| HeliusError::InvalidInput(e.to_string()))?
@@ -120,7 +120,7 @@ impl Helius {
         };
         let transaction_base58: String = encode(&serialized_transaction).into_string();
 
-        Ok(transaction_base58)
+        Ok((transaction_base58, last_valid_block_height))
     }
 
     /// Sends a bundle of transactions to the Jito Block Engine
@@ -231,7 +231,7 @@ impl Helius {
         let jito_api_url: &str = jito_api_url_string.as_str();
 
         // Create the smart transaction with tip
-        let serialized_transaction: String = self
+        let (serialized_transaction, last_valid_block_height) = self
             .create_smart_transaction_with_tip(config.create_config, Some(tip))
             .await?;
 
@@ -245,7 +245,7 @@ impl Helius {
         let interval: Duration = Duration::from_secs(5);
         let start: tokio::time::Instant = tokio::time::Instant::now();
 
-        while start.elapsed() < timeout {
+        while start.elapsed() < timeout || self.connection().get_block_height()? <= last_valid_block_height {
             let bundle_statuses: Value = self.get_bundle_statuses(vec![bundle_id.clone()], jito_api_url).await?;
 
             if let Some(values) = bundle_statuses["result"]["value"].as_array() {
