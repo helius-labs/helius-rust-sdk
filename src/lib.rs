@@ -3,6 +3,7 @@ pub mod config;
 pub mod enhanced_transactions;
 pub mod error;
 pub mod factory;
+pub mod jito;
 pub mod mint_api;
 pub mod optimized_transaction;
 pub mod request_handler;
