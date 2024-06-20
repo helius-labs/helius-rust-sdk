@@ -103,7 +103,7 @@ impl RequestHandler {
             let body_json: serde_json::Result<serde_json::Value> = serde_json::from_str(&body_text);
             match body_json {
                 Ok(body) => {
-                    let error_message: String = body["message"].as_str().unwrap_or("Unknown error").to_string();
+                    let error_message: String = body["error"].as_str().unwrap_or("Unknown error").to_string();
                     Err(HeliusError::from_response_status(status, path, error_message))
                 }
                 Err(_) => Err(HeliusError::from_response_status(status, path, body_text)),
