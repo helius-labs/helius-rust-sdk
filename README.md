@@ -18,7 +18,7 @@ Remember to run `cargo update` regularly to fetch the latest version of the SDK.
 
 ## Usage
 ### `Helius`
-The SDK provides a [`Helius`](https://github.com/helius-labs/helius-rust-sdk/blob/dev/src/client.rs) instance that can be configured with an API key and a given Solana cluster. Developers can generate a new API key on the [Helius Developer Dashboard](https://dev.helius.xyz/dashboard/app). This instance acts as the main entry point for interacting with the SDK by providing methods to access different Solana and RPC client functionalities. The following code is an example of how to use the SDK to fetch info on [Mad Lad #8420](https://xray.helius.xyz/token/F9Lw3ki3hJ7PF9HQXsBzoY8GyE6sPoEZZdXJBsTTD2rk?network=mainnet):
+The SDK provides a [`Helius`](https://github.com/helius-labs/helius-rust-sdk/blob/dev/src/client.rs) instance that can be configured with an API key and a given Solana cluster. Developers can generate a new API key on the [Helius Developer Dashboard](https://dev.helius.xyz/dashboard/app). This instance acts as the main entry point for interacting with the SDK by providing methods to access different Solana and RPC client functionalities. The following code is an example of how to use the SDK to fetch info on [Mad Lad #8420](https://explorer.solana.com/address/F9Lw3ki3hJ7PF9HQXsBzoY8GyE6sPoEZZdXJBsTTD2rk?network=mainnet):
 ```rust
 use helius::error::Result;
 use helius::types::{Cluster, DisplayOptions, GetAssetRequest, GetAssetResponseForAsset};
@@ -32,12 +32,7 @@ async fn main() -> Result<()> {
 
     let request: GetAssetRequest = GetAssetRequest {
         id: "F9Lw3ki3hJ7PF9HQXsBzoY8GyE6sPoEZZdXJBsTTD2rk".to_string(),
-        display_options: Some(DisplayOptions {
-            show_unverified_collections: false,
-            show_collection_metadata: false,
-            show_fungible: false,
-            show_inscription: false,
-        }),
+        display_options: None,
     };
 
     let response: Result<Option<GetAssetResponseForAsset>> = helius.rpc().get_asset(request).await;
@@ -123,9 +118,10 @@ Our SDK is designed to provide a seamless developer experience when building on 
 - [`remove_addresses_from_webhook`](https://github.com/helius-labs/helius-rust-sdk/blob/bf24259e3333ae93126bb65b342c2c63e80e07a6/src/webhook.rs#L75-L105) - Removes a list of addresses from an existing webhook by its ID
 
 ### Smart Transactions
+- [`create_smart_transaction`](https://github.com/helius-labs/helius-rust-sdk/blob/705d66fb7d4004fc32c2a5f0d6ca4a1f2a7b175d/src/optimized_transaction.rs#L113-L312) - Creates an optimized transaction based on the provided configuration
 - [`get_compute_units`](https://github.com/helius-labs/helius-rust-sdk/blob/a79a751e1a064125010bdb359068a366d635d005/src/optimized_transaction.rs#L29-L75) - Simulates a transaction to get the total compute units consumed
 - [`poll_transaction_confirmation`](https://github.com/helius-labs/helius-rust-sdk/blob/a79a751e1a064125010bdb359068a366d635d005/src/optimized_transaction.rs#L77-L112) - Polls a transaction to check whether it has been confirmed in 5 second intervals with a 15 second timeout
-- [`send_smart_transaction`](https://github.com/helius-labs/helius-rust-sdk/blob/a79a751e1a064125010bdb359068a366d635d005/src/optimized_transaction.rs#L114-L332) - Builds and sends an optimized transaction, and handles its confirmation status
+- [`send_smart_transaction`](https://github.com/helius-labs/helius-rust-sdk/blob/705d66fb7d4004fc32c2a5f0d6ca4a1f2a7b175d/src/optimized_transaction.rs#L314-L374) - Builds and sends an optimized transaction, and handles its confirmation status
 
 ### Jito Smart Transactions and Helper Methods
 - [`add_tip_instruction`](https://github.com/helius-labs/helius-rust-sdk/blob/02b351a5ee3fe16a36078b40f92dc72d0ad077ed/src/jito.rs#L66-L83) - Adds a tip instruction to the instructions provided
