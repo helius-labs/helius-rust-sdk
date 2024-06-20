@@ -117,11 +117,11 @@ impl Helius {
     /// whether it's a legacy or versioned smart transaction. The transaction's send configuration can also be changed, if provided
     ///
     /// # Returns
-    /// An optimized `Transaction` or `VersionedTransaction`
+    /// An optimized `SmartTransaction` (i.e., `Transaction` or `VersionedTransaction`) and the `last_valid_block_height`
     pub async fn create_smart_transaction(
         &self,
         config: &CreateSmartTransactionConfig<'_>,
-    ) -> Result<SmartTransaction> {
+    ) -> Result<(SmartTransaction, u64)> {
         if config.signers.is_empty() {
             return Err(HeliusError::InvalidInput(
                 "The fee payer must sign the transaction".to_string(),
@@ -131,7 +131,9 @@ impl Helius {
         let payer_pubkey: Pubkey = config
             .fee_payer
             .map_or(config.signers[0].pubkey(), |signer| signer.pubkey());
-        let recent_blockhash: Hash = self.connection().get_latest_blockhash()?;
+        let (recent_blockhash, last_valid_block_hash) = self
+            .connection()
+            .get_latest_blockhash_with_commitment(CommitmentConfig::confirmed())?;
         let mut final_instructions: Vec<Instruction> = vec![];
 
         // Check if any of the instructions provided set the compute unit price and/or limit, and throw an error if `true`
@@ -288,7 +290,10 @@ impl Helius {
                 message: versioned_message,
             });
 
-            Ok(SmartTransaction::Versioned(versioned_transaction.unwrap()))
+            Ok((
+                SmartTransaction::Versioned(versioned_transaction.unwrap()),
+                last_valid_block_hash,
+            ))
         } else {
             let mut tx: Transaction = Transaction::new_with_payer(&final_instructions, Some(&payer_pubkey));
             tx.try_partial_sign(&config.signers, recent_blockhash)?;
@@ -299,7 +304,10 @@ impl Helius {
 
             legacy_transaction = Some(tx);
 
-            Ok(SmartTransaction::Legacy(legacy_transaction.unwrap()))
+            Ok((
+                SmartTransaction::Legacy(legacy_transaction.unwrap()),
+                last_valid_block_hash,
+            ))
         }
     }
 
@@ -312,7 +320,7 @@ impl Helius {
     /// # Returns
     /// The transaction signature, if successful
     pub async fn send_smart_transaction(&self, config: SmartTransactionConfig<'_>) -> Result<Signature> {
-        let transaction: SmartTransaction = self.create_smart_transaction(&config.create_config).await?;
+        let (transaction, last_valid_block_height) = self.create_smart_transaction(&config.create_config).await?;
 
         // Common logic for sending transactions
         let send_transaction_config: RpcSendTransactionConfig = RpcSendTransactionConfig {
@@ -336,7 +344,9 @@ impl Helius {
         let timeout: Duration = Duration::from_secs(60);
         let start_time: Instant = Instant::now();
 
-        while Instant::now().duration_since(start_time) < timeout {
+        while Instant::now().duration_since(start_time) < timeout
+            || self.connection().get_block_height()? <= last_valid_block_height
+        {
             let result = match &transaction {
                 SmartTransaction::Legacy(tx) => send_result(tx),
                 SmartTransaction::Versioned(tx) => send_versioned_result(tx),
