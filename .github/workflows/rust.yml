@@ -78,6 +78,12 @@ jobs:
       
     - name: Build
       run: cargo build --verbose
+    
+    - name: Save build artifacts
+      uses: actions/upload-artifact@v2
+      with:
+        name: build
+        path: target
 
     - name: Show disk usage after build
       run: df -h
