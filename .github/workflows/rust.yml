@@ -11,7 +11,6 @@ env:
 
 jobs:
   build:
-
     runs-on: ubuntu-latest
     
     permissions:
@@ -28,18 +27,24 @@ jobs:
       with:
         path: ~/.cargo/registry
         key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
-    
+        restore-keys: |
+          ${{ runner.os }}-cargo-registry-
+
     - name: Cache cargo index
       uses: actions/cache@v3
       with:
-          path: ~/.cargo/git
-          key: ${{ runner.os }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
-    
+        path: ~/.cargo/git
+        key: ${{ runner.os }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-cargo-index-
+
     - name: Cache target directory
       uses: actions/cache@v3
       with:
-          path: target
-          key: ${{ runner.os }}-target-${{ hashFiles('**/Cargo.lock') }}
+        path: target
+        key: ${{ runner.os }}-target-${{ hashFiles('**/Cargo.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-target-
 
     - name: Set up Rust
       uses: actions-rs/toolchain@v1
@@ -48,10 +53,10 @@ jobs:
         profile: minimal
         override: true
         components: clippy
-    
+
     - name: Install Protobuf Compiler
       run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
-    
+
     - name: Clean up disk space
       run: |
         sudo apt-get clean
@@ -59,25 +64,24 @@ jobs:
         sudo rm -rf /usr/share/dotnet
         sudo rm -rf /usr/local/lib/android
         sudo rm -rf /opt/ghc
-      
+
     - name: Check formatting
       run: cargo fmt --all -- --check
-    
+
     - name: rust-clippy-check
       uses: giraffate/clippy-action@v1
       with:
-          reporter: 'github-pr-review'
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-      
+        reporter: 'github-pr-review'
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+
     - name: Build
       run: cargo build --verbose
-    
+
     - name: Save build artifacts
       uses: actions/upload-artifact@v2
       with:
         name: build
         path: target
-      
+
     - name: Run tests
       run: cargo test --verbose
-      
