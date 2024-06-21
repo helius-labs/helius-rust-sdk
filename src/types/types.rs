@@ -927,6 +927,7 @@ pub struct CreateCollectionWebhookRequest {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
 pub struct EditWebhookRequest {
     #[serde(skip_serializing)]
     pub webhook_id: String,
