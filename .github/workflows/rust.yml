@@ -24,22 +24,28 @@ jobs:
         fetch-depth: '0'
 
     - name: Cache cargo registry
-      uses: actions/cache@v3
-      with:
-        path: ~/.cargo/registry
-        key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+      run: |
+        timeout 10m bash -c "actions/cache@v3 \
+        with: \
+          path: ~/.cargo/registry \
+          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }} \
+          restore-keys: ${{ runner.os }}-cargo-registry- || echo 'Cache registry step failed or timed out.'"
     
     - name: Cache cargo index
-      uses: actions/cache@v3
-      with:
-          path: ~/.cargo/git
-          key: ${{ runner.os }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
+      run: |
+        timeout 10m bash -c "actions/cache@v3 \
+        with: \
+          path: ~/.cargo/git \
+          key: ${{ runner.os }}-cargo-index-${{ hashFiles('**/Cargo.lock') }} \
+          restore-keys: ${{ runner.os }}-cargo-index- || echo 'Cache index step failed or timed out.'"
     
     - name: Cache target directory
-      uses: actions/cache@v3
-      with:
-          path: target
-          key: ${{ runner.os }}-target-${{ hashFiles('**/Cargo.lock') }}
+      run: |
+        timeout 10m bash -c "actions/cache@v3 \
+        with: \
+          path: target \
+          key: ${{ runner.os }}-target-${{ hashFiles('**/Cargo.lock') }} \
+          restore-keys: ${{ runner.os }}-target- || echo 'Cache target step failed or timed out.'"
 
     - name: Set up Rust
       uses: actions-rs/toolchain@v1
@@ -48,21 +54,42 @@ jobs:
         profile: minimal
         override: true
         components: clippy
-    
+
     - name: Install Protobuf Compiler
       run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
-      
+
+    - name: Clean up disk space before build
+      run: |
+        sudo apt-get clean
+        sudo rm -rf /var/lib/apt/lists/*
+        sudo rm -rf /usr/share/dotnet
+        sudo rm -rf /usr/local/lib/android
+        sudo rm -rf /opt/ghc
+        df -h
+
     - name: Check formatting
       run: cargo fmt --all -- --check
-    
+
     - name: rust-clippy-check
       uses: giraffate/clippy-action@v1
       with:
-          reporter: 'github-pr-review'
-          github_token: ${{ secrets.GITHUB_TOKEN }}
+        reporter: 'github-pr-review'
+        github_token: ${{ secrets.GITHUB_TOKEN }}
       
     - name: Build
       run: cargo build --verbose
-      
+    
+    - name: Save build artifacts
+      uses: actions/upload-artifact@v2
+      with:
+        name: build
+        path: target
+
+    - name: Show disk usage after build
+      run: df -h
+
     - name: Run tests
       run: cargo test --verbose
+
+    - name: Show disk usage after tests
+      run: df -h
