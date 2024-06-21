@@ -68,11 +68,8 @@ jobs:
     - name: Check formatting
       run: cargo fmt --all -- --check
 
-    - name: rust-clippy-check
-      uses: giraffate/clippy-action@v1
-      with:
-        reporter: 'github-pr-review'
-        github_token: ${{ secrets.GITHUB_TOKEN }}
+    - name: Run Clippy
+      run: cargo clippy --all-targets -- -D warnings
 
     - name: Build
       run: cargo build --verbose
@@ -85,3 +82,6 @@ jobs:
 
     - name: Run tests
       run: cargo test --verbose
+
+    - name: Show disk usage
+      run: df -h
