@@ -73,14 +73,16 @@ async fn test_bad_request_with_json_rpc_error() {
         .mock("GET", "/")
         .with_status(400)
         .with_header("content-type", "application/json")
-        .with_body(r#"
+        .with_body(
+            r#"
         {
             "jsonrpc": "2.0",
             "error": {
                 "code": -32603,
                 "message": "internal error: please contact Helius support if this persists"
             }
-        }"#)
+        }"#,
+        )
         .create();
 
     let client: Arc<Client> = Arc::new(Client::new());
@@ -92,11 +94,10 @@ async fn test_bad_request_with_json_rpc_error() {
 
     assert!(response.is_err());
     match response {
-        Err(HeliusError::BadRequest { text, .. }) =>
-            assert_eq!(
-                text,
-                "code: -32603, message: \"internal error: please contact Helius support if this persists\""
-            ),
+        Err(HeliusError::BadRequest { text, .. }) => assert_eq!(
+            text,
+            "code: -32603, message: \"internal error: please contact Helius support if this persists\""
+        ),
         _ => panic!("Expected BadRequest error"),
     }
 

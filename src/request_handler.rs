@@ -1,9 +1,9 @@
 use crate::error::{HeliusError, Result};
 use reqwest::{Client, Method, RequestBuilder, Response, StatusCode, Url};
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use std::fmt::Debug;
 use std::sync::Arc;
-use serde_json::Value;
 
 /// Manages HTTP requests for the `Helius` client
 ///
@@ -105,12 +105,13 @@ impl RequestHandler {
             match body_json {
                 Ok(body) => {
                     let error_message = match body["error"].clone() {
-                        Value::Object(error_value) => {
-                            error_value.into_iter().map(|(k, v)| format!("{}: {}", k, v)).collect::<Vec<String>>().join(", ").to_string()
-                        }
-                        Value::String(error_value) => {
-                            error_value
-                        }
+                        Value::Object(error_value) => error_value
+                            .into_iter()
+                            .map(|(k, v)| format!("{}: {}", k, v))
+                            .collect::<Vec<String>>()
+                            .join(", ")
+                            .to_string(),
+                        Value::String(error_value) => error_value,
                         _ => "Unknown error".to_string(),
                     };
                     Err(HeliusError::from_response_status(status, path, error_message))
