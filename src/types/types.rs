@@ -795,7 +795,7 @@ pub struct GetPriorityFeeEstimateRequest {
 
 #[derive(Serialize, Deserialize, Debug, Default)]
 pub struct MicroLamportPriorityFeeLevels {
-    pub none: f64,
+    pub min: f64,
     pub low: f64,
     pub medium: f64,
     pub high: f64,
