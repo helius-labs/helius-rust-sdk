@@ -69,7 +69,7 @@ impl Helius {
 
         // Simulate the transaction
         let config: RpcSimulateTransactionConfig = RpcSimulateTransactionConfig {
-            sig_verify: true,
+            sig_verify: signers.is_some(),
             ..Default::default()
         };
         let result: Response<RpcSimulateTransactionResult> = self
