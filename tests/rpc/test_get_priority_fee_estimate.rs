@@ -19,7 +19,7 @@ async fn test_get_nft_editions_success() {
         result: GetPriorityFeeEstimateResponse {
             priority_fee_estimate: Some(100.0),
             priority_fee_levels: Some(MicroLamportPriorityFeeLevels {
-                none: 0.0,
+                min: 0.0,
                 low: 10.0,
                 medium: 100.0,
                 high: 500.0,
