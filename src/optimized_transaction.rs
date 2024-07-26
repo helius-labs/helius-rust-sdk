@@ -40,7 +40,7 @@ impl Helius {
         instructions: Vec<Instruction>,
         payer: Pubkey,
         lookup_tables: Vec<AddressLookupTableAccount>,
-        signers: &[&dyn Signer],
+        signers: Option<&[&dyn Signer]>,
     ) -> Result<Option<u64>> {
         // Set the compute budget limit
         let test_instructions: Vec<Instruction> = vec![ComputeBudgetInstruction::set_compute_unit_limit(1_400_000)]
@@ -56,13 +56,20 @@ impl Helius {
             v0::Message::try_compile(&payer, &test_instructions, &lookup_tables, recent_blockhash)?;
         let versioned_message: VersionedMessage = VersionedMessage::V0(v0_message);
 
-        // Create a signed VersionedTransaction
-        let transaction: VersionedTransaction = VersionedTransaction::try_new(versioned_message, signers)
-            .map_err(|e| HeliusError::InvalidInput(format!("Signing error: {:?}", e)))?;
+        // Create a VersionedTransaction (signed or unsigned)
+        let transaction: VersionedTransaction = if let Some(signers) = signers {
+            VersionedTransaction::try_new(versioned_message, signers)
+                .map_err(|e| HeliusError::InvalidInput(format!("Signing error: {:?}", e)))?
+        } else {
+            VersionedTransaction {
+                signatures: vec![],
+                message: versioned_message,
+            }
+        };
 
         // Simulate the transaction
         let config: RpcSimulateTransactionConfig = RpcSimulateTransactionConfig {
-            sig_verify: true,
+            sig_verify: signers.is_some(),
             ..Default::default()
         };
         let result: Response<RpcSimulateTransactionResult> = self
@@ -160,7 +167,7 @@ impl Helius {
                 v0::Message::try_compile(&payer_pubkey, &config.instructions, lookup_tables, recent_blockhash)?;
             let versioned_message: VersionedMessage = VersionedMessage::V0(v0_message);
 
-            let all_signers = if let Some(fee_payer) = config.fee_payer {
+            let all_signers: Vec<&dyn Signer> = if let Some(fee_payer) = config.fee_payer {
                 let mut all_signers: Vec<&dyn Signer> = config.signers.clone();
                 if !all_signers.iter().any(|signer| signer.pubkey() == fee_payer.pubkey()) {
                     all_signers.push(fee_payer);
@@ -238,7 +245,7 @@ impl Helius {
                 updated_instructions,
                 payer_pubkey,
                 config.lookup_tables.clone().unwrap_or_default(),
-                &config.signers,
+                Some(&config.signers),
             )
             .await?;
 
