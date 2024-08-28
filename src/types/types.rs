@@ -16,13 +16,14 @@ use solana_sdk::{address_lookup_table::AddressLookupTableAccount, instruction::I
 pub enum Cluster {
     Devnet,
     MainnetBeta,
+    StakedMainnetBeta
 }
 
 /// Stores the API and RPC endpoint URLs for a specific Helius cluster
 #[derive(Debug, Clone)]
 pub struct HeliusEndpoints {
     pub api: String,
-    pub rpc: String,
+    pub rpc: String
 }
 
 impl HeliusEndpoints {
@@ -30,12 +31,16 @@ impl HeliusEndpoints {
         match cluster {
             Cluster::Devnet => HeliusEndpoints {
                 api: "https://api-devnet.helius-rpc.com/".to_string(),
-                rpc: "https://devnet.helius-rpc.com/".to_string(),
+                rpc: "https://devnet.helius-rpc.com/".to_string()
             },
             Cluster::MainnetBeta => HeliusEndpoints {
                 api: "https://api-mainnet.helius-rpc.com/".to_string(),
-                rpc: "https://mainnet.helius-rpc.com/".to_string(),
+                rpc: "https://mainnet.helius-rpc.com/".to_string()
             },
+            Cluster::StakedMainnetBeta => HeliusEndpoints {
+                api: "https://api-mainnet.helius-rpc.com/".to_string(),
+                rpc: "https://staked.helius-rpc.com/".to_string()
+            }
         }
     }
 }
