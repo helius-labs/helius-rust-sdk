@@ -149,6 +149,9 @@ impl MintApiAuthority {
             Cluster::MainnetBeta => Ok(MintApiAuthority::Mainnet(
                 "HnT5KVAywGgQDhmh6Usk4bxRg4RwKxCK4jmECyaDth5R",
             )),
+            Cluster::StakedMainnetBeta => Ok(MintApiAuthority::Mainnet(
+                "HnT5KVAywGgQDhmh6Usk4bxRg4RwKxCK4jmECyaDth5R",
+            )),
         }
     }
 }

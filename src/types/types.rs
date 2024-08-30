@@ -16,6 +16,7 @@ use solana_sdk::{address_lookup_table::AddressLookupTableAccount, instruction::I
 pub enum Cluster {
     Devnet,
     MainnetBeta,
+    StakedMainnetBeta,
 }
 
 /// Stores the API and RPC endpoint URLs for a specific Helius cluster
@@ -35,6 +36,10 @@ impl HeliusEndpoints {
             Cluster::MainnetBeta => HeliusEndpoints {
                 api: "https://api-mainnet.helius-rpc.com/".to_string(),
                 rpc: "https://mainnet.helius-rpc.com/".to_string(),
+            },
+            Cluster::StakedMainnetBeta => HeliusEndpoints {
+                api: "https://api-mainnet.helius-rpc.com/".to_string(),
+                rpc: "https://staked.helius-rpc.com/".to_string(),
             },
         }
     }
