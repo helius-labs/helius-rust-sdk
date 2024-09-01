@@ -17,13 +17,13 @@ where `x.y.z` is your desired version. Alternatively, use `cargo add helius` to 
 Remember to run `cargo update` regularly to fetch the latest version of the SDK.
 
 ### TLS Options
-By default, this SDK uses the native TLS implementation. It is used as follows:
+The Helius Rust SDK uses the native TLS implementation by default via:
 ```toml
 [dependencies]
 helius = "x.y.z"
 ```
 
-To use `rustls` instead of the native TLS implementation, add the following to your `Cargo.toml`:
+However, the SDK also supports `rustls`. Add the following to your `Cargo.toml` to use `rustls` instead of the native TLS implementation:
 ```toml
 [dependencies]
 helius = { version = "x.y.z", default-features = false, features = ["rustls"] }
