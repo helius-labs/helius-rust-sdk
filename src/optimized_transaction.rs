@@ -401,7 +401,8 @@ impl Helius {
     ///
     /// # Errors
     ///
-    /// This function will return an error if keypair creation from seeds fails or the underlying `send_smart_transaction` call fails
+    /// This function will return an error if keypair creation from seeds fails, the underlying `send_smart_transaction` call fails,
+    /// or no signer seeds are provided
     /// 
     /// # Notes
     ///
