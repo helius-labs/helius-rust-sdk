@@ -424,13 +424,11 @@ impl Helius {
             .map(|seed| keypair_from_seed(&seed).expect("Failed to create keypair from seed"))
             .collect();
 
-        let fee_payer: Option<Keypair> = create_config
-            .fee_payer_seed
-            .map(|seed| keypair_from_seed(&seed).expect("Failed to create fee payer keypair from seed"));
-
         // Determine the fee payer
-        let fee_payer_index: usize = if fee_payer.is_some() {
-            signers.push(fee_payer.unwrap());
+        let fee_payer_index: usize = if let Some(fee_payer_seed) = create_config.fee_payer_seed {
+            let fee_payer: Keypair =
+                keypair_from_seed(&fee_payer_seed).expect("Failed to create fee payer keypair from seed");
+            signers.push(fee_payer);
             signers.len() - 1 // Index of the last signer (fee payer)
         } else {
             0 // Index of the first signer
