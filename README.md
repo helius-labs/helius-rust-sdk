@@ -16,6 +16,21 @@ where `x.y.z` is your desired version. Alternatively, use `cargo add helius` to 
 
 Remember to run `cargo update` regularly to fetch the latest version of the SDK.
 
+### TLS Options
+By default, this SDK uses the native TLS implementation. It is used as follows:
+```toml
+[dependencies]
+helius = "x.y.z"
+```
+
+To use `rustls` instead of the native TLS implementation, add the following to your `Cargo.toml`:
+```toml
+[dependencies]
+helius = { version = "x.y.z", default-features = false, features = ["rustls"] }
+```
+
+Using `rustls` may be preferred in environments where OpenSSL is not available or when a pure Rust TLS implementation is desired. However, it may not support all the same features as the native TLS implementation
+
 ## Usage
 ### `Helius`
 The SDK provides a [`Helius`](https://github.com/helius-labs/helius-rust-sdk/blob/dev/src/client.rs) instance that can be configured with an API key and a given Solana cluster. Developers can generate a new API key on the [Helius Developer Dashboard](https://dev.helius.xyz/dashboard/app). This instance acts as the main entry point for interacting with the SDK by providing methods to access different Solana and RPC client functionalities. The following code is an example of how to use the SDK to fetch info on [Mad Lad #8420](https://explorer.solana.com/address/F9Lw3ki3hJ7PF9HQXsBzoY8GyE6sPoEZZdXJBsTTD2rk?network=mainnet):
