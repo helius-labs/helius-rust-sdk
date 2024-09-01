@@ -123,6 +123,9 @@ pub enum HeliusError {
 
     #[error("Url parse error")]
     UrlParseError(#[from] url::ParseError),
+
+    #[error("TLS error: {0}")]
+    TlsError(String),
 }
 
 impl HeliusError {
@@ -153,6 +156,16 @@ impl From<SerdeJsonError> for HeliusError {
 impl From<SanitizeError> for HeliusError {
     fn from(err: SanitizeError) -> Self {
         HeliusError::InvalidInput(err.to_string())
+    }
+}
+
+impl From<ReqwestError> for HeliusError {
+    fn from(err: reqwest::Error) -> Self {
+        if err.is_builder() {
+            HeliusError::TlsError(err.to_string())
+        } else {
+            HeliusError::ReqwestError(err)
+        }
     }
 }
 
