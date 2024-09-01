@@ -403,7 +403,7 @@ impl Helius {
     ///
     /// This function will return an error if keypair creation from seeds fails, the underlying `send_smart_transaction` call fails,
     /// or no signer seeds are provided
-    /// 
+    ///
     /// # Notes
     ///
     /// If no `fee_payer_seed` is provided, the first signer (i.e., derived from the first seed in `signer_seeds`) will be used as the fee payer
@@ -413,9 +413,11 @@ impl Helius {
         send_options: Option<RpcSendTransactionConfig>,
     ) -> Result<Signature> {
         if create_config.signer_seeds.is_empty() {
-            return Err(HeliusError::InvalidInput("At least one signer seed must be provided".to_string()));
+            return Err(HeliusError::InvalidInput(
+                "At least one signer seed must be provided".to_string(),
+            ));
         }
-        
+
         let mut signers: Vec<Keypair> = create_config
             .signer_seeds
             .into_iter()
