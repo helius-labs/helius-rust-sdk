@@ -46,8 +46,9 @@ impl Helius {
     /// ```
     pub fn new(api_key: &str, cluster: Cluster) -> Result<Self> {
         let config: Arc<Config> = Arc::new(Config::new(api_key, cluster)?);
-        let client: Client = Client::new();
+        let client: Client = Client::builder().build().map_err(HeliusError::ReqwestError)?;
         let rpc_client: Arc<RpcClient> = Arc::new(RpcClient::new(Arc::new(client.clone()), config.clone())?);
+
         Ok(Helius {
             config,
             client,
@@ -75,7 +76,7 @@ impl Helius {
     /// ```
     pub fn new_with_async_solana(api_key: &str, cluster: Cluster) -> Result<Self> {
         let config: Arc<Config> = Arc::new(Config::new(api_key, cluster)?);
-        let client: Client = Client::new();
+        let client: Client = Client::builder().build().map_err(HeliusError::ReqwestError)?;
         let url: String = format!("{}/?api-key={}", config.endpoints.rpc, config.api_key);
         let async_solana_client: Arc<AsyncSolanaRpcClient> = Arc::new(AsyncSolanaRpcClient::new(url));
 
@@ -98,10 +99,11 @@ impl Helius {
     /// An instance of `Helius` if successful. A `HeliusError` is returned if an error occurs during configuration or initialization of the HTTP, RPC, or WS client
     pub async fn new_with_ws(api_key: &str, cluster: Cluster) -> Result<Self> {
         let config: Arc<Config> = Arc::new(Config::new(api_key, cluster)?);
-        let client: Client = Client::new();
+        let client: Client = Client::builder().build().map_err(HeliusError::ReqwestError)?;
         let rpc_client: Arc<RpcClient> = Arc::new(RpcClient::new(Arc::new(client.clone()), config.clone())?);
         let wss: String = format!("{}{}", ENHANCED_WEBSOCKET_URL, api_key);
         let ws_client: Arc<EnhancedWebsocket> = Arc::new(EnhancedWebsocket::new(&wss).await?);
+
         Ok(Helius {
             config,
             client,
