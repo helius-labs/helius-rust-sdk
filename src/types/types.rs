@@ -989,3 +989,32 @@ pub struct BasicRequest {
     pub method: String,
     pub params: Vec<Vec<String>>,
 }
+
+#[derive(Clone)]
+pub struct CreateSmartTransactionSeedConfig {
+    pub instructions: Vec<Instruction>,
+    pub signer_seeds: Vec<[u8; 32]>,
+    pub fee_payer_seed: Option<[u8; 32]>,
+    pub lookup_tables: Option<Vec<AddressLookupTableAccount>>,
+}
+
+impl CreateSmartTransactionSeedConfig {
+    pub fn new(instructions: Vec<Instruction>, signer_seeds: Vec<[u8; 32]>) -> Self {
+        Self {
+            instructions,
+            signer_seeds,
+            fee_payer_seed: None,
+            lookup_tables: None,
+        }
+    }
+
+    pub fn with_fee_payer_seed(mut self, seed: [u8; 32]) -> Self {
+        self.fee_payer_seed = Some(seed);
+        self
+    }
+
+    pub fn with_lookup_tables(mut self, lookup_tables: Vec<AddressLookupTableAccount>) -> Self {
+        self.lookup_tables = Some(lookup_tables);
+        self
+    }
+}

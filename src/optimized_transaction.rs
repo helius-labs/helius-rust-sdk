@@ -1,7 +1,7 @@
 use crate::error::{HeliusError, Result};
 use crate::types::{
-    CreateSmartTransactionConfig, GetPriorityFeeEstimateOptions, GetPriorityFeeEstimateRequest,
-    GetPriorityFeeEstimateResponse, SmartTransaction, SmartTransactionConfig,
+    CreateSmartTransactionConfig, CreateSmartTransactionSeedConfig, GetPriorityFeeEstimateOptions,
+    GetPriorityFeeEstimateRequest, GetPriorityFeeEstimateResponse, SmartTransaction, SmartTransactionConfig,
 };
 use crate::Helius;
 
@@ -9,6 +9,7 @@ use bincode::{serialize, ErrorKind};
 use reqwest::StatusCode;
 use solana_client::rpc_config::{RpcSendTransactionConfig, RpcSimulateTransactionConfig};
 use solana_client::rpc_response::{Response, RpcSimulateTransactionResult};
+use solana_sdk::signature::{keypair_from_seed, Keypair};
 use solana_sdk::{
     address_lookup_table::AddressLookupTableAccount,
     bs58::encode,
@@ -377,5 +378,76 @@ impl Helius {
             code: StatusCode::REQUEST_TIMEOUT,
             text: "Transaction failed to confirm in 60s".to_string(),
         })
+    }
+
+    /// Sends a smart transaction using seed bytes
+    ///
+    /// This method allows for sending smart transactions in asynchronous contexts
+    /// where the Signer trait's lack of Send + Sync would otherwise cause issues.
+    /// It creates Keypairs from the provided seed bytes and uses them to sign the transaction.
+    ///
+    /// # Arguments
+    ///
+    /// * `create_config` - A `CreateSmartTransactionSeedConfig` containing:
+    ///   - `instructions`: The instructions to be executed in the transaction.
+    ///   - `signer_seeds`: Seed bytes for generating signer keypairs.
+    ///   - `fee_payer_seed`: Optional seed bytes for generating the fee payer keypair.
+    ///   - `lookup_tables`: Optional address lookup tables for the transaction.
+    /// * `send_options` - Optional `RpcSendTransactionConfig` for sending the transaction.
+    ///
+    /// # Returns
+    ///
+    /// A `Result<Signature>` containing the transaction signature if successful, or an error if not.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if keypair creation from seeds fails, the underlying `send_smart_transaction` call fails,
+    /// or no signer seeds are provided
+    ///
+    /// # Notes
+    ///
+    /// If no `fee_payer_seed` is provided, the first signer (i.e., derived from the first seed in `signer_seeds`) will be used as the fee payer
+    pub async fn send_smart_transaction_with_seeds(
+        &self,
+        create_config: CreateSmartTransactionSeedConfig,
+        send_options: Option<RpcSendTransactionConfig>,
+    ) -> Result<Signature> {
+        if create_config.signer_seeds.is_empty() {
+            return Err(HeliusError::InvalidInput(
+                "At least one signer seed must be provided".to_string(),
+            ));
+        }
+
+        let mut signers: Vec<Keypair> = create_config
+            .signer_seeds
+            .into_iter()
+            .map(|seed| keypair_from_seed(&seed).expect("Failed to create keypair from seed"))
+            .collect();
+
+        // Determine the fee payer
+        let fee_payer_index: usize = if let Some(fee_payer_seed) = create_config.fee_payer_seed {
+            let fee_payer: Keypair =
+                keypair_from_seed(&fee_payer_seed).expect("Failed to create fee payer keypair from seed");
+            signers.push(fee_payer);
+            signers.len() - 1 // Index of the last signer (fee payer)
+        } else {
+            0 // Index of the first signer
+        };
+
+        let signer_refs: Vec<&dyn Signer> = signers.iter().map(|keypair| keypair as &dyn Signer).collect();
+
+        let create_smart_transaction_config: CreateSmartTransactionConfig<'_> = CreateSmartTransactionConfig {
+            instructions: create_config.instructions,
+            signers: signer_refs,
+            lookup_tables: create_config.lookup_tables,
+            fee_payer: Some(&signers[fee_payer_index] as &dyn Signer),
+        };
+
+        let smart_transaction_config: SmartTransactionConfig<'_> = SmartTransactionConfig {
+            create_config: create_smart_transaction_config,
+            send_options: send_options.unwrap_or_default(),
+        };
+
+        self.send_smart_transaction(smart_transaction_config).await
     }
 }

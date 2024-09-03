@@ -122,6 +122,7 @@ Our SDK is designed to provide a seamless developer experience when building on 
 - [`get_compute_units`](https://github.com/helius-labs/helius-rust-sdk/blob/a79a751e1a064125010bdb359068a366d635d005/src/optimized_transaction.rs#L29-L75) - Simulates a transaction to get the total compute units consumed
 - [`poll_transaction_confirmation`](https://github.com/helius-labs/helius-rust-sdk/blob/a79a751e1a064125010bdb359068a366d635d005/src/optimized_transaction.rs#L77-L112) - Polls a transaction to check whether it has been confirmed in 5 second intervals with a 15 second timeout
 - [`send_smart_transaction`](https://github.com/helius-labs/helius-rust-sdk/blob/705d66fb7d4004fc32c2a5f0d6ca4a1f2a7b175d/src/optimized_transaction.rs#L314-L374) - Builds and sends an optimized transaction, and handles its confirmation status
+- [`send_smart_transaction_with_seeds`]() - Sends a smart transaction using seed bytes
 
 ### Jito Smart Transactions and Helper Methods
 - [`add_tip_instruction`](https://github.com/helius-labs/helius-rust-sdk/blob/02b351a5ee3fe16a36078b40f92dc72d0ad077ed/src/jito.rs#L66-L83) - Adds a tip instruction to the instructions provided
