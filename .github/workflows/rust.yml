@@ -46,7 +46,7 @@ jobs:
           path: target \
           key: ${{ runner.os }}-target-${{ hashFiles('**/Cargo.lock') }} \
           restore-keys: ${{ runner.os }}-target- || echo 'Cache target step failed or timed out.'"
-
+    
     - name: Set up Rust
       uses: actions-rs/toolchain@v1
       with:
@@ -80,7 +80,7 @@ jobs:
       run: cargo build --verbose
     
     - name: Save build artifacts
-      uses: actions/upload-artifact@v2
+      uses: actions/upload-artifact@v4
       with:
         name: build
         path: target
