@@ -34,11 +34,11 @@ impl HeliusEndpoints {
                 rpc: "https://devnet.helius-rpc.com/".to_string(),
             },
             Cluster::MainnetBeta => HeliusEndpoints {
-                api: "https://api.helius-rpc.xyz/".to_string(),
+                api: "https://api-mainnet.helius-rpc.com/".to_string(),
                 rpc: "https://mainnet.helius-rpc.com/".to_string(),
             },
             Cluster::StakedMainnetBeta => HeliusEndpoints {
-                api: "https://api.helius-rpc.xyz/".to_string(),
+                api: "https://api-mainnet.helius-rpc.com/".to_string(),
                 rpc: "https://staked.helius-rpc.com/".to_string(),
             },
         }
