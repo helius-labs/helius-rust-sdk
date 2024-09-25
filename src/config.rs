@@ -57,7 +57,7 @@ impl Config {
         let mut rpc_url_with_api_key: Url = self.endpoints.rpc.parse()?;
         rpc_url_with_api_key
             .query_pairs_mut()
-            .append_pair("api_key", &self.api_key)
+            .append_pair("api-key", &self.api_key)
             .finish();
 
         let reqwest_client = Client::new();
