@@ -29,7 +29,7 @@ pub struct EnhancedTransaction {
 pub struct AccountData {
     pub account: String,
     #[serde(deserialize_with = "crate::utils::serde::deserialize_opt_from_str")]
-    pub native_balance_change: Option<u64>,
+    pub native_balance_change: Option<i64>,
     #[deprecated(
         note = "Note this field was added by mistake and is always None, use native_balance_change instead",
         since = "0.2.2"
