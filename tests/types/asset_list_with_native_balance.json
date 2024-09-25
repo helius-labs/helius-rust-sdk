@@ -1,0 +1,108 @@
+{
+    "total": 1,
+    "limit": 1000,
+    "cursor": "eeHNoMJoFxNE9sGgyb3ZU4yJs65ekMX4mRUXWkVB3KV",
+    "items": [
+        {
+            "interface": "V1_NFT",
+            "id": "JDPM1gUHdke4pHuABnNv51sVGw2ZeuDbyPhKMFnxgGxn",
+            "content": {
+                "$schema": "https://schema.metaplex.com/nft1.0.json",
+                "json_uri": "https://www.hi-hi.vip/json/wifdrop6.json",
+                "files": [
+                    {
+                        "uri": "https://img.hi-hi.vip/json/img/wif.gif",
+                        "cdn_uri": "https://cdn.helius-rpc.com/cdn-cgi/image//https://img.hi-hi.vip/json/img/wif.gif",
+                        "mime": "image/gif"
+                    }
+                ],
+                "metadata": {
+                    "attributes": [
+                        {
+                            "value": "https://wifdrop.com",
+                            "trait_type": "Website"
+                        },
+                        {
+                            "value": "True",
+                            "trait_type": "Verified"
+                        },
+                        {
+                            "value": "3,000+ WIF",
+                            "trait_type": "Amount"
+                        },
+                        {
+                            "value": "35 minutes!",
+                            "trait_type": "Time Left"
+                        }
+                    ],
+                    "description": "Random Drop event! https://WIFDROP.com",
+                    "name": "3000$ WIF Lucky Drop WIFDROP.com",
+                    "symbol": "WFD",
+                    "token_standard": "NonFungible"
+                },
+                "links": {
+                    "external_url": "https://Wifdrop.com",
+                    "image": "https://img.hi-hi.vip/json/img/wif.gif"
+                }
+            },
+            "authorities": [
+                {
+                    "address": "G1GmNbuEwkmxvawJb2tRa1DAxScGPeXydmCVF2roaDEw",
+                    "scopes": [
+                        "full"
+                    ]
+                }
+            ],
+            "compression": {
+                "eligible": false,
+                "compressed": true,
+                "data_hash": "38H9vrizmkU7s7eRr4nXWxJuTc2GivGSa8e5yw5fyQy8",
+                "creator_hash": "H6fmhtvYtsLtsXNtNBsniiSZXkV1J4yP35zgZVzcBb3b",
+                "asset_hash": "HEmRb8ED5EuyXTitH1bJcWgL6HDLHY95c728Am5A1JT5",
+                "tree": "3Grymv861hLiCa8cefye5UP5fkAirbtodvkjoe9dH2iV",
+                "seq": 20911,
+                "leaf_id": 20908
+            },
+            "grouping": [
+                {
+                    "group_key": "collection",
+                    "group_value": "HPc65ZxbkxdaWZrQBGKYhctCShJoSLWd7Dtkh2eicRwC"
+                }
+            ],
+            "royalty": {
+                "royalty_model": "creators",
+                "target": null,
+                "percent": 0.0,
+                "basis_points": 0,
+                "primary_sale_happened": false,
+                "locked": false
+            },
+            "creators": [
+                {
+                    "address": "H17XJzC1N5o15pwB9gMZ8RRHhmNVMbt4PXiHj53epf1n",
+                    "share": 100,
+                    "verified": true
+                }
+            ],
+            "ownership": {
+                "frozen": false,
+                "delegated": true,
+                "delegate": "H17XJzC1N5o15pwB9gMZ8RRHhmNVMbt4PXiHj53epf1n",
+                "ownership_model": "single",
+                "owner": "HmBek5ZndbgLsWLUqRjXBauXjTupfxZrAGnuL9FJhsBP"
+            },
+            "supply": {
+                "print_max_supply": 0,
+                "print_current_supply": 0,
+                "edition_nonce": 0
+            },
+            "mutable": true,
+            "burnt": false
+        }
+    ],
+    "nativeBalance": {
+        "lamports": 47770720,
+        "price_per_sol": 150.3314666748047,
+        "total_price": 7.1814424017114264
+    }
+}

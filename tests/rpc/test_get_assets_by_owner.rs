@@ -134,6 +134,7 @@ async fn test_get_assets_by_owner_success() {
                 mpl_core_info: None,
             }],
             errors: None,
+            native_balance: None,
         },
         id: "1".to_string(),
     };

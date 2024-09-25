@@ -1,7 +1,7 @@
 use super::{
     enums::{AssetSortBy, AssetSortDirection, Context, Interface, OwnershipModel, RoyaltyModel, Scope, UseMethod},
-    AccountWebhookEncoding, CollectionIdentifier, PriorityLevel, SearchAssetsOptions, SearchConditionType, TokenType,
-    TransactionStatus, TransactionType, UiTransactionEncoding, WebhookType,
+    AccountWebhookEncoding, CollectionIdentifier, NativeBalance, PriorityLevel, SearchAssetsOptions,
+    SearchConditionType, TokenType, TransactionStatus, TransactionType, UiTransactionEncoding, WebhookType,
 };
 use crate::types::{DisplayOptions, GetAssetOptions};
 // use chrono::{DateTime, Utc};
@@ -288,6 +288,8 @@ pub struct AssetList {
     pub items: Vec<Asset>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub errors: Option<Vec<AssetError>>,
+    #[serde(skip_serializing_if = "Option::is_none", rename = "nativeBalance")]
+    pub native_balance: Option<NativeBalance>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Default)]

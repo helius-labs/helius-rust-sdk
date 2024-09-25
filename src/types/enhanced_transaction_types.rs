@@ -164,6 +164,15 @@ pub struct NativeBalanceChange {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
+pub struct NativeBalance {
+    // helius does not return this field if account don't exist on chain
+    #[serde(default)]
+    pub lamports: u64,
+    pub price_per_sol: Option<f64>,
+    pub total_price: Option<f64>,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
 pub struct ProgramInfo {
     pub source: Source,
     pub account: String,
