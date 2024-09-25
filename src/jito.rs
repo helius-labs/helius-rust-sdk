@@ -13,7 +13,6 @@ use crate::types::{
 use crate::Helius;
 
 use bincode::{serialize, ErrorKind};
-use chrono::format::parse;
 use phf::phf_map;
 use rand::seq::SliceRandom;
 use reqwest::{Method, StatusCode, Url};
