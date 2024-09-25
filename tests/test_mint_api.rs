@@ -89,7 +89,7 @@ async fn test_mint_compressed_nft() {
         mint_response.signature,
         "rqs2XsREo7Q15dmPgWmneYo9NUqA2z1RrvYYMoynJWtr3rUfqBy9gZhXorWwLGowZ63Sodnciwt62Y79F7CSnSu"
     );
-    assert_eq!(mint_response.minted, true);
+    assert!(mint_response.minted);
     assert_eq!(
         mint_response.asset_id,
         Some("FhYMMur2tMTWXyWEvHKX1zqzMkGSJk4sXATgrcnqAdGL".to_string())

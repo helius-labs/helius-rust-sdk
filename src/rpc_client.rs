@@ -231,9 +231,9 @@ impl RpcClient {
     ///
     /// # Arguments
     /// * `request` - A struct that includes the following:
-    /// `transaction` - Optionally, the serialized transaction for which the fee estimate is requested
-    /// `account_key` - Optionally, a list of account public keys involved in a given transaction to help determine the necessary priority fee based on the accounts' recent activity
-    /// `options` - Additional options for fine-tuning the request, such as the desired priority level or the number of slots to look back and consider for the estimate
+    ///   `transaction` - Optionally, the serialized transaction for which the fee estimate is requested
+    ///   `account_key` - Optionally, a list of account public keys involved in a given transaction to help determine the necessary priority fee based on the accounts' recent activity
+    ///   `options` - Additional options for fine-tuning the request, such as the desired priority level or the number of slots to look back and consider for the estimate
     ///
     /// # Returns
     /// A `Result` that, if successful, wraps the `GetPriorityFeeEstimateResponse` struct, containing:

@@ -102,7 +102,7 @@ impl Helius {
         }
 
         let tip_amount: u64 = tip_amount.unwrap_or(1000);
-        let random_tip_account: &str = *JITO_TIP_ACCOUNTS.choose(&mut rand::thread_rng()).unwrap();
+        let random_tip_account: &str = JITO_TIP_ACCOUNTS.choose(&mut rand::thread_rng()).unwrap();
         let payer_key: Pubkey = config
             .fee_payer
             .map_or_else(|| config.signers[0].pubkey(), |signer| signer.pubkey());
@@ -224,7 +224,7 @@ impl Helius {
 
         let tip: u64 = tip_amount.unwrap_or(1000);
         let user_provided_region: &str = region.unwrap_or("Default");
-        let jito_region: &str = *JITO_API_URLS
+        let jito_region: &str = JITO_API_URLS
             .get(user_provided_region)
             .ok_or_else(|| HeliusError::InvalidInput("Invalid Jito region".to_string()))?;
         let jito_api_url_string: String = format!("{}/api/v1/bundles", jito_region);

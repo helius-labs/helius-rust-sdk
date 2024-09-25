@@ -122,7 +122,7 @@ impl Helius {
     ///
     /// # Arguments
     /// * `config` - The configuration for the smart transaction, which includes the transaction's instructions, signers, and lookup tables, depending on
-    /// whether it's a legacy or versioned smart transaction. The transaction's send configuration can also be changed, if provided
+    ///    whether it's a legacy or versioned smart transaction. The transaction's send configuration can also be changed, if provided
     ///
     /// # Returns
     /// An optimized `SmartTransaction` (i.e., `Transaction` or `VersionedTransaction`) and the `last_valid_block_height`
@@ -323,7 +323,7 @@ impl Helius {
     ///
     /// # Arguments
     /// * `config` - The configuration for the smart transaction, which includes the transaction's instructions, signers, and lookup tables, depending on
-    /// whether it's a legacy or versioned smart transaction. The transaction's send configuration can also be changed, if provided
+    ///   whether it's a legacy or versioned smart transaction. The transaction's send configuration can also be changed, if provided
     ///
     /// # Returns
     /// The transaction signature, if successful
