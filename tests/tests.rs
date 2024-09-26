@@ -4,6 +4,10 @@ mod utils {
     mod test_make_keypairs;
 }
 
+mod types {
+    mod deserialize_enhanced_tx;
+}
+
 mod rpc {
     mod test_get_asset;
     mod test_get_asset_batch;

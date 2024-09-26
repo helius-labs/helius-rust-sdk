@@ -1,0 +1,52 @@
+{
+    "description": "7mHVPmoTJQZUGDHpWHRr2dV2e9UBaGknopjh3AdJpj89 transferred 0.05008025 SOL to BZkAJnd9QaNWgAXkTjNmKvYiAGXVAzhWZHJpJgo6RsAt.",
+    "type": "TRANSFER",
+    "source": "SYSTEM_PROGRAM",
+    "fee": 5000,
+    "feePayer": "7mHVPmoTJQZUGDHpWHRr2dV2e9UBaGknopjh3AdJpj89",
+    "signature": "ArRXvQdphogFmmuULMjHhk1nBV7vhjHwQxUbKAEkexPJYWmeFQXt5ycoyA2wKMTN9STdtHJ1Nm7d9csjC1oDd32",
+    "slot": 289356858,
+    "timestamp": 1726146439,
+    "tokenTransfers": [],
+    "nativeTransfers": [
+        {
+            "fromUserAccount": "7mHVPmoTJQZUGDHpWHRr2dV2e9UBaGknopjh3AdJpj89",
+            "toUserAccount": "BZkAJnd9QaNWgAXkTjNmKvYiAGXVAzhWZHJpJgo6RsAt",
+            "amount": 50080250
+        }
+    ],
+    "accountData": [
+        {
+            "account": "7mHVPmoTJQZUGDHpWHRr2dV2e9UBaGknopjh3AdJpj89",
+            "nativeBalanceChange": -5000,
+            "tokenBalanceChanges": []
+        },
+        {
+            "account": "BZkAJnd9QaNWgAXkTjNmKvYiAGXVAzhWZHJpJgo6RsAt",
+            "nativeBalanceChange": 0,
+            "tokenBalanceChanges": []
+        },
+        {
+            "account": "11111111111111111111111111111111",
+            "nativeBalanceChange": 0,
+            "tokenBalanceChanges": []
+        }
+    ],
+    "transactionError": {
+        "InsufficientFundsForRent": {
+            "account_index": 0
+        }
+    },
+    "instructions": [
+        {
+            "accounts": [
+                "7mHVPmoTJQZUGDHpWHRr2dV2e9UBaGknopjh3AdJpj89",
+                "BZkAJnd9QaNWgAXkTjNmKvYiAGXVAzhWZHJpJgo6RsAt"
+            ],
+            "data": "3Bxs4ihZh9cqzbLb",
+            "programId": "11111111111111111111111111111111",
+            "innerInstructions": []
+        }
+    ],
+    "events": {}
+}

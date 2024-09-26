@@ -77,8 +77,11 @@ pub struct TokenTransfer {
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct TransactionError {
-    #[serde(rename = "InstructionError")]
+    #[serde(default, rename = "InstructionError")]
     pub instruciton_error: serde_json::Value,
+    // TODO adding below allow to handle other errors too but adding this field is breaking change as all other fields are pub
+    // #[serde(flatten)]
+    // other: serde_json::Value,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
