@@ -146,6 +146,8 @@ impl Helius {
     pub fn ws(&self) -> Option<Arc<EnhancedWebsocket>> {
         self.ws_client.clone()
     }
+
+    pub fn config(&self) -> Arc<Config> { self.config.clone() }
 }
 
 /// A wrapper around the asynchronous Solana RPC client that provides thread-safe access
