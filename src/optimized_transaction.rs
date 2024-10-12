@@ -22,6 +22,7 @@ use solana_sdk::{
     signature::{Signature, Signer},
     transaction::{Transaction, VersionedTransaction},
 };
+use solana_transaction_status::TransactionConfirmationStatus;
 use std::time::{Duration, Instant};
 use tokio::time::sleep;
 
@@ -104,9 +105,7 @@ impl Helius {
                 });
             }
 
-            let status = self
-                .connection()
-                .get_signature_statuses(&[txt_sig])?;
+            let status = self.connection().get_signature_statuses(&[txt_sig])?;
 
             match status.value[0].clone() {
                 Some(status) => {
