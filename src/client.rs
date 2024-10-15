@@ -79,7 +79,6 @@ impl Helius {
         let client: Client = Client::builder().build().map_err(HeliusError::ReqwestError)?;
         let url: String = format!("{}/?api-key={}", config.endpoints.rpc, config.api_key);
         let async_solana_client: Arc<AsyncSolanaRpcClient> = Arc::new(AsyncSolanaRpcClient::new(url));
-
         Ok(Helius {
             config: config.clone(),
             client: client.clone(),
