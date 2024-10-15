@@ -160,7 +160,6 @@ async fn test_get_asset_proof_failure() {
     assert!(result.is_err(), "Expected an error but got success");
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -191,8 +190,7 @@ mod tests {
         let cluster = Cluster::Devnet;
         let mint_api_authority = MintApiAuthority::from_cluster(&cluster);
 
-        let expected_pubkey =
-            Pubkey::from_str("2LbAtCJSaHqTnP9M5QSjvAMXk79RNLusFspFN5Ew67TC").unwrap();
+        let expected_pubkey = Pubkey::from_str("2LbAtCJSaHqTnP9M5QSjvAMXk79RNLusFspFN5Ew67TC").unwrap();
 
         match mint_api_authority {
             MintApiAuthority::Devnet(pubkey) => {
@@ -204,8 +202,7 @@ mod tests {
         let cluster = Cluster::MainnetBeta;
         let mint_api_authority = MintApiAuthority::from_cluster(&cluster);
 
-        let expected_pubkey =
-            Pubkey::from_str("HnT5KVAywGgQDhmh6Usk4bxRg4RwKxCK4jmECyaDth5R").unwrap();
+        let expected_pubkey = Pubkey::from_str("HnT5KVAywGgQDhmh6Usk4bxRg4RwKxCK4jmECyaDth5R").unwrap();
 
         match mint_api_authority {
             MintApiAuthority::Mainnet(pubkey) => {
@@ -217,8 +214,7 @@ mod tests {
         let cluster = Cluster::StakedMainnetBeta;
         let mint_api_authority = MintApiAuthority::from_cluster(&cluster);
 
-        let expected_pubkey =
-            Pubkey::from_str("HnT5KVAywGgQDhmh6Usk4bxRg4RwKxCK4jmECyaDth5R").unwrap();
+        let expected_pubkey = Pubkey::from_str("HnT5KVAywGgQDhmh6Usk4bxRg4RwKxCK4jmECyaDth5R").unwrap();
 
         match mint_api_authority {
             MintApiAuthority::Mainnet(pubkey) => {

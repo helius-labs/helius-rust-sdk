@@ -1,11 +1,11 @@
+use crate::error::Result;
+use crate::types::{MintCompressedNftRequest, MintResponse};
+use crate::utils::collection_authority::revoke_collection_authority_instruction;
+use crate::Helius;
 use solana_program::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, Signature};
 use solana_sdk::signer::Signer;
 use solana_sdk::transaction::Transaction;
-use crate::error::Result;
-use crate::types::{MintCompressedNftRequest, MintResponse};
-use crate::Helius;
-use crate::utils::collection_authority::revoke_collection_authority_instruction;
 
 impl Helius {
     /// The easiest way to mint a compressed NFT (cNFT)
@@ -34,23 +34,21 @@ impl Helius {
         collection_mint: Pubkey,
         delegated_collection_authority: Option<Pubkey>,
         revoke_authority_keypair: &Keypair,
-        payer_keypair: Option<&Keypair>
+        payer_keypair: Option<&Keypair>,
     ) -> Result<Signature> {
-        let collection_authority = delegated_collection_authority
-            .unwrap_or(self.config().mint_api_authority().into());
-        let revoke_instruction = revoke_collection_authority_instruction(collection_mint, collection_authority, revoke_authority_keypair);
+        let collection_authority = delegated_collection_authority.unwrap_or(self.config().mint_api_authority().into());
+        let revoke_instruction =
+            revoke_collection_authority_instruction(collection_mint, collection_authority, revoke_authority_keypair);
         let payer_keypair = payer_keypair.unwrap_or(revoke_authority_keypair);
-        let recent_blockhash = self.async_connection()?
-            .get_latest_blockhash()
-            .await?;
+        let recent_blockhash = self.async_connection()?.get_latest_blockhash().await?;
         self.async_connection()?
-            .send_and_confirm_transaction(
-                &Transaction::new_signed_with_payer(
-                    &vec![revoke_instruction],
-                    Some(&payer_keypair.pubkey()),
-                    &vec![&payer_keypair, &revoke_authority_keypair],
-                    recent_blockhash))
+            .send_and_confirm_transaction(&Transaction::new_signed_with_payer(
+                &vec![revoke_instruction],
+                Some(&payer_keypair.pubkey()),
+                &vec![&payer_keypair, &revoke_authority_keypair],
+                recent_blockhash,
+            ))
             .await
-            .map_err(|e|e.into())
+            .map_err(|e| e.into())
     }
 }

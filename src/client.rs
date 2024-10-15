@@ -146,7 +146,9 @@ impl Helius {
         self.ws_client.clone()
     }
 
-    pub fn config(&self) -> Arc<Config> { self.config.clone() }
+    pub fn config(&self) -> Arc<Config> {
+        self.config.clone()
+    }
 }
 
 /// A wrapper around the asynchronous Solana RPC client that provides thread-safe access

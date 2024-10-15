@@ -13,7 +13,6 @@ pub struct Config {
     /// The endpoints associated with the specified `cluster`. Note these endpoints are automatically determined based on the cluster to ensure requests
     /// are made to the correct cluster
     pub endpoints: HeliusEndpoints,
-
 }
 
 impl Config {

@@ -147,8 +147,12 @@ pub enum MintApiAuthority {
 impl MintApiAuthority {
     pub fn from_cluster(cluster: &Cluster) -> Self {
         match cluster {
-            Cluster::MainnetBeta | Cluster::StakedMainnetBeta => MintApiAuthority::Mainnet(Pubkey::from_str("HnT5KVAywGgQDhmh6Usk4bxRg4RwKxCK4jmECyaDth5R").unwrap()),
-            Cluster::Devnet => MintApiAuthority::Devnet(Pubkey::from_str("2LbAtCJSaHqTnP9M5QSjvAMXk79RNLusFspFN5Ew67TC").unwrap()),
+            Cluster::MainnetBeta | Cluster::StakedMainnetBeta => {
+                MintApiAuthority::Mainnet(Pubkey::from_str("HnT5KVAywGgQDhmh6Usk4bxRg4RwKxCK4jmECyaDth5R").unwrap())
+            }
+            Cluster::Devnet => {
+                MintApiAuthority::Devnet(Pubkey::from_str("2LbAtCJSaHqTnP9M5QSjvAMXk79RNLusFspFN5Ew67TC").unwrap())
+            }
         }
     }
 }
