@@ -1,11 +1,11 @@
 use helius::error::Result;
 use helius::types::Cluster;
 use helius::utils::collection_authority::{
-    delegate_collection_authority_instruction, get_collection_authority_record, get_collection_metadata_account,
+    get_collection_authority_record, get_collection_metadata_account,
 };
 use helius::Helius;
 use mpl_token_metadata::instructions::CreateMetadataAccountV3InstructionArgs;
-use mpl_token_metadata::instructions::{ApproveCollectionAuthority, CreateMetadataAccountV3};
+use mpl_token_metadata::instructions::CreateMetadataAccountV3;
 use mpl_token_metadata::types::DataV2;
 use solana_program::system_instruction::create_account;
 use solana_program::system_program;
