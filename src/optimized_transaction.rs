@@ -22,6 +22,7 @@ use solana_sdk::{
     signature::{Signature, Signer},
     transaction::{Transaction, VersionedTransaction},
 };
+use solana_transaction_status::TransactionConfirmationStatus;
 use std::time::{Duration, Instant};
 use tokio::time::sleep;
 
@@ -104,16 +105,23 @@ impl Helius {
                 });
             }
 
-            match self
-                .connection()
-                .get_signature_status_with_commitment(&txt_sig, commitment_config)
-            {
-                Ok(Some(Ok(()))) => return Ok(txt_sig),
-                Ok(Some(Err(err))) => return Err(HeliusError::TransactionError(err)),
-                Ok(None) => {
+            let status = self.connection().get_signature_statuses(&[txt_sig])?;
+
+            match status.value[0].clone() {
+                Some(status) => {
+                    if status.err.is_none()
+                        && (status.confirmation_status == Some(TransactionConfirmationStatus::Confirmed)
+                            || status.confirmation_status == Some(TransactionConfirmationStatus::Finalized))
+                    {
+                        return Ok(txt_sig);
+                    }
+                    if status.err.is_some() {
+                        return Err(HeliusError::TransactionError(status.err.unwrap()));
+                    }
+                }
+                None => {
                     sleep(interval).await;
                 }
-                Err(err) => return Err(HeliusError::ClientError(err)),
             }
         }
     }
