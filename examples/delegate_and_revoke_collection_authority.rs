@@ -1,6 +1,8 @@
 use helius::error::Result;
 use helius::types::Cluster;
-use helius::utils::collection_authority::{get_collection_authority_record, get_collection_metadata_account};
+use helius::utils::collection_authority::{
+    delegate_collection_authority_instruction, get_collection_authority_record, get_collection_metadata_account,
+};
 use helius::Helius;
 use mpl_token_metadata::instructions::CreateMetadataAccountV3InstructionArgs;
 use mpl_token_metadata::instructions::{ApproveCollectionAuthority, CreateMetadataAccountV3};
@@ -16,8 +18,8 @@ use spl_token::{instruction::initialize_mint, state::Mint};
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    let api_key = ""; // Replace with your Helius API key
     let payer = Keypair::from_base58_string("");
-    let api_key = "";
     let cluster = Cluster::MainnetBeta;
     let helius = Helius::new_with_async_solana(api_key, cluster)?;
     // Get the async Solana RPC client from Helius
@@ -59,7 +61,10 @@ async fn main() -> Result<()> {
         .send_and_confirm_transaction(&transaction)
         .await
         .expect("Failed to create and initialize mint");
-    println!("Collection mint created: {}", collection_mint_keypair.pubkey());
+    println!(
+        "Collection mint created and initialized: {}",
+        collection_mint_keypair.pubkey()
+    );
 
     // Create Metadata account for the collection mint
     let metadata_pubkey = get_collection_metadata_account(&collection_mint_keypair.pubkey());
@@ -94,42 +99,31 @@ async fn main() -> Result<()> {
         recent_blockhash,
     );
     rpc_client.send_and_confirm_transaction(&transaction).await?;
-    println!(
-        "Metadata account created for collection mint {:?}",
-        collection_mint_keypair.pubkey().to_string()
-    );
+    println!("Metadata account created: {}", metadata_pubkey.to_string());
 
     let delegated_authority_keypair = Keypair::new();
-    let collection_authority_record =
-        get_collection_authority_record(&collection_mint_keypair.pubkey(), &delegated_authority_keypair.pubkey());
-    // Delegate collection authority to delegated_authority_keypair
-    let approve_collection_authority_ix = ApproveCollectionAuthority {
-        collection_authority_record,
-        new_collection_authority: delegated_authority_keypair.pubkey(),
-        update_authority: collection_authority_keypair.pubkey(),
-        payer: payer.pubkey(),
-        metadata: metadata_pubkey,
-        mint: collection_mint_keypair.pubkey(),
-        system_program: system_program::ID,
-        rent: None,
-    }
-    .instruction();
-    let mut transaction = Transaction::new_with_payer(&[approve_collection_authority_ix], Some(&payer.pubkey()));
-    let recent_blockhash = rpc_client
-        .get_latest_blockhash()
-        .await
-        .expect("Failed to get blockhash");
-    transaction.sign(&[&payer, &collection_authority_keypair], recent_blockhash);
-    rpc_client
-        .send_and_confirm_transaction(&transaction)
-        .await
-        .expect("Failed to delegate collection authority");
-    println!(
-        "Delegated collection authority to {}",
+    let result = helius
+        .delegate_collection_authority(
+            collection_mint_keypair.pubkey(),
+            delegated_authority_keypair.pubkey(),
+            &collection_authority_keypair,
+            Some(&payer),
+        )
+        .await;
+    assert!(
+        result.is_ok(),
+        "Failed to delegate collection authority to {}",
         delegated_authority_keypair.pubkey()
+    );
+    println!(
+        "Delegate collection authority to {} transaction signature: {}",
+        delegated_authority_keypair.pubkey(),
+        result?
     );
 
     // The record for delegated collection authority should exist in blockchain
+    let collection_authority_record =
+        get_collection_authority_record(&collection_mint_keypair.pubkey(), &delegated_authority_keypair.pubkey());
     let account = rpc_client.get_account(&collection_authority_record).await;
     assert!(account.is_ok(), "Collection authority record account should exist");
 
@@ -143,7 +137,11 @@ async fn main() -> Result<()> {
         )
         .await;
     assert!(result.is_ok(), "Failed to revoke collection authority");
-    println!("Revoke transaction signature: {}", result?);
+    println!(
+        "Revoke collection authority from {} transaction signature: {}",
+        delegated_authority_keypair.pubkey(),
+        result?
+    );
 
     // Fetch the collection authority record account
     let account = rpc_client.get_account(&collection_authority_record).await;

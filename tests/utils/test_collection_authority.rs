@@ -39,6 +39,38 @@ mod tests {
     }
 
     #[test]
+    fn test_get_delegate_collection_authority_instruction() {
+        let collection_mint = Pubkey::new_unique();
+        let new_collection_authority = Pubkey::new_unique();
+        let update_authority_keypair = Keypair::new();
+        let payer_pubkey = Pubkey::new_unique();
+
+        let instruction = delegate_collection_authority_instruction(
+            collection_mint,
+            new_collection_authority,
+            &update_authority_keypair,
+            payer_pubkey,
+        );
+
+        assert_eq!(instruction.program_id, ID);
+
+        let collection_metadata = get_collection_metadata_account(&collection_mint);
+        let collection_authority_record = get_collection_authority_record(&collection_mint, &new_collection_authority);
+
+        let expected_accounts = vec![
+            AccountMeta::new(collection_authority_record, false),
+            AccountMeta::new_readonly(new_collection_authority, false),
+            AccountMeta::new(update_authority_keypair.pubkey(), true),
+            AccountMeta::new(payer_pubkey, true),
+            AccountMeta::new_readonly(collection_metadata, false),
+            AccountMeta::new_readonly(collection_mint, false),
+            AccountMeta::new_readonly(solana_program::system_program::ID, false),
+        ];
+
+        assert_eq!(instruction.accounts, expected_accounts);
+    }
+
+    #[test]
     fn test_get_revoke_collection_authority_instruction() {
         let collection_mint = Pubkey::new_unique();
         let collection_authority = Pubkey::new_unique();
