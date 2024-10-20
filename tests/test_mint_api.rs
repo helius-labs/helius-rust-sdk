@@ -160,44 +160,67 @@ async fn test_get_asset_proof_failure() {
     assert!(result.is_err(), "Expected an error but got success");
 }
 
-#[tokio::test]
-async fn test_mint_api_authority_from_cluster_success() {
-    let devnet_cluster: Cluster = Cluster::Devnet;
-    let mainnet_cluster: Cluster = Cluster::MainnetBeta;
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use solana_program::pubkey::Pubkey;
+    use std::str::FromStr;
 
-    let devnet_authority: std::result::Result<MintApiAuthority, &str> = MintApiAuthority::from_cluster(devnet_cluster);
-    let mainnet_authority: std::result::Result<MintApiAuthority, &str> =
-        MintApiAuthority::from_cluster(mainnet_cluster);
+    #[test]
+    fn test_into_pubkey() {
+        let pubkey_str = "HnT5KVAywGgQDhmh6Usk4bxRg4RwKxCK4jmECyaDth5R";
+        let expected_pubkey = Pubkey::from_str(pubkey_str).unwrap();
 
-    assert_eq!(
-        devnet_authority.unwrap(),
-        MintApiAuthority::Devnet("2LbAtCJSaHqTnP9M5QSjvAMXk79RNLusFspFN5Ew67TC"),
-        "Devnet authority did not match expected value"
-    );
-    assert_eq!(
-        mainnet_authority.unwrap(),
-        MintApiAuthority::Mainnet("HnT5KVAywGgQDhmh6Usk4bxRg4RwKxCK4jmECyaDth5R"),
-        "Mainnet authority did not match expected value"
-    );
-}
+        let mint_authority = MintApiAuthority::Mainnet(expected_pubkey);
+        let converted_pubkey: Pubkey = mint_authority.into();
 
-#[tokio::test]
-async fn test_mint_api_authority_from_cluster_failure() {
-    let devnet_cluster: Cluster = Cluster::Devnet;
-    let mainnet_cluster: Cluster = Cluster::MainnetBeta;
+        assert_eq!(converted_pubkey, expected_pubkey);
 
-    let devnet_authority: std::result::Result<MintApiAuthority, &str> = MintApiAuthority::from_cluster(devnet_cluster);
-    let mainnet_authority: std::result::Result<MintApiAuthority, &str> =
-        MintApiAuthority::from_cluster(mainnet_cluster);
+        let pubkey_str = "2LbAtCJSaHqTnP9M5QSjvAMXk79RNLusFspFN5Ew67TC";
+        let expected_pubkey = Pubkey::from_str(pubkey_str).unwrap();
 
-    assert_ne!(
-        devnet_authority.unwrap(),
-        MintApiAuthority::Devnet("Blade"),
-        "Devnet authority did not match expected value"
-    );
-    assert_ne!(
-        mainnet_authority.unwrap(),
-        MintApiAuthority::Mainnet("Deacon Frost"),
-        "Mainnet authority did not match expected value"
-    );
+        let mint_authority = MintApiAuthority::Devnet(expected_pubkey);
+        let converted_pubkey: Pubkey = mint_authority.into();
+
+        assert_eq!(converted_pubkey, expected_pubkey);
+    }
+
+    #[test]
+    fn test_from_cluster() {
+        let cluster = Cluster::Devnet;
+        let mint_api_authority = MintApiAuthority::from_cluster(&cluster);
+
+        let expected_pubkey = Pubkey::from_str("2LbAtCJSaHqTnP9M5QSjvAMXk79RNLusFspFN5Ew67TC").unwrap();
+
+        match mint_api_authority {
+            MintApiAuthority::Devnet(pubkey) => {
+                assert_eq!(pubkey, expected_pubkey);
+            }
+            _ => panic!("Expected MintApiAuthority::Devnet variant"),
+        }
+
+        let cluster = Cluster::MainnetBeta;
+        let mint_api_authority = MintApiAuthority::from_cluster(&cluster);
+
+        let expected_pubkey = Pubkey::from_str("HnT5KVAywGgQDhmh6Usk4bxRg4RwKxCK4jmECyaDth5R").unwrap();
+
+        match mint_api_authority {
+            MintApiAuthority::Mainnet(pubkey) => {
+                assert_eq!(pubkey, expected_pubkey);
+            }
+            _ => panic!("Expected MintApiAuthority::Mainnet variant"),
+        }
+
+        let cluster = Cluster::StakedMainnetBeta;
+        let mint_api_authority = MintApiAuthority::from_cluster(&cluster);
+
+        let expected_pubkey = Pubkey::from_str("HnT5KVAywGgQDhmh6Usk4bxRg4RwKxCK4jmECyaDth5R").unwrap();
+
+        match mint_api_authority {
+            MintApiAuthority::Mainnet(pubkey) => {
+                assert_eq!(pubkey, expected_pubkey);
+            }
+            _ => panic!("Expected MintApiAuthority::Mainnet variant"),
+        }
+    }
 }

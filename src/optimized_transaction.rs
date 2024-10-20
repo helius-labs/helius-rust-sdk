@@ -95,8 +95,6 @@ impl Helius {
         let interval: Duration = Duration::from_secs(5);
         let start: Instant = Instant::now();
 
-        let commitment_config: CommitmentConfig = CommitmentConfig::confirmed();
-
         loop {
             if start.elapsed() >= timeout {
                 return Err(HeliusError::Timeout {
