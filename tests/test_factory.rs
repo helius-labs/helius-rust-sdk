@@ -17,7 +17,7 @@ fn test_factory_create_mainnet_instance() {
     let helius: Helius = factory.create(Cluster::MainnetBeta).unwrap();
 
     assert_eq!(helius.config.api_key, "valid_api_key");
-    assert_eq!(helius.config.endpoints.api, "https://api.helius-rpc.com/");
+    assert_eq!(helius.config.endpoints.api, "https://api-mainnet.helius-rpc.com/");
     assert_eq!(helius.config.endpoints.rpc, "https://mainnet.helius-rpc.com/");
 }
 
@@ -27,7 +27,7 @@ fn test_factory_create_staked_mainnet_instance() {
     let helius: Helius = factory.create(Cluster::StakedMainnetBeta).unwrap();
 
     assert_eq!(helius.config.api_key, "valid_api_key");
-    assert_eq!(helius.config.endpoints.api, "https://api.helius-rpc.com/");
+    assert_eq!(helius.config.endpoints.api, "https://api-mainnet.helius-rpc.com/");
     assert_eq!(helius.config.endpoints.rpc, "https://staked.helius-rpc.com/");
 }
 
@@ -40,6 +40,6 @@ fn test_factory_create_with_reqwest() {
         .unwrap();
 
     assert_eq!(helius.config.api_key, "valid_api_key");
-    assert_eq!(helius.config.endpoints.api, "https://api.helius-rpc.com/");
+    assert_eq!(helius.config.endpoints.api, "https://api-mainnet.helius-rpc.com/");
     assert_eq!(helius.config.endpoints.rpc, "https://mainnet.helius-rpc.com/");
 }
