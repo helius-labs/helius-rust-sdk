@@ -35,7 +35,6 @@ async fn main() -> Result<()> {
         &spl_token::id(),
     );
     let collection_authority_keypair = Keypair::new();
-    // Initialize the mint instruction
     let initialize_mint_ix = initialize_mint(
         &spl_token::id(),
         &collection_mint_keypair.pubkey(),
@@ -84,7 +83,6 @@ async fn main() -> Result<()> {
         collection_details: None,
     });
     let recent_blockhash = rpc_client.get_latest_blockhash().await?;
-    // Send the transaction to create the metadata account
     let transaction = Transaction::new_signed_with_payer(
         &[create_metadata_accounts_ix],
         Some(&payer.pubkey()),
