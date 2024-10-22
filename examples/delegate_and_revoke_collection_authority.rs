@@ -16,21 +16,17 @@ use spl_token::{instruction::initialize_mint, state::Mint};
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let api_key = ""; // Replace with your Helius API key
+    let api_key = "";
     let payer = Keypair::from_base58_string("");
     let cluster = Cluster::MainnetBeta;
     let helius = Helius::new_with_async_solana(api_key, cluster)?;
-    // Get the async Solana RPC client from Helius
     let rpc_client = helius.async_connection()?;
 
-    // Create a new SPL Token mint (collection mint)
     let collection_mint_keypair = Keypair::new();
-    // Calculate rent-exempt amount for the mint account
     let rent = rpc_client
         .get_minimum_balance_for_rent_exemption(Mint::LEN)
         .await
         .expect("Failed to get rent exemption amount");
-    // Create mint account instruction
     let create_mint_account_ix = create_account(
         &payer.pubkey(),
         &collection_mint_keypair.pubkey(),
@@ -64,7 +60,6 @@ async fn main() -> Result<()> {
         collection_mint_keypair.pubkey()
     );
 
-    // Create Metadata account for the collection mint
     let metadata_pubkey = get_collection_metadata_account(&collection_mint_keypair.pubkey());
     let create_metadata_accounts_ix = CreateMetadataAccountV3 {
         metadata: metadata_pubkey,
@@ -119,13 +114,11 @@ async fn main() -> Result<()> {
         result?
     );
 
-    // The record for delegated collection authority should exist in blockchain
     let collection_authority_record =
         get_collection_authority_record(&collection_mint_keypair.pubkey(), &delegated_authority_keypair.pubkey());
     let account = rpc_client.get_account(&collection_authority_record).await;
     assert!(account.is_ok(), "Collection authority record account should exist");
 
-    // Revoke the collection authority using your method
     let result = helius
         .revoke_collection_authority(
             collection_mint_keypair.pubkey(),
@@ -141,9 +134,7 @@ async fn main() -> Result<()> {
         result?
     );
 
-    // Fetch the collection authority record account
     let account = rpc_client.get_account(&collection_authority_record).await;
-    // The account should not exist if the authority was revoked
     assert!(account.is_err(), "Collection authority record account should be closed");
 
     println!("Delegated collection authority successfully revoked");
