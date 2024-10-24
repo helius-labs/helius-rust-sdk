@@ -20,7 +20,7 @@ futures-util = "0.3.30"
 mpl-token-metadata = { version = "5.0.0-beta.0" }
 phf = { version = "0.11.2", features = ["macros"] }
 rand = "0.8.5"
-reqwest = { version = "0.11", features = ["json"], default-features = false }
+reqwest = { version = "0.12.8", features = ["json"], default-features = false }
 semver = "1.0.23"
 serde = "1.0.198"
 serde-enum-str = "0.4.0"
@@ -46,3 +46,8 @@ default = ["native-tls"]
 native-tls = ["reqwest/native-tls"]
 rustls = ["reqwest/rustls-tls"]
 
+[patch.crates-io]
+# https://github.com/solana-labs/solana/issues/26688#issuecomment-2136066879
+# For curve25519-dalek use the same revision Solana uses
+# https://github.com/solana-labs/solana/blob/27eff8408b7223bb3c4ab70523f8a8dca3ca6645/Cargo.toml#L475-L563
+curve25519-dalek = { git = "https://github.com/solana-labs/curve25519-dalek.git", rev = "b500cdc2a920cd5bff9e2dd974d7b97349d61464" }
