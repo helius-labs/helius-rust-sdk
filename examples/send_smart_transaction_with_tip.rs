@@ -42,6 +42,7 @@ async fn main() {
             max_retries: None,
             min_context_slot: None,
         },
+        timeout: Timeout::default(),
     };
 
     // Send the optimized transaction with a 10k lamport tip using the New York region's API URL
