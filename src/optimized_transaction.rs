@@ -7,8 +7,11 @@ use crate::Helius;
 
 use bincode::{serialize, ErrorKind};
 use reqwest::StatusCode;
-use solana_client::rpc_config::{RpcSendTransactionConfig, RpcSimulateTransactionConfig};
-use solana_client::rpc_response::{Response, RpcSimulateTransactionResult};
+use solana_client::{
+    rpc_client::SerializableTransaction,
+    rpc_config::{RpcSendTransactionConfig, RpcSimulateTransactionConfig},
+    rpc_response::{Response, RpcSimulateTransactionResult},
+};
 use solana_sdk::signature::{keypair_from_seed, Keypair};
 use solana_sdk::{
     address_lookup_table::AddressLookupTableAccount,
@@ -345,26 +348,43 @@ impl Helius {
             min_context_slot: config.send_options.min_context_slot,
         };
 
-        let send_result = |transaction: &Transaction| {
-            self.connection()
-                .send_transaction_with_config(transaction, send_transaction_config)
-        };
-        let send_versioned_result = |transaction: &VersionedTransaction| {
-            self.connection()
-                .send_transaction_with_config(transaction, send_transaction_config)
-        };
+        match transaction {
+            SmartTransaction::Legacy(tx) => {
+                self.send_and_confirm_transaction(&tx, send_transaction_config, last_valid_block_height)
+                    .await
+            }
+            SmartTransaction::Versioned(tx) => {
+                self.send_and_confirm_transaction(&tx, send_transaction_config, last_valid_block_height)
+                    .await
+            }
+        }
+    }
 
+    /// Sends a transaction and handles its confirmation status
+    ///
+    /// # Arguments
+    /// * `transaction` - The transaction to be sent, which implements `SerializableTransaction`
+    /// * `send_transaction_config` - Configuration options for sending the transaction
+    /// * `last_valid_block_hash` - The last block hash at which the transaction is valid
+    ///
+    /// # Returns
+    /// The transaction signature, if successful
+    pub async fn send_and_confirm_transaction(
+        &self,
+        transaction: &impl SerializableTransaction,
+        send_transaction_config: RpcSendTransactionConfig,
+        last_valid_block_hash: u64,
+    ) -> Result<Signature> {
         // Retry logic with a timeout of 60 seconds
         let timeout: Duration = Duration::from_secs(60);
         let start_time: Instant = Instant::now();
 
         while Instant::now().duration_since(start_time) < timeout
-            || self.connection().get_block_height()? <= last_valid_block_height
+            || self.connection().get_block_height()? <= last_valid_block_hash
         {
-            let result = match &transaction {
-                SmartTransaction::Legacy(tx) => send_result(tx),
-                SmartTransaction::Versioned(tx) => send_versioned_result(tx),
-            };
+            let result = self
+                .connection()
+                .send_transaction_with_config(transaction, send_transaction_config);
 
             match result {
                 Ok(signature) => {
