@@ -219,31 +219,33 @@ impl Helius {
         // Encode the transaction
         let transaction_base58: String = encode(&serialized_tx).into_string();
 
+        // Get the priority fee estimate based on the serialized transaction
+        let priority_fee_request: GetPriorityFeeEstimateRequest = GetPriorityFeeEstimateRequest {
+            transaction: Some(transaction_base58),
+            account_keys: None,
+            options: Some(GetPriorityFeeEstimateOptions {
+                recommended: Some(true),
+                ..Default::default()
+            }),
+        };
+
+        // Send the request to get the priority fee estimate
+        let priority_fee_estimate: GetPriorityFeeEstimateResponse =
+            self.rpc().get_priority_fee_estimate(priority_fee_request).await?;
+
+        // Extract the estimated priority fee, or return an error if not available
+        let priority_fee_estimate = priority_fee_estimate
+            .priority_fee_estimate
+            .ok_or(HeliusError::InvalidInput(
+                "Priority fee estimate not available".to_string(),
+            ))? as u64;
+
         // Determine the priority fee for the transaction
         let priority_fee: u64 = if let Some(provided_fee) = config.priority_fee {
-            // Use the user-provided priority fee if available
-            provided_fee
+            // Take the minimum between the estimate and the user-provided cap
+            std::cmp::min(priority_fee_estimate, provided_fee)
         } else {
-            // Get the priority fee estimate based on the serialized transaction
-            let priority_fee_request: GetPriorityFeeEstimateRequest = GetPriorityFeeEstimateRequest {
-                transaction: Some(transaction_base58),
-                account_keys: None,
-                options: Some(GetPriorityFeeEstimateOptions {
-                    recommended: Some(true),
-                    ..Default::default()
-                }),
-            };
-
-            // Send the request to get the priority fee estimate
-            let priority_fee_estimate: GetPriorityFeeEstimateResponse =
-                self.rpc().get_priority_fee_estimate(priority_fee_request).await?;
-
-            // Extract the estimated priority fee, or return an error if not available
             priority_fee_estimate
-                .priority_fee_estimate
-                .ok_or(HeliusError::InvalidInput(
-                    "Priority fee estimate not available".to_string(),
-                ))? as u64
         };
 
         // Add the compute unit price instruction with the priority fee
