@@ -1,7 +1,7 @@
 use crate::error::{HeliusError, Result};
 use crate::types::{
     CreateSmartTransactionConfig, CreateSmartTransactionSeedConfig, GetPriorityFeeEstimateOptions,
-    GetPriorityFeeEstimateRequest, GetPriorityFeeEstimateResponse, SmartTransaction, SmartTransactionConfig,
+    GetPriorityFeeEstimateRequest, GetPriorityFeeEstimateResponse, SmartTransaction, SmartTransactionConfig, Timeout,
 };
 use crate::Helius;
 
@@ -337,13 +337,7 @@ impl Helius {
         let (transaction, last_valid_block_height) = self.create_smart_transaction(&config.create_config).await?;
 
         // Common logic for sending transactions
-        let send_transaction_config: RpcSendTransactionConfig = RpcSendTransactionConfig {
-            skip_preflight: config.send_options.skip_preflight,
-            preflight_commitment: config.send_options.preflight_commitment,
-            encoding: config.send_options.encoding,
-            max_retries: config.send_options.max_retries,
-            min_context_slot: config.send_options.min_context_slot,
-        };
+        let send_transaction_config = config.send_options.clone();
 
         let send_result = |transaction: &Transaction| {
             self.connection()
@@ -354,8 +348,8 @@ impl Helius {
                 .send_transaction_with_config(transaction, send_transaction_config)
         };
 
-        // Retry logic with a timeout of 60 seconds
-        let timeout: Duration = Duration::from_secs(60);
+        // Retry logic with a timeout
+        let timeout: Duration = config.timeout.into();
         let start_time: Instant = Instant::now();
 
         while Instant::now().duration_since(start_time) < timeout
@@ -400,6 +394,7 @@ impl Helius {
     ///   - `fee_payer_seed`: Optional seed bytes for generating the fee payer keypair.
     ///   - `lookup_tables`: Optional address lookup tables for the transaction.
     /// * `send_options` - Optional `RpcSendTransactionConfig` for sending the transaction.
+    /// * `timeout` - Optional `Timeout` wait time for polling transaction confirmation.
     ///
     /// # Returns
     ///
@@ -417,6 +412,7 @@ impl Helius {
         &self,
         create_config: CreateSmartTransactionSeedConfig,
         send_options: Option<RpcSendTransactionConfig>,
+        timeout: Option<Timeout>,
     ) -> Result<Signature> {
         if create_config.signer_seeds.is_empty() {
             return Err(HeliusError::InvalidInput(
@@ -452,6 +448,7 @@ impl Helius {
         let smart_transaction_config: SmartTransactionConfig<'_> = SmartTransactionConfig {
             create_config: create_smart_transaction_config,
             send_options: send_options.unwrap_or_default(),
+            timeout: timeout.unwrap_or_default(),
         };
 
         self.send_smart_transaction(smart_transaction_config).await
