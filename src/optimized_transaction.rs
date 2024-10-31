@@ -339,17 +339,24 @@ impl Helius {
     pub async fn send_smart_transaction(&self, config: SmartTransactionConfig<'_>) -> Result<Signature> {
         let (transaction, last_valid_block_height) = self.create_smart_transaction(&config.create_config).await?;
 
-        // Common logic for sending transactions
-        let send_transaction_config = config.send_options.clone();
-
         match transaction {
             SmartTransaction::Legacy(tx) => {
-                self.send_and_confirm_transaction(&tx, send_transaction_config, last_valid_block_height)
-                    .await
+                self.send_and_confirm_transaction(
+                    &tx,
+                    config.send_options,
+                    last_valid_block_height,
+                    Some(config.timeout.into()),
+                )
+                .await
             }
             SmartTransaction::Versioned(tx) => {
-                self.send_and_confirm_transaction(&tx, send_transaction_config, last_valid_block_height)
-                    .await
+                self.send_and_confirm_transaction(
+                    &tx,
+                    config.send_options,
+                    last_valid_block_height,
+                    Some(config.timeout.into()),
+                )
+                .await
             }
         }
     }
@@ -359,7 +366,8 @@ impl Helius {
     /// # Arguments
     /// * `transaction` - The transaction to be sent, which implements `SerializableTransaction`
     /// * `send_transaction_config` - Configuration options for sending the transaction
-    /// * `last_valid_block_hash` - The last block hash at which the transaction is valid
+    /// * `last_valid_block_height` - The last block height at which the transaction is valid
+    /// * `timeout` - Optional duration for polling transaction confirmation, defaults to 60 seconds
     ///
     /// # Returns
     /// The transaction signature, if successful
@@ -367,14 +375,15 @@ impl Helius {
         &self,
         transaction: &impl SerializableTransaction,
         send_transaction_config: RpcSendTransactionConfig,
-        last_valid_block_hash: u64,
+        last_valid_block_height: u64,
+        timeout: Option<Duration>,
     ) -> Result<Signature> {
         // Retry logic with a timeout
-        let timeout: Duration = config.timeout.into();
+        let timeout: Duration = timeout.unwrap_or(Duration::from_secs(60));
         let start_time: Instant = Instant::now();
 
         while Instant::now().duration_since(start_time) < timeout
-            || self.connection().get_block_height()? <= last_valid_block_hash
+            || self.connection().get_block_height()? <= last_valid_block_height
         {
             let result = self
                 .connection()
