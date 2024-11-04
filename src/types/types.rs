@@ -4,9 +4,9 @@ use super::{
     TransactionStatus, TransactionType, UiTransactionEncoding, WebhookType,
 };
 use crate::types::{DisplayOptions, GetAssetOptions};
-// use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use std::time::Duration;
 
 use solana_client::rpc_config::RpcSendTransactionConfig;
 use solana_sdk::{address_lookup_table::AddressLookupTableAccount, instruction::Instruction, signature::Signer};
@@ -969,17 +969,36 @@ impl<'a> CreateSmartTransactionConfig<'a> {
         }
     }
 }
+pub struct Timeout {
+    pub duration: Duration,
+}
+
+impl Default for Timeout {
+    fn default() -> Self {
+        Self {
+            duration: Duration::from_secs(60),
+        }
+    }
+}
+
+impl Into<Duration> for Timeout {
+    fn into(self) -> Duration {
+        self.duration
+    }
+}
 
 pub struct SmartTransactionConfig<'a> {
     pub create_config: CreateSmartTransactionConfig<'a>,
     pub send_options: RpcSendTransactionConfig,
+    pub timeout: Timeout,
 }
 
 impl<'a> SmartTransactionConfig<'a> {
-    pub fn new(instructions: Vec<Instruction>, signers: Vec<&'a dyn Signer>) -> Self {
+    pub fn new(instructions: Vec<Instruction>, signers: Vec<&'a dyn Signer>, timeout: Timeout) -> Self {
         Self {
             create_config: CreateSmartTransactionConfig::new(instructions, signers),
             send_options: RpcSendTransactionConfig::default(),
+            timeout,
         }
     }
 }
