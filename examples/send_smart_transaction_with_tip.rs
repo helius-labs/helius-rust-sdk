@@ -31,6 +31,7 @@ async fn main() {
         signers: vec![&from_keypair],
         lookup_tables: None,
         fee_payer: None,
+        priority_fee: None,
     };
 
     let config: SmartTransactionConfig = SmartTransactionConfig {

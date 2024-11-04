@@ -955,6 +955,7 @@ pub struct CreateSmartTransactionConfig<'a> {
     pub signers: Vec<&'a dyn Signer>,
     pub lookup_tables: Option<Vec<AddressLookupTableAccount>>,
     pub fee_payer: Option<&'a dyn Signer>,
+    pub priority_fee: Option<u64>,
 }
 
 impl<'a> CreateSmartTransactionConfig<'a> {
@@ -964,6 +965,7 @@ impl<'a> CreateSmartTransactionConfig<'a> {
             signers,
             lookup_tables: None,
             fee_payer: None,
+            priority_fee: None,
         }
     }
 }
@@ -1015,6 +1017,7 @@ pub struct CreateSmartTransactionSeedConfig {
     pub signer_seeds: Vec<[u8; 32]>,
     pub fee_payer_seed: Option<[u8; 32]>,
     pub lookup_tables: Option<Vec<AddressLookupTableAccount>>,
+    pub priority_fee: Option<u64>,
 }
 
 impl CreateSmartTransactionSeedConfig {
@@ -1024,6 +1027,7 @@ impl CreateSmartTransactionSeedConfig {
             signer_seeds,
             fee_payer_seed: None,
             lookup_tables: None,
+            priority_fee: None,
         }
     }
 
