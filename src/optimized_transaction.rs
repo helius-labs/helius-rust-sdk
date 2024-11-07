@@ -4,12 +4,13 @@ use crate::types::{
     GetPriorityFeeEstimateRequest, GetPriorityFeeEstimateResponse, SmartTransaction, SmartTransactionConfig, Timeout,
 };
 use crate::Helius;
+use std::sync::Arc;
 
 use bincode::{serialize, ErrorKind};
 use reqwest::StatusCode;
 use solana_client::rpc_config::{RpcSendTransactionConfig, RpcSimulateTransactionConfig};
 use solana_client::rpc_response::{Response, RpcSimulateTransactionResult};
-use solana_sdk::signature::{keypair_from_seed, Keypair};
+use solana_sdk::signature::keypair_from_seed;
 use solana_sdk::{
     address_lookup_table::AddressLookupTableAccount,
     bs58::encode,
@@ -42,7 +43,7 @@ impl Helius {
         instructions: Vec<Instruction>,
         payer: Pubkey,
         lookup_tables: Vec<AddressLookupTableAccount>,
-        signers: Option<&[&dyn Signer]>,
+        signers: Option<&[Arc<dyn Signer>]>,
     ) -> Result<Option<u64>> {
         // Set the compute budget limit
         let test_instructions: Vec<Instruction> = vec![ComputeBudgetInstruction::set_compute_unit_limit(1_400_000)]
@@ -134,7 +135,7 @@ impl Helius {
     /// An optimized `SmartTransaction` (i.e., `Transaction` or `VersionedTransaction`) and the `last_valid_block_height`
     pub async fn create_smart_transaction(
         &self,
-        config: &CreateSmartTransactionConfig<'_>,
+        config: &CreateSmartTransactionConfig,
     ) -> Result<(SmartTransaction, u64)> {
         if config.signers.is_empty() {
             return Err(HeliusError::InvalidInput(
@@ -144,6 +145,7 @@ impl Helius {
 
         let payer_pubkey: Pubkey = config
             .fee_payer
+            .as_ref()
             .map_or(config.signers[0].pubkey(), |signer| signer.pubkey());
         let (recent_blockhash, last_valid_block_hash) = self
             .connection()
@@ -174,10 +176,10 @@ impl Helius {
                 v0::Message::try_compile(&payer_pubkey, &config.instructions, lookup_tables, recent_blockhash)?;
             let versioned_message: VersionedMessage = VersionedMessage::V0(v0_message);
 
-            let all_signers: Vec<&dyn Signer> = if let Some(fee_payer) = config.fee_payer {
-                let mut all_signers: Vec<&dyn Signer> = config.signers.clone();
+            let all_signers: Vec<Arc<dyn Signer>> = if let Some(fee_payer) = &config.fee_payer {
+                let mut all_signers = config.signers.clone();
                 if !all_signers.iter().any(|signer| signer.pubkey() == fee_payer.pubkey()) {
-                    all_signers.push(fee_payer);
+                    all_signers.push(fee_payer.clone());
                 }
 
                 all_signers
@@ -200,7 +202,7 @@ impl Helius {
             let mut tx: Transaction = Transaction::new_with_payer(&config.instructions, Some(&payer_pubkey));
             tx.try_partial_sign(&config.signers, recent_blockhash)?;
 
-            if let Some(fee_payer) = config.fee_payer {
+            if let Some(fee_payer) = config.fee_payer.as_ref() {
                 tx.try_partial_sign(&[fee_payer], recent_blockhash)?;
             }
 
@@ -284,10 +286,10 @@ impl Helius {
                 v0::Message::try_compile(&payer_pubkey, &final_instructions, lookup_tables, recent_blockhash)?;
             let versioned_message: VersionedMessage = VersionedMessage::V0(v0_message);
 
-            let all_signers: Vec<&dyn Signer> = if let Some(fee_payer) = config.fee_payer {
+            let all_signers: Vec<Arc<dyn Signer>> = if let Some(fee_payer) = config.fee_payer.as_ref() {
                 let mut all_signers = config.signers.clone();
                 if !all_signers.iter().any(|signer| signer.pubkey() == fee_payer.pubkey()) {
-                    all_signers.push(fee_payer);
+                    all_signers.push(fee_payer.clone());
                 }
                 all_signers
             } else {
@@ -312,7 +314,7 @@ impl Helius {
             let mut tx: Transaction = Transaction::new_with_payer(&final_instructions, Some(&payer_pubkey));
             tx.try_partial_sign(&config.signers, recent_blockhash)?;
 
-            if let Some(fee_payer) = config.fee_payer {
+            if let Some(fee_payer) = config.fee_payer.as_ref() {
                 tx.try_partial_sign(&[fee_payer], recent_blockhash)?;
             }
 
@@ -333,7 +335,7 @@ impl Helius {
     ///
     /// # Returns
     /// The transaction signature, if successful
-    pub async fn send_smart_transaction(&self, config: SmartTransactionConfig<'_>) -> Result<Signature> {
+    pub async fn send_smart_transaction(&self, config: SmartTransactionConfig) -> Result<Signature> {
         let (transaction, last_valid_block_height) = self.create_smart_transaction(&config.create_config).await?;
 
         // Common logic for sending transactions
@@ -420,32 +422,32 @@ impl Helius {
             ));
         }
 
-        let mut signers: Vec<Keypair> = create_config
+        let mut signers: Vec<Arc<dyn Signer>> = create_config
             .signer_seeds
             .into_iter()
-            .map(|seed| keypair_from_seed(&seed).expect("Failed to create keypair from seed"))
+            .map(|seed| {
+                Arc::new(keypair_from_seed(&seed).expect("Failed to create keypair from seed")) as Arc<dyn Signer>
+            })
             .collect();
 
         // Determine the fee payer
         let fee_payer_index: usize = if let Some(fee_payer_seed) = create_config.fee_payer_seed {
-            let fee_payer: Keypair =
-                keypair_from_seed(&fee_payer_seed).expect("Failed to create fee payer keypair from seed");
+            let fee_payer =
+                Arc::new(keypair_from_seed(&fee_payer_seed).expect("Failed to create fee payer keypair from seed"));
             signers.push(fee_payer);
             signers.len() - 1 // Index of the last signer (fee payer)
         } else {
             0 // Index of the first signer
         };
-
-        let signer_refs: Vec<&dyn Signer> = signers.iter().map(|keypair| keypair as &dyn Signer).collect();
-
-        let create_smart_transaction_config: CreateSmartTransactionConfig<'_> = CreateSmartTransactionConfig {
+        let fee_payer = signers[fee_payer_index].clone();
+        let create_smart_transaction_config: CreateSmartTransactionConfig = CreateSmartTransactionConfig {
             instructions: create_config.instructions,
-            signers: signer_refs,
+            signers,
             lookup_tables: create_config.lookup_tables,
-            fee_payer: Some(&signers[fee_payer_index] as &dyn Signer),
+            fee_payer: Some(fee_payer),
         };
 
-        let smart_transaction_config: SmartTransactionConfig<'_> = SmartTransactionConfig {
+        let smart_transaction_config: SmartTransactionConfig = SmartTransactionConfig {
             create_config: create_smart_transaction_config,
             send_options: send_options.unwrap_or_default(),
             timeout: timeout.unwrap_or_default(),
