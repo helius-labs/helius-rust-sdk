@@ -521,7 +521,6 @@ pub struct TokenInfo {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct PriceInfo {
-    #[serde(rename = "pricePerToken")]
     pub price_per_token: f32,
     pub currency: String,
 }
