@@ -512,15 +512,10 @@ pub struct TokenInfo {
     pub balance: Option<u64>,
     pub supply: Option<u64>,
     pub decimals: Option<i32>,
-    #[serde(rename = "tokenProgram")]
     pub token_program: Option<String>,
-    #[serde(rename = "associatedTokenAddress")]
     pub associated_token_address: Option<String>,
-    #[serde(rename = "priceInfo")]
     pub price_info: Option<PriceInfo>,
-    #[serde(rename = "mintAuthority")]
     pub mint_authority: Option<String>,
-    #[serde(rename = "freezeAuthority")]
     pub freeze_authority: Option<String>,
 }
 
