@@ -273,9 +273,9 @@ pub struct ApiResponse<T> {
 
 #[derive(Serialize, Deserialize, Debug, Default)]
 pub struct NativeBalance {
-    pub lamports: f32,
-    pub price_per_sol: f32,
-    pub total_price: f32,
+    pub lamports: u64,
+    pub price_per_sol: f64,
+    pub total_price: f64,
 }
 
 #[derive(Serialize, Deserialize, Debug, Default)]
