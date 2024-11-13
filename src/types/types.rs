@@ -272,6 +272,13 @@ pub struct ApiResponse<T> {
 }
 
 #[derive(Serialize, Deserialize, Debug, Default)]
+pub struct NativeBalance {
+    pub lamports: f32,
+    pub price_per_sol: f32,
+    pub total_price: f32,
+}
+
+#[derive(Serialize, Deserialize, Debug, Default)]
 pub struct AssetList {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub grand_total: Option<u64>,
@@ -286,6 +293,8 @@ pub struct AssetList {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cursor: Option<String>,
     pub items: Vec<Asset>,
+    #[serde(rename = "nativeBalance", skip_serializing_if = "Option::is_none")]
+    pub native_balance: Option<NativeBalance>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub errors: Option<Vec<AssetError>>,
 }
