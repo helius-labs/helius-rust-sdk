@@ -48,6 +48,26 @@ impl Helius {
             url = format!("{}&before={}", url, before);
         }
 
+        if let Some(until) = request.until {
+            url = format!("{}&until={}", url, until);
+        }
+
+        if let Some(commitment) = request.commitment {
+            url = format!("{}&commitment={}", url, commitment);
+        }
+
+        if let Some(source) = request.source {
+            url = format!("{}&source={}", url, source);
+        }
+
+        if let Some(transaction_type) = request.transaction_type {
+            url = format!("{}&type={}", url, transaction_type);
+        }
+
+        if let Some(limit) = request.limit {
+            url = format!("{}&limit={}", url, limit);
+        }
+
         let parsed_url: Url = Url::parse(&url).expect("Failed to parse URL");
 
         self.rpc_client.handler.send(Method::GET, parsed_url, None::<&()>).await
