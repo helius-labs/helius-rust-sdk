@@ -13,7 +13,7 @@ use solana_client::{
     rpc_config::{RpcSendTransactionConfig, RpcSimulateTransactionConfig},
     rpc_response::{Response, RpcSimulateTransactionResult},
 };
-use solana_sdk::signature::{keypair_from_seed, Keypair};
+use solana_sdk::signature::keypair_from_seed;
 use solana_sdk::{
     address_lookup_table::AddressLookupTableAccount,
     bs58::encode,
