@@ -29,7 +29,7 @@ use tokio_tungstenite::{
     MaybeTlsStream, WebSocketStream,
 };
 
-pub const ENHANCED_WEBSOCKET_URL: &str = "wss://atlas-mainnet.helius-rpc.com?api-key=";
+pub const ENHANCED_WEBSOCKET_URL: &str = "wss://atlas-mainnet.helius-rpc.com/?api-key=";
 const DEFAULT_PING_DURATION_SECONDS: u64 = 10;
 
 // pub type Result<T = ()> = Result<T, HeliusError>;
