@@ -29,13 +29,6 @@ pub enum Interface {
     ProgrammableNFT,
     #[serde(rename = "FungibleToken")]
     FungibleToken,
-    #[serde(rename = "V1_PRINT")]
-    V1PRINT,
-    #[allow(non_camel_case_types)]
-    #[serde(rename = "LEGACY_NFT")]
-    LEGACY_NFT,
-    #[serde(rename = "V2_NFT")]
-    Nft,
     #[serde(rename = "MplCoreAsset")]
     MplCoreAsset,
     #[serde(rename = "MplCoreCollection")]
