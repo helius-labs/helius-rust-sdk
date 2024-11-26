@@ -20,7 +20,7 @@ futures-util = "0.3.30"
 mpl-token-metadata = { version = "5.0.0-beta.0" }
 phf = { version = "0.11.2", features = ["macros"] }
 rand = "0.8.5"
-reqwest = { version = "0.12.8", features = ["json"], default-features = false }
+reqwest = { version = "0.12.8", features = ["json", "native-tls"] }
 semver = "1.0.23"
 serde = "1.0.198"
 serde-enum-str = "0.4.0"
@@ -32,9 +32,9 @@ solana-rpc-client-api = "2.0"
 solana-sdk = "2.0"
 solana-transaction-status = "2.0"
 thiserror = "1.0.58"
-tokio = { version = "1.37.0", features = ["macros", "rt-multi-thread", "net"] }
+tokio = { version = "1.37.0", features = ["macros", "rt-multi-thread", "net", "time"] }
 tokio-stream = "0.1.15"
-tokio-tungstenite = { version = "0.24.0", features = ["native-tls", "handshake"] }
+tokio-tungstenite = { version = "0.24.0", features = ["native-tls"] }
 url = "2.5.0"
 spl-token = { version = "6.0", features = ["no-entrypoint"] }
 
@@ -43,8 +43,14 @@ mockito = "1.4.0"
 
 [features]
 default = ["native-tls"]
-native-tls = ["reqwest/native-tls"]
-rustls = ["reqwest/rustls-tls"]
+native-tls = [
+    "reqwest/native-tls",
+    "tokio-tungstenite/native-tls"
+]
+rustls = [
+    "reqwest/rustls-tls",
+    "tokio-tungstenite/rustls-tls-webpki-roots"
+]
 
 [patch.crates-io]
 # https://github.com/solana-labs/solana/issues/26688#issuecomment-2136066879
