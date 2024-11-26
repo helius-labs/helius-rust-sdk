@@ -1,14 +1,19 @@
 use crate::error::{HeliusError, Result};
 use crate::types::{
-    CreateSmartTransactionConfig, GetPriorityFeeEstimateOptions, GetPriorityFeeEstimateRequest,
-    GetPriorityFeeEstimateResponse, SmartTransaction, SmartTransactionConfig,
+    CreateSmartTransactionConfig, CreateSmartTransactionSeedConfig, GetPriorityFeeEstimateOptions,
+    GetPriorityFeeEstimateRequest, GetPriorityFeeEstimateResponse, SmartTransaction, SmartTransactionConfig, Timeout,
 };
 use crate::Helius;
+use std::sync::Arc;
 
 use bincode::{serialize, ErrorKind};
 use reqwest::StatusCode;
-use solana_client::rpc_config::{RpcSendTransactionConfig, RpcSimulateTransactionConfig};
-use solana_client::rpc_response::{Response, RpcSimulateTransactionResult};
+use solana_client::{
+    rpc_client::SerializableTransaction,
+    rpc_config::{RpcSendTransactionConfig, RpcSimulateTransactionConfig},
+    rpc_response::{Response, RpcSimulateTransactionResult},
+};
+use solana_sdk::signature::keypair_from_seed;
 use solana_sdk::{
     address_lookup_table::AddressLookupTableAccount,
     bs58::encode,
@@ -21,6 +26,7 @@ use solana_sdk::{
     signature::{Signature, Signer},
     transaction::{Transaction, VersionedTransaction},
 };
+use solana_transaction_status::TransactionConfirmationStatus;
 use std::time::{Duration, Instant};
 use tokio::time::sleep;
 
@@ -40,7 +46,7 @@ impl Helius {
         instructions: Vec<Instruction>,
         payer: Pubkey,
         lookup_tables: Vec<AddressLookupTableAccount>,
-        signers: &[&dyn Signer],
+        signers: Option<&[Arc<dyn Signer>]>,
     ) -> Result<Option<u64>> {
         // Set the compute budget limit
         let test_instructions: Vec<Instruction> = vec![ComputeBudgetInstruction::set_compute_unit_limit(1_400_000)]
@@ -56,13 +62,20 @@ impl Helius {
             v0::Message::try_compile(&payer, &test_instructions, &lookup_tables, recent_blockhash)?;
         let versioned_message: VersionedMessage = VersionedMessage::V0(v0_message);
 
-        // Create a signed VersionedTransaction
-        let transaction: VersionedTransaction = VersionedTransaction::try_new(versioned_message, signers)
-            .map_err(|e| HeliusError::InvalidInput(format!("Signing error: {:?}", e)))?;
+        // Create a VersionedTransaction (signed or unsigned)
+        let transaction: VersionedTransaction = if let Some(signers) = signers {
+            VersionedTransaction::try_new(versioned_message, signers)
+                .map_err(|e| HeliusError::InvalidInput(format!("Signing error: {:?}", e)))?
+        } else {
+            VersionedTransaction {
+                signatures: vec![],
+                message: versioned_message,
+            }
+        };
 
         // Simulate the transaction
         let config: RpcSimulateTransactionConfig = RpcSimulateTransactionConfig {
-            sig_verify: true,
+            sig_verify: signers.is_some(),
             ..Default::default()
         };
         let result: Response<RpcSimulateTransactionResult> = self
@@ -86,8 +99,6 @@ impl Helius {
         let interval: Duration = Duration::from_secs(5);
         let start: Instant = Instant::now();
 
-        let commitment_config: CommitmentConfig = CommitmentConfig::confirmed();
-
         loop {
             if start.elapsed() >= timeout {
                 return Err(HeliusError::Timeout {
@@ -96,16 +107,23 @@ impl Helius {
                 });
             }
 
-            match self
-                .connection()
-                .get_signature_status_with_commitment(&txt_sig, commitment_config)
-            {
-                Ok(Some(Ok(()))) => return Ok(txt_sig),
-                Ok(Some(Err(err))) => return Err(HeliusError::TransactionError(err)),
-                Ok(None) => {
+            let status = self.connection().get_signature_statuses(&[txt_sig])?;
+
+            match status.value[0].clone() {
+                Some(status) => {
+                    if status.err.is_none()
+                        && (status.confirmation_status == Some(TransactionConfirmationStatus::Confirmed)
+                            || status.confirmation_status == Some(TransactionConfirmationStatus::Finalized))
+                    {
+                        return Ok(txt_sig);
+                    }
+                    if status.err.is_some() {
+                        return Err(HeliusError::TransactionError(status.err.unwrap()));
+                    }
+                }
+                None => {
                     sleep(interval).await;
                 }
-                Err(err) => return Err(HeliusError::ClientError(err)),
             }
         }
     }
@@ -120,7 +138,7 @@ impl Helius {
     /// An optimized `SmartTransaction` (i.e., `Transaction` or `VersionedTransaction`) and the `last_valid_block_height`
     pub async fn create_smart_transaction(
         &self,
-        config: &CreateSmartTransactionConfig<'_>,
+        config: &CreateSmartTransactionConfig,
     ) -> Result<(SmartTransaction, u64)> {
         if config.signers.is_empty() {
             return Err(HeliusError::InvalidInput(
@@ -130,6 +148,7 @@ impl Helius {
 
         let payer_pubkey: Pubkey = config
             .fee_payer
+            .as_ref()
             .map_or(config.signers[0].pubkey(), |signer| signer.pubkey());
         let (recent_blockhash, last_valid_block_hash) = self
             .connection()
@@ -160,10 +179,10 @@ impl Helius {
                 v0::Message::try_compile(&payer_pubkey, &config.instructions, lookup_tables, recent_blockhash)?;
             let versioned_message: VersionedMessage = VersionedMessage::V0(v0_message);
 
-            let all_signers = if let Some(fee_payer) = config.fee_payer {
-                let mut all_signers: Vec<&dyn Signer> = config.signers.clone();
+            let all_signers: Vec<Arc<dyn Signer>> = if let Some(fee_payer) = &config.fee_payer {
+                let mut all_signers = config.signers.clone();
                 if !all_signers.iter().any(|signer| signer.pubkey() == fee_payer.pubkey()) {
-                    all_signers.push(fee_payer);
+                    all_signers.push(fee_payer.clone());
                 }
 
                 all_signers
@@ -186,7 +205,7 @@ impl Helius {
             let mut tx: Transaction = Transaction::new_with_payer(&config.instructions, Some(&payer_pubkey));
             tx.try_partial_sign(&config.signers, recent_blockhash)?;
 
-            if let Some(fee_payer) = config.fee_payer {
+            if let Some(fee_payer) = config.fee_payer.as_ref() {
                 tx.try_partial_sign(&[fee_payer], recent_blockhash)?;
             }
 
@@ -238,7 +257,7 @@ impl Helius {
                 updated_instructions,
                 payer_pubkey,
                 config.lookup_tables.clone().unwrap_or_default(),
-                &config.signers,
+                Some(&config.signers),
             )
             .await?;
 
@@ -270,10 +289,10 @@ impl Helius {
                 v0::Message::try_compile(&payer_pubkey, &final_instructions, lookup_tables, recent_blockhash)?;
             let versioned_message: VersionedMessage = VersionedMessage::V0(v0_message);
 
-            let all_signers: Vec<&dyn Signer> = if let Some(fee_payer) = config.fee_payer {
+            let all_signers: Vec<Arc<dyn Signer>> = if let Some(fee_payer) = config.fee_payer.as_ref() {
                 let mut all_signers = config.signers.clone();
                 if !all_signers.iter().any(|signer| signer.pubkey() == fee_payer.pubkey()) {
-                    all_signers.push(fee_payer);
+                    all_signers.push(fee_payer.clone());
                 }
                 all_signers
             } else {
@@ -298,7 +317,7 @@ impl Helius {
             let mut tx: Transaction = Transaction::new_with_payer(&final_instructions, Some(&payer_pubkey));
             tx.try_partial_sign(&config.signers, recent_blockhash)?;
 
-            if let Some(fee_payer) = config.fee_payer {
+            if let Some(fee_payer) = config.fee_payer.as_ref() {
                 tx.try_partial_sign(&[fee_payer], recent_blockhash)?;
             }
 
@@ -319,38 +338,58 @@ impl Helius {
     ///
     /// # Returns
     /// The transaction signature, if successful
-    pub async fn send_smart_transaction(&self, config: SmartTransactionConfig<'_>) -> Result<Signature> {
+    pub async fn send_smart_transaction(&self, config: SmartTransactionConfig) -> Result<Signature> {
         let (transaction, last_valid_block_height) = self.create_smart_transaction(&config.create_config).await?;
 
-        // Common logic for sending transactions
-        let send_transaction_config: RpcSendTransactionConfig = RpcSendTransactionConfig {
-            skip_preflight: config.send_options.skip_preflight,
-            preflight_commitment: config.send_options.preflight_commitment,
-            encoding: config.send_options.encoding,
-            max_retries: config.send_options.max_retries,
-            min_context_slot: config.send_options.min_context_slot,
-        };
+        match transaction {
+            SmartTransaction::Legacy(tx) => {
+                self.send_and_confirm_transaction(
+                    &tx,
+                    config.send_options,
+                    last_valid_block_height,
+                    Some(config.timeout.into()),
+                )
+                .await
+            }
+            SmartTransaction::Versioned(tx) => {
+                self.send_and_confirm_transaction(
+                    &tx,
+                    config.send_options,
+                    last_valid_block_height,
+                    Some(config.timeout.into()),
+                )
+                .await
+            }
+        }
+    }
 
-        let send_result = |transaction: &Transaction| {
-            self.connection()
-                .send_transaction_with_config(transaction, send_transaction_config)
-        };
-        let send_versioned_result = |transaction: &VersionedTransaction| {
-            self.connection()
-                .send_transaction_with_config(transaction, send_transaction_config)
-        };
-
-        // Retry logic with a timeout of 60 seconds
-        let timeout: Duration = Duration::from_secs(60);
+    /// Sends a transaction and handles its confirmation status
+    ///
+    /// # Arguments
+    /// * `transaction` - The transaction to be sent, which implements `SerializableTransaction`
+    /// * `send_transaction_config` - Configuration options for sending the transaction
+    /// * `last_valid_block_height` - The last block height at which the transaction is valid
+    /// * `timeout` - Optional duration for polling transaction confirmation, defaults to 60 seconds
+    ///
+    /// # Returns
+    /// The transaction signature, if successful
+    pub async fn send_and_confirm_transaction(
+        &self,
+        transaction: &impl SerializableTransaction,
+        send_transaction_config: RpcSendTransactionConfig,
+        last_valid_block_height: u64,
+        timeout: Option<Duration>,
+    ) -> Result<Signature> {
+        // Retry logic with a timeout
+        let timeout: Duration = timeout.unwrap_or(Duration::from_secs(60));
         let start_time: Instant = Instant::now();
 
         while Instant::now().duration_since(start_time) < timeout
             || self.connection().get_block_height()? <= last_valid_block_height
         {
-            let result = match &transaction {
-                SmartTransaction::Legacy(tx) => send_result(tx),
-                SmartTransaction::Versioned(tx) => send_versioned_result(tx),
-            };
+            let result = self
+                .connection()
+                .send_transaction_with_config(transaction, send_transaction_config);
 
             match result {
                 Ok(signature) => {
@@ -370,5 +409,79 @@ impl Helius {
             code: StatusCode::REQUEST_TIMEOUT,
             text: "Transaction failed to confirm in 60s".to_string(),
         })
+    }
+
+    /// Sends a smart transaction using seed bytes
+    ///
+    /// This method allows for sending smart transactions in asynchronous contexts
+    /// where the Signer trait's lack of Send + Sync would otherwise cause issues.
+    /// It creates Keypairs from the provided seed bytes and uses them to sign the transaction.
+    ///
+    /// # Arguments
+    ///
+    /// * `create_config` - A `CreateSmartTransactionSeedConfig` containing:
+    ///   - `instructions`: The instructions to be executed in the transaction.
+    ///   - `signer_seeds`: Seed bytes for generating signer keypairs.
+    ///   - `fee_payer_seed`: Optional seed bytes for generating the fee payer keypair.
+    ///   - `lookup_tables`: Optional address lookup tables for the transaction.
+    /// * `send_options` - Optional `RpcSendTransactionConfig` for sending the transaction.
+    /// * `timeout` - Optional `Timeout` wait time for polling transaction confirmation.
+    ///
+    /// # Returns
+    ///
+    /// A `Result<Signature>` containing the transaction signature if successful, or an error if not.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if keypair creation from seeds fails, the underlying `send_smart_transaction` call fails,
+    /// or no signer seeds are provided
+    ///
+    /// # Notes
+    ///
+    /// If no `fee_payer_seed` is provided, the first signer (i.e., derived from the first seed in `signer_seeds`) will be used as the fee payer
+    pub async fn send_smart_transaction_with_seeds(
+        &self,
+        create_config: CreateSmartTransactionSeedConfig,
+        send_options: Option<RpcSendTransactionConfig>,
+        timeout: Option<Timeout>,
+    ) -> Result<Signature> {
+        if create_config.signer_seeds.is_empty() {
+            return Err(HeliusError::InvalidInput(
+                "At least one signer seed must be provided".to_string(),
+            ));
+        }
+
+        let mut signers: Vec<Arc<dyn Signer>> = create_config
+            .signer_seeds
+            .into_iter()
+            .map(|seed| {
+                Arc::new(keypair_from_seed(&seed).expect("Failed to create keypair from seed")) as Arc<dyn Signer>
+            })
+            .collect();
+
+        // Determine the fee payer
+        let fee_payer_index: usize = if let Some(fee_payer_seed) = create_config.fee_payer_seed {
+            let fee_payer =
+                Arc::new(keypair_from_seed(&fee_payer_seed).expect("Failed to create fee payer keypair from seed"));
+            signers.push(fee_payer);
+            signers.len() - 1 // Index of the last signer (fee payer)
+        } else {
+            0 // Index of the first signer
+        };
+        let fee_payer = signers[fee_payer_index].clone();
+        let create_smart_transaction_config: CreateSmartTransactionConfig = CreateSmartTransactionConfig {
+            instructions: create_config.instructions,
+            signers,
+            lookup_tables: create_config.lookup_tables,
+            fee_payer: Some(fee_payer),
+        };
+
+        let smart_transaction_config: SmartTransactionConfig = SmartTransactionConfig {
+            create_config: create_smart_transaction_config,
+            send_options: send_options.unwrap_or_default(),
+            timeout: timeout.unwrap_or_default(),
+        };
+
+        self.send_smart_transaction(smart_transaction_config).await
     }
 }

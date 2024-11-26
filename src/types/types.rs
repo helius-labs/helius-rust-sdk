@@ -4,9 +4,10 @@ use super::{
     TransactionStatus, TransactionType, UiTransactionEncoding, WebhookType,
 };
 use crate::types::{DisplayOptions, GetAssetOptions};
-// use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use std::sync::Arc;
+use std::time::Duration;
 
 use solana_client::rpc_config::RpcSendTransactionConfig;
 use solana_sdk::{address_lookup_table::AddressLookupTableAccount, instruction::Instruction, signature::Signer};
@@ -16,6 +17,7 @@ use solana_sdk::{address_lookup_table::AddressLookupTableAccount, instruction::I
 pub enum Cluster {
     Devnet,
     MainnetBeta,
+    StakedMainnetBeta,
 }
 
 /// Stores the API and RPC endpoint URLs for a specific Helius cluster
@@ -35,6 +37,10 @@ impl HeliusEndpoints {
             Cluster::MainnetBeta => HeliusEndpoints {
                 api: "https://api-mainnet.helius-rpc.com/".to_string(),
                 rpc: "https://mainnet.helius-rpc.com/".to_string(),
+            },
+            Cluster::StakedMainnetBeta => HeliusEndpoints {
+                api: "https://api-mainnet.helius-rpc.com/".to_string(),
+                rpc: "https://staked.helius-rpc.com/".to_string(),
             },
         }
     }
@@ -795,7 +801,7 @@ pub struct GetPriorityFeeEstimateRequest {
 
 #[derive(Serialize, Deserialize, Debug, Default)]
 pub struct MicroLamportPriorityFeeLevels {
-    pub none: f64,
+    pub min: f64,
     pub low: f64,
     pub medium: f64,
     pub high: f64,
@@ -945,15 +951,15 @@ pub struct EditWebhookRequest {
     pub encoding: AccountWebhookEncoding,
 }
 
-pub struct CreateSmartTransactionConfig<'a> {
+pub struct CreateSmartTransactionConfig {
     pub instructions: Vec<Instruction>,
-    pub signers: Vec<&'a dyn Signer>,
+    pub signers: Vec<Arc<dyn Signer>>,
     pub lookup_tables: Option<Vec<AddressLookupTableAccount>>,
-    pub fee_payer: Option<&'a dyn Signer>,
+    pub fee_payer: Option<Arc<dyn Signer>>,
 }
 
-impl<'a> CreateSmartTransactionConfig<'a> {
-    pub fn new(instructions: Vec<Instruction>, signers: Vec<&'a dyn Signer>) -> Self {
+impl CreateSmartTransactionConfig {
+    pub fn new(instructions: Vec<Instruction>, signers: Vec<Arc<dyn Signer>>) -> Self {
         Self {
             instructions,
             signers,
@@ -962,17 +968,36 @@ impl<'a> CreateSmartTransactionConfig<'a> {
         }
     }
 }
-
-pub struct SmartTransactionConfig<'a> {
-    pub create_config: CreateSmartTransactionConfig<'a>,
-    pub send_options: RpcSendTransactionConfig,
+pub struct Timeout {
+    pub duration: Duration,
 }
 
-impl<'a> SmartTransactionConfig<'a> {
-    pub fn new(instructions: Vec<Instruction>, signers: Vec<&'a dyn Signer>) -> Self {
+impl Default for Timeout {
+    fn default() -> Self {
+        Self {
+            duration: Duration::from_secs(60),
+        }
+    }
+}
+
+impl Into<Duration> for Timeout {
+    fn into(self) -> Duration {
+        self.duration
+    }
+}
+
+pub struct SmartTransactionConfig {
+    pub create_config: CreateSmartTransactionConfig,
+    pub send_options: RpcSendTransactionConfig,
+    pub timeout: Timeout,
+}
+
+impl SmartTransactionConfig {
+    pub fn new(instructions: Vec<Instruction>, signers: Vec<Arc<dyn Signer>>, timeout: Timeout) -> Self {
         Self {
             create_config: CreateSmartTransactionConfig::new(instructions, signers),
             send_options: RpcSendTransactionConfig::default(),
+            timeout,
         }
     }
 }
@@ -983,4 +1008,33 @@ pub struct BasicRequest {
     pub id: u32,
     pub method: String,
     pub params: Vec<Vec<String>>,
+}
+
+#[derive(Clone)]
+pub struct CreateSmartTransactionSeedConfig {
+    pub instructions: Vec<Instruction>,
+    pub signer_seeds: Vec<[u8; 32]>,
+    pub fee_payer_seed: Option<[u8; 32]>,
+    pub lookup_tables: Option<Vec<AddressLookupTableAccount>>,
+}
+
+impl CreateSmartTransactionSeedConfig {
+    pub fn new(instructions: Vec<Instruction>, signer_seeds: Vec<[u8; 32]>) -> Self {
+        Self {
+            instructions,
+            signer_seeds,
+            fee_payer_seed: None,
+            lookup_tables: None,
+        }
+    }
+
+    pub fn with_fee_payer_seed(mut self, seed: [u8; 32]) -> Self {
+        self.fee_payer_seed = Some(seed);
+        self
+    }
+
+    pub fn with_lookup_tables(mut self, lookup_tables: Vec<AddressLookupTableAccount>) -> Self {
+        self.lookup_tables = Some(lookup_tables);
+        self
+    }
 }

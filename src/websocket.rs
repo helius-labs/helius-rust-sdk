@@ -28,9 +28,8 @@ use tokio_tungstenite::{
     },
     MaybeTlsStream, WebSocketStream,
 };
-use url::Url;
 
-pub const ENHANCED_WEBSOCKET_URL: &str = "wss://atlas-mainnet.helius-rpc.com?api-key=";
+pub const ENHANCED_WEBSOCKET_URL: &str = "wss://atlas-mainnet.helius-rpc.com/?api-key=";
 const DEFAULT_PING_DURATION_SECONDS: u64 = 10;
 
 // pub type Result<T = ()> = Result<T, HeliusError>;
@@ -54,7 +53,6 @@ pub struct EnhancedWebsocket {
 impl EnhancedWebsocket {
     /// Expects enhanced websocket endpoint: wss://atlas-mainnet.helius-rpc.com?api-key=<API_KEY>
     pub async fn new(url: &str) -> Result<Self> {
-        let url = Url::parse(url)?;
         let (ws, _response) = connect_async(url).await.map_err(HeliusError::Tungstenite)?;
 
         let (subscribe_sender, subscribe_receiver) = mpsc::unbounded_channel();
@@ -218,7 +216,6 @@ impl EnhancedWebsocket {
                 request_id += 1;
                 let method = format!("{operation}Subscribe");
                 let body = json!({"jsonrpc":"2.0","id":request_id,"method":method,"params":params});
-                println!("subscription: {:#}", body);
                 ws.send(Message::Text(body.to_string())).await?;
                 requests_subscribe.insert(request_id, (operation, response_sender));
               },

@@ -1,6 +1,8 @@
 use serde::{Deserialize, Serialize};
 use serde_enum_str::{Deserialize_enum_str, Serialize_enum_str};
+use solana_program::pubkey::Pubkey;
 use solana_sdk::transaction::{Transaction, VersionedTransaction};
+use std::str::FromStr;
 
 use super::*;
 
@@ -27,13 +29,6 @@ pub enum Interface {
     ProgrammableNFT,
     #[serde(rename = "FungibleToken")]
     FungibleToken,
-    #[serde(rename = "V1_PRINT")]
-    V1PRINT,
-    #[allow(non_camel_case_types)]
-    #[serde(rename = "LEGACY_NFT")]
-    LEGACY_NFT,
-    #[serde(rename = "V2_NFT")]
-    Nft,
     #[serde(rename = "MplCoreAsset")]
     MplCoreAsset,
     #[serde(rename = "MplCoreCollection")]
@@ -138,17 +133,28 @@ pub enum TokenType {
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum MintApiAuthority {
-    Mainnet(&'static str),
-    Devnet(&'static str),
+    Mainnet(Pubkey),
+    Devnet(Pubkey),
 }
 
 impl MintApiAuthority {
-    pub fn from_cluster(cluster: Cluster) -> Result<Self, &'static str> {
+    pub fn from_cluster(cluster: &Cluster) -> Self {
         match cluster {
-            Cluster::Devnet => Ok(MintApiAuthority::Devnet("2LbAtCJSaHqTnP9M5QSjvAMXk79RNLusFspFN5Ew67TC")),
-            Cluster::MainnetBeta => Ok(MintApiAuthority::Mainnet(
-                "HnT5KVAywGgQDhmh6Usk4bxRg4RwKxCK4jmECyaDth5R",
-            )),
+            Cluster::MainnetBeta | Cluster::StakedMainnetBeta => {
+                MintApiAuthority::Mainnet(Pubkey::from_str("HnT5KVAywGgQDhmh6Usk4bxRg4RwKxCK4jmECyaDth5R").unwrap())
+            }
+            Cluster::Devnet => {
+                MintApiAuthority::Devnet(Pubkey::from_str("2LbAtCJSaHqTnP9M5QSjvAMXk79RNLusFspFN5Ew67TC").unwrap())
+            }
+        }
+    }
+}
+
+impl Into<Pubkey> for MintApiAuthority {
+    fn into(self) -> Pubkey {
+        match self {
+            MintApiAuthority::Mainnet(s) => s,
+            MintApiAuthority::Devnet(s) => s,
         }
     }
 }

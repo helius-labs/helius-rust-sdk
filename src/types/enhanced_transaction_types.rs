@@ -78,7 +78,7 @@ pub struct TokenTransfer {
 #[serde(rename_all = "camelCase")]
 pub struct TransactionError {
     #[serde(rename = "InstructionError")]
-    pub instruciton_error: serde_json::Value,
+    pub instruction_error: Option<serde_json::Value>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]

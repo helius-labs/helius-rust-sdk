@@ -9,7 +9,7 @@ async fn main() -> Result<()> {
     let api_key: &str = "your_api_key";
     let cluster: Cluster = Cluster::MainnetBeta;
 
-    let helius: Helius = Helius::new_with_ws(api_key, cluster).await.unwrap();
+    let helius: Helius = Helius::new_with_ws(api_key, cluster).await?;
 
     let key: pubkey::Pubkey = pubkey!("BtsmiEEvnSuUnKxqXj2PZRYpPJAc7C34mGz8gtJ1DAaH");
 

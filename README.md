@@ -16,6 +16,21 @@ where `x.y.z` is your desired version. Alternatively, use `cargo add helius` to 
 
 Remember to run `cargo update` regularly to fetch the latest version of the SDK.
 
+### TLS Options
+The Helius Rust SDK uses the native TLS implementation by default via:
+```toml
+[dependencies]
+helius = "x.y.z"
+```
+
+However, the SDK also supports `rustls`. Add the following to your `Cargo.toml` to use `rustls` instead of the native TLS implementation:
+```toml
+[dependencies]
+helius = { version = "x.y.z", default-features = false, features = ["rustls"] }
+```
+
+Using `rustls` may be preferred in environments where OpenSSL is not available or when a pure Rust TLS implementation is desired. However, it may not support all the same features as the native TLS implementation
+
 ## Usage
 ### `Helius`
 The SDK provides a [`Helius`](https://github.com/helius-labs/helius-rust-sdk/blob/dev/src/client.rs) instance that can be configured with an API key and a given Solana cluster. Developers can generate a new API key on the [Helius Developer Dashboard](https://dev.helius.xyz/dashboard/app). This instance acts as the main entry point for interacting with the SDK by providing methods to access different Solana and RPC client functionalities. The following code is an example of how to use the SDK to fetch info on [Mad Lad #8420](https://explorer.solana.com/address/F9Lw3ki3hJ7PF9HQXsBzoY8GyE6sPoEZZdXJBsTTD2rk?network=mainnet):
@@ -118,17 +133,19 @@ Our SDK is designed to provide a seamless developer experience when building on 
 - [`remove_addresses_from_webhook`](https://github.com/helius-labs/helius-rust-sdk/blob/bf24259e3333ae93126bb65b342c2c63e80e07a6/src/webhook.rs#L75-L105) - Removes a list of addresses from an existing webhook by its ID
 
 ### Smart Transactions
-- [`create_smart_transaction`](https://github.com/helius-labs/helius-rust-sdk/blob/705d66fb7d4004fc32c2a5f0d6ca4a1f2a7b175d/src/optimized_transaction.rs#L113-L312) - Creates an optimized transaction based on the provided configuration
-- [`get_compute_units`](https://github.com/helius-labs/helius-rust-sdk/blob/a79a751e1a064125010bdb359068a366d635d005/src/optimized_transaction.rs#L29-L75) - Simulates a transaction to get the total compute units consumed
-- [`poll_transaction_confirmation`](https://github.com/helius-labs/helius-rust-sdk/blob/a79a751e1a064125010bdb359068a366d635d005/src/optimized_transaction.rs#L77-L112) - Polls a transaction to check whether it has been confirmed in 5 second intervals with a 15 second timeout
-- [`send_smart_transaction`](https://github.com/helius-labs/helius-rust-sdk/blob/705d66fb7d4004fc32c2a5f0d6ca4a1f2a7b175d/src/optimized_transaction.rs#L314-L374) - Builds and sends an optimized transaction, and handles its confirmation status
+- [`create_smart_transaction`](https://github.com/helius-labs/helius-rust-sdk/blob/bd9e0b10c81ab9ea56dfcd286336b086f6737b64/src/optimized_transaction.rs#L131-L331) - Creates an optimized transaction based on the provided configuration
+- [`get_compute_units`](https://github.com/helius-labs/helius-rust-sdk/blob/bd9e0b10c81ab9ea56dfcd286336b086f6737b64/src/optimized_transaction.rs#L34-L87) - Simulates a transaction to get the total compute units consumed
+- [`poll_transaction_confirmation`](https://github.com/helius-labs/helius-rust-sdk/blob/bd9e0b10c81ab9ea56dfcd286336b086f6737b64/src/optimized_transaction.rs#L89-L129) - Polls a transaction to check whether it has been confirmed in 5 second intervals with a 15 second timeout
+- [`send_smart_transaction`](https://github.com/helius-labs/helius-rust-sdk/blob/bd9e0b10c81ab9ea56dfcd286336b086f6737b64/src/optimized_transaction.rs#L333-L364) - Builds and sends an optimized transaction, and handles its confirmation status
+- [`send_and_confirm_transaction`](https://github.com/helius-labs/helius-rust-sdk/blob/bd9e0b10c81ab9ea56dfcd286336b086f6737b64/src/optimized_transaction.rs#L366-L412) - Sends a transaction and handles its confirmation status with retry logic
+- [`send_smart_transaction_with_seeds`](https://github.com/helius-labs/helius-rust-sdk/blob/bd9e0b10c81ab9ea56dfcd286336b086f6737b64/src/optimized_transaction.rs#L414-L487) - Sends a smart transaction using seed bytes
 
 ### Jito Smart Transactions and Helper Methods
 - [`add_tip_instruction`](https://github.com/helius-labs/helius-rust-sdk/blob/02b351a5ee3fe16a36078b40f92dc72d0ad077ed/src/jito.rs#L66-L83) - Adds a tip instruction to the instructions provided
-- [`create_smart_transaction_with_tip`](https://github.com/helius-labs/helius-rust-sdk/blob/02b351a5ee3fe16a36078b40f92dc72d0ad077ed/src/jito.rs#L85-L124) - Creates a smart transaction with a Jito tip
-- [`get_bundle_statuses`](https://github.com/helius-labs/helius-rust-sdk/blob/02b351a5ee3fe16a36078b40f92dc72d0ad077ed/src/jito.rs#L169-L202) - Get the status of Jito bundles
-- [`send_jito_bundle`](https://github.com/helius-labs/helius-rust-sdk/blob/02b351a5ee3fe16a36078b40f92dc72d0ad077ed/src/jito.rs#L126-L167) - Sends a bundle of transactions to the Jito Block Engine
-- [`send_smart_transaction_with_tip`](https://github.com/helius-labs/helius-rust-sdk/blob/02b351a5ee3fe16a36078b40f92dc72d0ad077ed/src/jito.rs#L204-L269) - Sends a smart transaction as a Jito bundle with a tip
+- [`create_smart_transaction_with_tip`](https://github.com/helius-labs/helius-rust-sdk/blob/bd9e0b10c81ab9ea56dfcd286336b086f6737b64/src/jito.rs#L85-L125) - Creates a smart transaction with a Jito tip
+- [`get_bundle_statuses`](https://github.com/helius-labs/helius-rust-sdk/blob/bd9e0b10c81ab9ea56dfcd286336b086f6737b64/src/jito.rs#L170-L203) - Get the status of Jito bundles
+- [`send_jito_bundle`](https://github.com/helius-labs/helius-rust-sdk/blob/bd9e0b10c81ab9ea56dfcd286336b086f6737b64/src/jito.rs#L127-L168) - Sends a bundle of transactions to the Jito Block Engine
+- [`send_smart_transaction_with_tip`](https://github.com/helius-labs/helius-rust-sdk/blob/bd9e0b10c81ab9ea56dfcd286336b086f6737b64/src/jito.rs#L205-L270) - Sends a smart transaction as a Jito bundle with a tip
 
 ### Helper Methods
 - [`get_priority_fee_estimate`](https://docs.helius.dev/solana-rpc-nodes/alpha-priority-fee-api) - Gets an estimate of the priority fees required for a transaction to be processed more quickly

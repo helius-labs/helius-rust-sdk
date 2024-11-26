@@ -1,5 +1,5 @@
 use crate::error::{HeliusError, Result};
-use crate::types::{Cluster, HeliusEndpoints};
+use crate::types::{Cluster, HeliusEndpoints, MintApiAuthority};
 
 /// Configuration settings for the Helius client
 ///
@@ -39,5 +39,9 @@ impl Config {
             cluster,
             endpoints,
         })
+    }
+
+    pub fn mint_api_authority(&self) -> MintApiAuthority {
+        MintApiAuthority::from_cluster(&self.cluster)
     }
 }

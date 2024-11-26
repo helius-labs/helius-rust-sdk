@@ -6,6 +6,7 @@ use solana_sdk::{
     system_instruction::transfer,
 };
 use std::str::FromStr;
+use std::sync::Arc;
 use std::time::Duration;
 use tokio::time::sleep;
 
@@ -28,7 +29,7 @@ async fn main() {
 
     let create_config: CreateSmartTransactionConfig = CreateSmartTransactionConfig {
         instructions,
-        signers: vec![&from_keypair],
+        signers: vec![Arc::new(from_keypair)],
         lookup_tables: None,
         fee_payer: None,
     };
@@ -42,6 +43,7 @@ async fn main() {
             max_retries: None,
             min_context_slot: None,
         },
+        timeout: Timeout::default(),
     };
 
     // Send the optimized transaction with a 10k lamport tip using the New York region's API URL
