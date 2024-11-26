@@ -6,6 +6,7 @@ use super::{
 use crate::types::{DisplayOptions, GetAssetOptions};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use std::sync::Arc;
 use std::time::Duration;
 
 use solana_client::rpc_config::RpcSendTransactionConfig;
@@ -950,15 +951,15 @@ pub struct EditWebhookRequest {
     pub encoding: AccountWebhookEncoding,
 }
 
-pub struct CreateSmartTransactionConfig<'a> {
+pub struct CreateSmartTransactionConfig {
     pub instructions: Vec<Instruction>,
-    pub signers: Vec<&'a dyn Signer>,
+    pub signers: Vec<Arc<dyn Signer>>,
     pub lookup_tables: Option<Vec<AddressLookupTableAccount>>,
-    pub fee_payer: Option<&'a dyn Signer>,
+    pub fee_payer: Option<Arc<dyn Signer>>,
 }
 
-impl<'a> CreateSmartTransactionConfig<'a> {
-    pub fn new(instructions: Vec<Instruction>, signers: Vec<&'a dyn Signer>) -> Self {
+impl CreateSmartTransactionConfig {
+    pub fn new(instructions: Vec<Instruction>, signers: Vec<Arc<dyn Signer>>) -> Self {
         Self {
             instructions,
             signers,
@@ -985,14 +986,14 @@ impl Into<Duration> for Timeout {
     }
 }
 
-pub struct SmartTransactionConfig<'a> {
-    pub create_config: CreateSmartTransactionConfig<'a>,
+pub struct SmartTransactionConfig {
+    pub create_config: CreateSmartTransactionConfig,
     pub send_options: RpcSendTransactionConfig,
     pub timeout: Timeout,
 }
 
-impl<'a> SmartTransactionConfig<'a> {
-    pub fn new(instructions: Vec<Instruction>, signers: Vec<&'a dyn Signer>, timeout: Timeout) -> Self {
+impl SmartTransactionConfig {
+    pub fn new(instructions: Vec<Instruction>, signers: Vec<Arc<dyn Signer>>, timeout: Timeout) -> Self {
         Self {
             create_config: CreateSmartTransactionConfig::new(instructions, signers),
             send_options: RpcSendTransactionConfig::default(),
