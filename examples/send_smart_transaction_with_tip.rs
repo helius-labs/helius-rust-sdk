@@ -32,6 +32,7 @@ async fn main() {
         signers: vec![Arc::new(from_keypair)],
         lookup_tables: None,
         fee_payer: None,
+        priority_fee_cap: None,
     };
 
     let config: SmartTransactionConfig = SmartTransactionConfig {
