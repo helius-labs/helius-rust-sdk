@@ -31,6 +31,7 @@ use tokio_tungstenite::{
 
 pub const ENHANCED_WEBSOCKET_URL: &str = "wss://atlas-mainnet.helius-rpc.com/?api-key=";
 const DEFAULT_PING_DURATION_SECONDS: u64 = 10;
+const DEFAULT_MAX_FAILED_PINGS: usize = 3;
 
 // pub type Result<T = ()> = Result<T, HeliusError>;
 
@@ -52,12 +53,19 @@ pub struct EnhancedWebsocket {
 
 impl EnhancedWebsocket {
     /// Expects enhanced websocket endpoint: wss://atlas-mainnet.helius-rpc.com?api-key=<API_KEY>
-    pub async fn new(url: &str) -> Result<Self> {
+    pub async fn new(url: &str, ping_interval_secs: Option<u64>, pong_timeout_secs: Option<u64>) -> Result<Self> {
         let (ws, _response) = connect_async(url).await.map_err(HeliusError::Tungstenite)?;
 
         let (subscribe_sender, subscribe_receiver) = mpsc::unbounded_channel();
         let (_request_sender, request_receiver) = mpsc::unbounded_channel();
         let (shutdown_sender, shutdown_receiver) = oneshot::channel();
+
+        let ping_interval = ping_interval_secs.unwrap_or(DEFAULT_PING_DURATION_SECONDS);
+        let max_failed_pings = if let Some(timeout) = pong_timeout_secs {
+          (timeout as f64 / ping_interval as f64).ceil() as usize
+        } else {
+          DEFAULT_MAX_FAILED_PINGS
+        };
 
         Ok(Self {
             subscribe_sender,
@@ -68,7 +76,8 @@ impl EnhancedWebsocket {
                 subscribe_receiver,
                 request_receiver,
                 shutdown_receiver,
-                DEFAULT_PING_DURATION_SECONDS,
+                ping_interval,
+                max_failed_pings,
             )),
         })
     }
@@ -189,8 +198,10 @@ impl EnhancedWebsocket {
         mut request_receiver: mpsc::UnboundedReceiver<RequestMsg>,
         mut shutdown_receiver: oneshot::Receiver<()>,
         ping_duration_seconds: u64,
+        max_failed_pings: usize,
     ) -> Result<()> {
         let mut request_id: u64 = 0;
+        let mut unmatched_pings: usize = 0;
 
         let mut requests_subscribe = BTreeMap::new();
         let mut requests_unsubscribe = BTreeMap::<u64, oneshot::Sender<()>>::new();
@@ -209,7 +220,23 @@ impl EnhancedWebsocket {
               },
               // Send `Message::Ping` each 10s if no any other communication
               () = sleep(Duration::from_secs(ping_duration_seconds)) => {
+                // Check if we've exceeded our failed ping threshold
+                if unmatched_pings >= max_failed_pings {
+                  let frame = CloseFrame {
+                    code: CloseCode::Abnormal,
+                    reason: format!("No pong received after {} pings", max_failed_pings).into()
+                  };
+
+                  ws.send(Message::Close(Some(frame))).await?;
+                  ws.flush().await?;
+
+                  return Err(HeliusError::WebsocketClosed(
+                    format!("Connection timeout: no pong received after {} pings", max_failed_pings)
+                  ));
+                }
+
                 ws.send(Message::Ping(Vec::new())).await?;
+                unmatched_pings += 1;
               },
               // Read message for subscribe
               Some((operation, params, response_sender)) = subscribe_receiver.recv() => {
@@ -250,7 +277,10 @@ impl EnhancedWebsocket {
                       ws.send(Message::Pong(data)).await?;
                       continue
                   },
-                  Message::Pong(_data) => continue,
+                  Message::Pong(_data) => {
+                    unmatched_pings = 0;
+                    continue;
+                  },
                   Message::Close(_frame) => break,
                   Message::Frame(_frame) => continue,
                 };
