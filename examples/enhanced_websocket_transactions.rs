@@ -10,7 +10,7 @@ async fn main() -> Result<()> {
     let cluster: Cluster = Cluster::MainnetBeta;
 
     // Uses custom ping-pong timeouts to ping every 15s and timeout after 45s of no pong
-    let helius: Helius = Helius::new_with_ws(api_key, cluster, Some(15), Some(45)).await.unwrap();
+    let helius: Helius = Helius::new_with_ws_with_timeouts(api_key, cluster, Some(15), Some(45)).await?;
 
     let key: pubkey::Pubkey = pubkey!("BtsmiEEvnSuUnKxqXj2PZRYpPJAc7C34mGz8gtJ1DAaH");
 

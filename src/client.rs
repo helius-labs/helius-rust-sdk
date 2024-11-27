@@ -100,7 +100,7 @@ impl Helius {
     ///
     /// # Returns
     /// An instance of `Helius` if successful. A `HeliusError` is returned if an error occurs during configuration or initialization of the HTTP, RPC, or WS client
-    pub async fn new_with_ws(
+    pub async fn new_with_ws_with_timeouts(
         api_key: &str,
         cluster: Cluster,
         ping_interval_secs: Option<u64>,
@@ -132,8 +132,8 @@ impl Helius {
     ///
     /// # Returns
     /// An instance of `Helius` if successful. A `HeliusError` is returned if an error occurs during configuration or initialization of the HTTP, RPC, or WS client
-    pub async fn new_with_ws_default(api_key: &str, cluster: Cluster) -> Result<Self> {
-        Self::new_with_ws(api_key, cluster, None, None).await
+    pub async fn new_with_ws(api_key: &str, cluster: Cluster) -> Result<Self> {
+        Self::new_with_ws_with_timeouts(api_key, cluster, None, None).await
     }
 
     /// Provides a thread-safe way to access RPC functionalities
