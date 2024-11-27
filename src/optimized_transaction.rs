@@ -244,9 +244,15 @@ impl Helius {
                     "Priority fee estimate not available".to_string(),
                 ))? as u64;
 
+        let priority_fee: u64 = if let Some(provided_fee) = config.priority_fee_cap {
+            // Take the minimum between the estimate and the user-provided cap
+            std::cmp::min(priority_fee_recommendation, provided_fee)
+        } else {
+            priority_fee_recommendation
+        };
+
         // Add the compute unit price instruction with the estimated fee
-        let compute_budget_ix: Instruction =
-            ComputeBudgetInstruction::set_compute_unit_price(priority_fee_recommendation);
+        let compute_budget_ix: Instruction = ComputeBudgetInstruction::set_compute_unit_price(priority_fee);
         let mut updated_instructions: Vec<Instruction> = config.instructions.clone();
         updated_instructions.push(compute_budget_ix.clone());
         final_instructions.push(compute_budget_ix);
@@ -474,6 +480,7 @@ impl Helius {
             signers,
             lookup_tables: create_config.lookup_tables,
             fee_payer: Some(fee_payer),
+            priority_fee_cap: create_config.priority_fee_cap,
         };
 
         let smart_transaction_config: SmartTransactionConfig = SmartTransactionConfig {
