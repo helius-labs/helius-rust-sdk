@@ -97,17 +97,21 @@ impl Helius {
     /// * `cluster` - The Solana cluster (Devnet or MainnetBeta) that defines the given network environment
     /// * `ping_interval_secs` - Optional duration in seconds between ping messages (defaults to 10 seconds if None)
     /// * `pong_timeout_secs` - Optional duration in seconds to wait for a pong response before considering the connection dead
-    /// 
+    ///
     /// # Returns
     /// An instance of `Helius` if successful. A `HeliusError` is returned if an error occurs during configuration or initialization of the HTTP, RPC, or WS client
-    pub async fn new_with_ws(api_key: &str, cluster: Cluster, ping_interval_secs: Option<u64>, pong_timeout_secs: Option<u64>) -> Result<Self> {
+    pub async fn new_with_ws(
+        api_key: &str,
+        cluster: Cluster,
+        ping_interval_secs: Option<u64>,
+        pong_timeout_secs: Option<u64>,
+    ) -> Result<Self> {
         let config: Arc<Config> = Arc::new(Config::new(api_key, cluster)?);
         let client: Client = Client::builder().build().map_err(HeliusError::ReqwestError)?;
         let rpc_client: Arc<RpcClient> = Arc::new(RpcClient::new(Arc::new(client.clone()), config.clone())?);
         let wss: String = format!("{}{}", ENHANCED_WEBSOCKET_URL, api_key);
-        let ws_client: Arc<EnhancedWebsocket> = Arc::new(
-            EnhancedWebsocket::new(&wss, ping_interval_secs, pong_timeout_secs).await?
-        );
+        let ws_client: Arc<EnhancedWebsocket> =
+            Arc::new(EnhancedWebsocket::new(&wss, ping_interval_secs, pong_timeout_secs).await?);
 
         Ok(Helius {
             config,

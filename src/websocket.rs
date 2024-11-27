@@ -62,9 +62,9 @@ impl EnhancedWebsocket {
 
         let ping_interval = ping_interval_secs.unwrap_or(DEFAULT_PING_DURATION_SECONDS);
         let max_failed_pings = if let Some(timeout) = pong_timeout_secs {
-          (timeout as f64 / ping_interval as f64).ceil() as usize
+            (timeout as f64 / ping_interval as f64).ceil() as usize
         } else {
-          DEFAULT_MAX_FAILED_PINGS
+            DEFAULT_MAX_FAILED_PINGS
         };
 
         Ok(Self {
