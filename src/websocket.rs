@@ -30,8 +30,8 @@ use tokio_tungstenite::{
 };
 
 pub const ENHANCED_WEBSOCKET_URL: &str = "wss://atlas-mainnet.helius-rpc.com/?api-key=";
-const DEFAULT_PING_DURATION_SECONDS: u64 = 10;
-const DEFAULT_MAX_FAILED_PINGS: usize = 3;
+pub const DEFAULT_PING_DURATION_SECONDS: u64 = 10;
+pub const DEFAULT_MAX_FAILED_PINGS: usize = 3;
 
 // pub type Result<T = ()> = Result<T, HeliusError>;
 
