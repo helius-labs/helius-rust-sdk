@@ -269,6 +269,9 @@ impl EnhancedWebsocket {
                   None => break,
                 };
 
+                // Reset unmatched_pings on any received frame
+                unmatched_pings = 0;
+
                 // Get text from the message
                 let text = match msg {
                   Message::Text(text) => text,
@@ -278,7 +281,6 @@ impl EnhancedWebsocket {
                       continue
                   },
                   Message::Pong(_data) => {
-                    unmatched_pings = 0;
                     continue;
                   },
                   Message::Close(_frame) => break,
