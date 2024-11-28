@@ -41,7 +41,7 @@ type SubscribeRequestMsg = (String, Value, oneshot::Sender<SubscribeResponseMsg>
 type SubscribeResult<'a, T> = Result<(BoxStream<'a, T>, UnsubscribeFn)>;
 type RequestMsg = (String, Value, oneshot::Sender<Result<Value>>);
 
-/// A client for subscribing to transaction or account updates from a Helius (geyser) enhanced websocket server.
+/// A client for subscribing to transaction or account updates from a Helius (Geyser) enhanced websocket server.
 ///
 /// Forked from Solana's [`PubsubClient`].
 pub struct EnhancedWebsocket {
