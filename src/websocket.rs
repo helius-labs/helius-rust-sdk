@@ -60,12 +60,16 @@ impl EnhancedWebsocket {
         let (_request_sender, request_receiver) = mpsc::unbounded_channel();
         let (shutdown_sender, shutdown_receiver) = oneshot::channel();
 
-        let ping_interval = ping_interval_secs.unwrap_or(DEFAULT_PING_DURATION_SECONDS);
-        let max_failed_pings = if let Some(timeout) = pong_timeout_secs {
-            (timeout as f64 / ping_interval as f64).ceil() as usize
-        } else {
-            DEFAULT_MAX_FAILED_PINGS
-        };
+        let ping_interval = ping_interval_secs.filter(|interval: &u64| *interval !=0).unwrap_or(DEFAULT_PING_DURATION_SECONDS);
+        let max_failed_pings = pong_timeout_secs
+          .map(|timeout| (timeout as f64 / ping_interval as f64).ceil() as usize)
+          .map_or(DEFAULT_MAX_FAILED_PINGS, |max_failed_pings| {
+            if max_failed_pings != 0 {
+              max_failed_pings
+            } else {
+              usize::MAX
+            }
+          });
 
         Ok(Self {
             subscribe_sender,
