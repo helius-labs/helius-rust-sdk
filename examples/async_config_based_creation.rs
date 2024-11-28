@@ -1,6 +1,6 @@
+use helius::config::Config;
 use helius::error::Result;
 use helius::types::Cluster;
-use helius::config::Config;
 use helius::Helius;
 
 /// Demonstrates creating a Helius client with async Solana capabilities using the config-based approach
@@ -11,9 +11,12 @@ async fn main() -> Result<()> {
 
     let config: Config = Config::new(api_key, cluster)?;
     let async_client: Helius = config.create_client_with_async()?;
-    
+
     if let Ok(async_conn) = async_client.async_connection() {
-        println!("Async client - Get Block Height: {:?}", async_conn.get_block_height().await);
+        println!(
+            "Async client - Get Block Height: {:?}",
+            async_conn.get_block_height().await
+        );
     }
 
     Ok(())
