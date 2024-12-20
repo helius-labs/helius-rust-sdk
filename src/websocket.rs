@@ -29,8 +29,9 @@ use tokio_tungstenite::{
     MaybeTlsStream, WebSocketStream,
 };
 
-pub const ENHANCED_WEBSOCKET_URL: &str = "wss://atlas-mainnet.helius-rpc.com?api-key=";
-const DEFAULT_PING_DURATION_SECONDS: u64 = 10;
+pub const ENHANCED_WEBSOCKET_URL: &str = "wss://atlas-mainnet.helius-rpc.com/?api-key=";
+pub const DEFAULT_PING_DURATION_SECONDS: u64 = 10;
+pub const DEFAULT_MAX_FAILED_PINGS: usize = 3;
 
 // pub type Result<T = ()> = Result<T, HeliusError>;
 
@@ -40,7 +41,7 @@ type SubscribeRequestMsg = (String, Value, oneshot::Sender<SubscribeResponseMsg>
 type SubscribeResult<'a, T> = Result<(BoxStream<'a, T>, UnsubscribeFn)>;
 type RequestMsg = (String, Value, oneshot::Sender<Result<Value>>);
 
-/// A client for subscribing to transaction or account updates from a Helius (geyser) enhanced websocket server.
+/// A client for subscribing to transaction or account updates from a Helius (Geyser) enhanced websocket server.
 ///
 /// Forked from Solana's [`PubsubClient`].
 pub struct EnhancedWebsocket {
@@ -52,12 +53,25 @@ pub struct EnhancedWebsocket {
 
 impl EnhancedWebsocket {
     /// Expects enhanced websocket endpoint: wss://atlas-mainnet.helius-rpc.com?api-key=<API_KEY>
-    pub async fn new(url: &str) -> Result<Self> {
+    pub async fn new(url: &str, ping_interval_secs: Option<u64>, pong_timeout_secs: Option<u64>) -> Result<Self> {
         let (ws, _response) = connect_async(url).await.map_err(HeliusError::Tungstenite)?;
 
         let (subscribe_sender, subscribe_receiver) = mpsc::unbounded_channel();
         let (_request_sender, request_receiver) = mpsc::unbounded_channel();
         let (shutdown_sender, shutdown_receiver) = oneshot::channel();
+
+        let ping_interval = ping_interval_secs
+            .filter(|interval: &u64| *interval != 0)
+            .unwrap_or(DEFAULT_PING_DURATION_SECONDS);
+        let max_failed_pings = pong_timeout_secs
+            .map(|timeout| (timeout as f64 / ping_interval as f64).ceil() as usize)
+            .map_or(DEFAULT_MAX_FAILED_PINGS, |max_failed_pings| {
+                if max_failed_pings != 0 {
+                    max_failed_pings
+                } else {
+                    usize::MAX
+                }
+            });
 
         Ok(Self {
             subscribe_sender,
@@ -68,7 +82,8 @@ impl EnhancedWebsocket {
                 subscribe_receiver,
                 request_receiver,
                 shutdown_receiver,
-                DEFAULT_PING_DURATION_SECONDS,
+                ping_interval,
+                max_failed_pings,
             )),
         })
     }
@@ -189,8 +204,10 @@ impl EnhancedWebsocket {
         mut request_receiver: mpsc::UnboundedReceiver<RequestMsg>,
         mut shutdown_receiver: oneshot::Receiver<()>,
         ping_duration_seconds: u64,
+        max_failed_pings: usize,
     ) -> Result<()> {
         let mut request_id: u64 = 0;
+        let mut unmatched_pings: usize = 0;
 
         let mut requests_subscribe = BTreeMap::new();
         let mut requests_unsubscribe = BTreeMap::<u64, oneshot::Sender<()>>::new();
@@ -209,7 +226,23 @@ impl EnhancedWebsocket {
               },
               // Send `Message::Ping` each 10s if no any other communication
               () = sleep(Duration::from_secs(ping_duration_seconds)) => {
+                // Check if we've exceeded our failed ping threshold
+                if unmatched_pings >= max_failed_pings {
+                  let frame = CloseFrame {
+                    code: CloseCode::Abnormal,
+                    reason: format!("No pong received after {} pings", max_failed_pings).into()
+                  };
+
+                  ws.send(Message::Close(Some(frame))).await?;
+                  ws.flush().await?;
+
+                  return Err(HeliusError::WebsocketClosed(
+                    format!("Connection timeout: no pong received after {} pings", max_failed_pings)
+                  ));
+                }
+
                 ws.send(Message::Ping(Vec::new())).await?;
+                unmatched_pings += 1;
               },
               // Read message for subscribe
               Some((operation, params, response_sender)) = subscribe_receiver.recv() => {
@@ -242,6 +275,9 @@ impl EnhancedWebsocket {
                   None => break,
                 };
 
+                // Reset unmatched_pings on any received frame
+                unmatched_pings = 0;
+
                 // Get text from the message
                 let text = match msg {
                   Message::Text(text) => text,
@@ -250,7 +286,9 @@ impl EnhancedWebsocket {
                       ws.send(Message::Pong(data)).await?;
                       continue
                   },
-                  Message::Pong(_data) => continue,
+                  Message::Pong(_data) => {
+                    continue;
+                  },
                   Message::Close(_frame) => break,
                   Message::Frame(_frame) => continue,
                 };

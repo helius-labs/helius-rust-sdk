@@ -92,7 +92,7 @@ impl Helius {
     /// A `Result` containing the serialized transaction as a base58-encoded string and the last valid block height
     pub async fn create_smart_transaction_with_tip(
         &self,
-        mut config: CreateSmartTransactionConfig<'_>,
+        mut config: CreateSmartTransactionConfig,
         tip_amount: Option<u64>,
     ) -> Result<(String, u64)> {
         if config.signers.is_empty() {
@@ -105,6 +105,7 @@ impl Helius {
         let random_tip_account: &str = *JITO_TIP_ACCOUNTS.choose(&mut rand::thread_rng()).unwrap();
         let payer_key: Pubkey = config
             .fee_payer
+            .as_ref()
             .map_or_else(|| config.signers[0].pubkey(), |signer| signer.pubkey());
 
         self.add_tip_instruction(&mut config.instructions, payer_key, random_tip_account, tip_amount);
@@ -212,7 +213,7 @@ impl Helius {
     /// A `Result` containing the bundle IDc
     pub async fn send_smart_transaction_with_tip(
         &self,
-        config: SmartTransactionConfig<'_>,
+        config: SmartTransactionConfig,
         tip_amount: Option<u64>,
         region: Option<JitoRegion>,
     ) -> Result<String> {
