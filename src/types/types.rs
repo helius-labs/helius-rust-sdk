@@ -357,7 +357,6 @@ pub struct Asset {
     pub mutable: bool,
     pub burnt: bool,
     pub mint_extensions: Option<Value>,
-    #[serde(rename = "tokenSupply")]
     pub token_info: Option<TokenInfo>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub group_definition: Option<GroupDefinition>,
