@@ -273,6 +273,13 @@ pub struct ApiResponse<T> {
 }
 
 #[derive(Serialize, Deserialize, Debug, Default)]
+pub struct NativeBalance {
+    pub lamports: u64,
+    pub price_per_sol: f64,
+    pub total_price: f64,
+}
+
+#[derive(Serialize, Deserialize, Debug, Default)]
 pub struct AssetList {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub grand_total: Option<u64>,
@@ -287,6 +294,8 @@ pub struct AssetList {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cursor: Option<String>,
     pub items: Vec<Asset>,
+    #[serde(rename = "nativeBalance", skip_serializing_if = "Option::is_none")]
+    pub native_balance: Option<NativeBalance>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub errors: Option<Vec<AssetError>>,
 }
@@ -513,21 +522,15 @@ pub struct TokenInfo {
     pub balance: Option<u64>,
     pub supply: Option<u64>,
     pub decimals: Option<i32>,
-    #[serde(rename = "tokenProgram")]
     pub token_program: Option<String>,
-    #[serde(rename = "associatedTokenAddress")]
     pub associated_token_address: Option<String>,
-    #[serde(rename = "priceInfo")]
     pub price_info: Option<PriceInfo>,
-    #[serde(rename = "mintAuthority")]
     pub mint_authority: Option<String>,
-    #[serde(rename = "freezeAuthority")]
     pub freeze_authority: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct PriceInfo {
-    #[serde(rename = "pricePerToken")]
     pub price_per_token: f32,
     pub currency: String,
 }
