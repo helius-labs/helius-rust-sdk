@@ -12,6 +12,11 @@ async fn main() -> Result<()> {
     let request: ParsedTransactionHistoryRequest = ParsedTransactionHistoryRequest {
         address: "2k5AXX4guW9XwRQ1AKCpAuUqgWDpQpwFfpVFh3hnm2Ha".to_string(),
         before: None,
+        until: None,
+        transaction_type: None,
+        commitment: None,
+        limit: None,
+        source: None,
     };
 
     let response: Result<Vec<EnhancedTransaction>> = helius.parsed_transaction_history(request).await;

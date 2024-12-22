@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 use serde_json::{Number, Value};
+use solana_sdk::commitment_config::CommitmentLevel;
 
 use super::*;
 use crate::utils::deserialize_str_to_number;
@@ -214,6 +215,14 @@ pub struct ParseTransactionsRequest {
 pub struct ParsedTransactionHistoryRequest {
     pub address: String,
     pub before: Option<String>,
+    pub until: Option<String>,
+    // Only support `finalized` and `confirmed` at this time.
+    pub commitment: Option<CommitmentLevel>,
+    pub source: Option<Source>,
+    #[serde(rename = "type")]
+    pub transaction_type: Option<TransactionType>,
+    // Should be between 1 and 100
+    pub limit: Option<u64>,
 }
 
 /// We have a limit of 100 transactions per call, so this helps split the signatures into different chunks
