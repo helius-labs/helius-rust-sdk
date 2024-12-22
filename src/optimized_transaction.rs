@@ -611,9 +611,7 @@ impl Helius {
 
             let fee_payer_copy: Keypair = Keypair::from_bytes(&fee_payer.to_bytes()).unwrap();
             let mut all_signers: Vec<Keypair> = vec![fee_payer_copy];
-            all_signers.extend(
-                keypairs.into_iter().filter(|k| k.pubkey() != fee_payer.pubkey())
-            );
+            all_signers.extend(keypairs.into_iter().filter(|k| k.pubkey() != fee_payer.pubkey()));
 
             let mut tx: VersionedTransaction = VersionedTransaction {
                 signatures: vec![Signature::default(); all_signers.len()],
@@ -630,9 +628,7 @@ impl Helius {
             let mut tx: Transaction = Transaction::new_with_payer(&final_instructions, Some(&fee_payer.pubkey()));
 
             let mut signers: Vec<&Keypair> = vec![&fee_payer];
-            signers.extend(
-                keypairs.iter().filter(|k| k.pubkey() != fee_payer.pubkey())
-            );
+            signers.extend(keypairs.iter().filter(|k| k.pubkey() != fee_payer.pubkey()));
 
             tx.sign(&signers, recent_blockhash);
 

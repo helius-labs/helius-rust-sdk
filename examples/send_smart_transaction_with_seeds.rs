@@ -15,8 +15,8 @@ async fn main() {
         let helius: Helius = Helius::new(api_key, cluster).unwrap();
 
         // Convert your base58 private key to a seed
-        let keypair_base58 = "your_keypair_as_base58";
-        let keypair_bytes = bs58::decode(keypair_base58).into_vec().unwrap();
+        let keypair_base58: &str = "your_keypair_as_base58";
+        let keypair_bytes: Vec<u8> = bs58::decode(keypair_base58).into_vec().unwrap();
 
         // Create the recipient address
         let to_pubkey: Pubkey = Pubkey::from_str("recipient_address").unwrap();
