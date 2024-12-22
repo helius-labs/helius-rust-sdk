@@ -218,6 +218,11 @@ async fn test_parse_transaction_history_success() {
     let request: ParsedTransactionHistoryRequest = ParsedTransactionHistoryRequest {
         address: "46tC8n6GyWvUjFxpTE9juG5WZ72RXADpPhY4S1d6wvTi".to_string(),
         before: None,
+        until: None,
+        transaction_type: None,
+        commitment: None,
+        limit: None,
+        source: None,
     };
 
     let response: Result<Vec<EnhancedTransaction>> = helius.parsed_transaction_history(request).await;
@@ -244,6 +249,7 @@ async fn test_parse_transaction_history_failure() {
             rpc: url.to_string(),
         },
     });
+
     let client: Client = Client::new();
     let rpc_client: Arc<RpcClient> = Arc::new(RpcClient::new(Arc::new(client.clone()), Arc::clone(&config)).unwrap());
     let helius: Helius = Helius {
@@ -253,10 +259,17 @@ async fn test_parse_transaction_history_failure() {
         async_rpc_client: None,
         ws_client: None,
     };
+
     let request: ParsedTransactionHistoryRequest = ParsedTransactionHistoryRequest {
         address: "46tC8n6GyWvUjFxpTE9juG5WZ72RXADpPhY4S1d6wvTi".to_string(),
         before: None,
+        until: None,
+        transaction_type: None,
+        commitment: None,
+        limit: None,
+        source: None,
     };
+
     server
         .mock(
             "GET",

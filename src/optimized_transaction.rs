@@ -24,6 +24,7 @@ use solana_sdk::{
     message::{v0, VersionedMessage},
     pubkey::Pubkey,
     signature::{Signature, Signer},
+    signer::keypair::Keypair,
     transaction::{Transaction, VersionedTransaction},
 };
 use solana_transaction_status::TransactionConfirmationStatus;
@@ -37,7 +38,7 @@ impl Helius {
     /// * `instructions` - The transaction instructions
     /// * `payer` - The public key of the payer
     /// * `lookup_tables` - The address lookup tables
-    /// * `from_keypair` - The keypair signing the transaction (needed to simulate the transaction)
+    /// * `signers` - The signers for the transaction
     ///
     /// # Returns
     /// The compute units consumed, or None if unsuccessful
@@ -417,6 +418,63 @@ impl Helius {
         })
     }
 
+    /// Thread safe version of get_compute_units to simulate a transaction to get the total compute units consumed
+    ///
+    /// # Arguments
+    /// * `instructions` - The transaction instructions
+    /// * `payer` - The public key of the payer
+    /// * `lookup_tables` - The address lookup tables
+    /// * `keypairs` - The keypairs for the transaction
+    ///
+    /// # Returns
+    /// The compute units consumed, or None if unsuccessful
+    pub async fn get_compute_units_thread_safe(
+        &self,
+        instructions: Vec<Instruction>,
+        payer: Pubkey,
+        lookup_tables: Vec<AddressLookupTableAccount>,
+        keypairs: Option<&[&Keypair]>,
+    ) -> Result<Option<u64>> {
+        let test_instructions: Vec<Instruction> = vec![ComputeBudgetInstruction::set_compute_unit_limit(1_400_000)]
+            .into_iter()
+            .chain(instructions)
+            .collect::<Vec<_>>();
+
+        let recent_blockhash: Hash = self.connection().get_latest_blockhash()?;
+        let v0_message: v0::Message =
+            v0::Message::try_compile(&payer, &test_instructions, &lookup_tables, recent_blockhash)?;
+        let versioned_message: VersionedMessage = VersionedMessage::V0(v0_message);
+
+        let transaction: VersionedTransaction = if let Some(keypairs) = keypairs {
+            let mut tx = VersionedTransaction {
+                signatures: vec![Signature::default(); keypairs.len()],
+                message: versioned_message.clone(),
+            };
+
+            for (i, keypair) in keypairs.iter().enumerate() {
+                tx.signatures[i] = keypair.sign_message(&versioned_message.serialize());
+            }
+
+            tx
+        } else {
+            VersionedTransaction {
+                signatures: vec![],
+                message: versioned_message,
+            }
+        };
+
+        let config: RpcSimulateTransactionConfig = RpcSimulateTransactionConfig {
+            sig_verify: keypairs.is_some(),
+            ..Default::default()
+        };
+
+        let result: Response<RpcSimulateTransactionResult> = self
+            .connection()
+            .simulate_transaction_with_config(&transaction, config)?;
+
+        Ok(result.value.units_consumed)
+    }
+
     /// Sends a smart transaction using seed bytes
     ///
     /// This method allows for sending smart transactions in asynchronous contexts
@@ -439,7 +497,7 @@ impl Helius {
     ///
     /// # Errors
     ///
-    /// This function will return an error if keypair creation from seeds fails, the underlying `send_smart_transaction` call fails,
+    /// This function will return an error if keypair creation from seeds fails, the transaction sending fails,
     /// or no signer seeds are provided
     ///
     /// # Notes
@@ -457,38 +515,146 @@ impl Helius {
             ));
         }
 
-        let mut signers: Vec<Arc<dyn Signer>> = create_config
+        let keypairs: Vec<Keypair> = create_config
             .signer_seeds
             .into_iter()
-            .map(|seed| {
-                Arc::new(keypair_from_seed(&seed).expect("Failed to create keypair from seed")) as Arc<dyn Signer>
-            })
+            .map(|seed| keypair_from_seed(&seed).expect("Failed to create keypair from seed"))
             .collect();
 
-        // Determine the fee payer
-        let fee_payer_index: usize = if let Some(fee_payer_seed) = create_config.fee_payer_seed {
-            let fee_payer =
-                Arc::new(keypair_from_seed(&fee_payer_seed).expect("Failed to create fee payer keypair from seed"));
-            signers.push(fee_payer);
-            signers.len() - 1 // Index of the last signer (fee payer)
+        // Create the fee payer keypair if provided. Otherwise, we default to the first signer
+        let fee_payer: Keypair = if let Some(fee_payer_seed) = create_config.fee_payer_seed {
+            keypair_from_seed(&fee_payer_seed).expect("Failed to create keypair from seed")
         } else {
-            0 // Index of the first signer
-        };
-        let fee_payer = signers[fee_payer_index].clone();
-        let create_smart_transaction_config: CreateSmartTransactionConfig = CreateSmartTransactionConfig {
-            instructions: create_config.instructions,
-            signers,
-            lookup_tables: create_config.lookup_tables,
-            fee_payer: Some(fee_payer),
-            priority_fee_cap: create_config.priority_fee_cap,
+            Keypair::from_bytes(&keypairs[0].to_bytes()).unwrap()
         };
 
-        let smart_transaction_config: SmartTransactionConfig = SmartTransactionConfig {
-            create_config: create_smart_transaction_config,
-            send_options: send_options.unwrap_or_default(),
-            timeout: timeout.unwrap_or_default(),
+        let (recent_blockhash, last_valid_block_hash) = self
+            .connection()
+            .get_latest_blockhash_with_commitment(CommitmentConfig::confirmed())?;
+
+        let mut final_instructions: Vec<Instruction> = vec![];
+
+        // Get priority fee estimate
+        let transaction: Transaction = Transaction::new_signed_with_payer(
+            &create_config.instructions,
+            Some(&fee_payer.pubkey()),
+            &[&fee_payer],
+            recent_blockhash,
+        );
+
+        let serialized_tx: Vec<u8> = serialize(&transaction).map_err(|e| HeliusError::InvalidInput(e.to_string()))?;
+        let transaction_base58: String = encode(&serialized_tx).into_string();
+
+        let priority_fee_request: GetPriorityFeeEstimateRequest = GetPriorityFeeEstimateRequest {
+            transaction: Some(transaction_base58),
+            account_keys: None,
+            options: Some(GetPriorityFeeEstimateOptions {
+                recommended: Some(true),
+                ..Default::default()
+            }),
         };
 
-        self.send_smart_transaction(smart_transaction_config).await
+        let priority_fee_estimate: GetPriorityFeeEstimateResponse =
+            self.rpc().get_priority_fee_estimate(priority_fee_request).await?;
+        let priority_fee_recommendation: u64 =
+            priority_fee_estimate
+                .priority_fee_estimate
+                .ok_or(HeliusError::InvalidInput(
+                    "Priority fee estimate not available".to_string(),
+                ))? as u64;
+
+        let priority_fee: u64 = if let Some(provided_fee) = create_config.priority_fee_cap {
+            std::cmp::min(priority_fee_recommendation, provided_fee)
+        } else {
+            priority_fee_recommendation
+        };
+
+        // Add compute budget instructions
+        final_instructions.push(ComputeBudgetInstruction::set_compute_unit_price(priority_fee));
+
+        // Get optimal compute units
+        let mut test_instructions: Vec<Instruction> = final_instructions.clone();
+        test_instructions.extend(create_config.instructions.clone());
+
+        let units: Option<u64> = self
+            .get_compute_units_thread_safe(
+                test_instructions,
+                fee_payer.pubkey(),
+                create_config.lookup_tables.clone().unwrap_or_default(),
+                Some(&[&fee_payer]),
+            )
+            .await?;
+
+        let compute_units: u64 = units.ok_or(HeliusError::InvalidInput(
+            "Error fetching compute units for the instructions provided".to_string(),
+        ))?;
+
+        let customers_cu: u32 = if compute_units < 1000 {
+            1000
+        } else {
+            (compute_units as f64 * 1.1).ceil() as u32
+        };
+
+        final_instructions.push(ComputeBudgetInstruction::set_compute_unit_limit(customers_cu));
+        final_instructions.extend(create_config.instructions);
+
+        // Create the final transaction
+        let transaction: SmartTransaction = if let Some(lookup_tables) = create_config.lookup_tables {
+            let message: v0::Message = v0::Message::try_compile(
+                &fee_payer.pubkey(),
+                &final_instructions,
+                &lookup_tables,
+                recent_blockhash,
+            )?;
+
+            let versioned_message: VersionedMessage = VersionedMessage::V0(message);
+
+            let fee_payer_copy: Keypair = Keypair::from_bytes(&fee_payer.to_bytes()).unwrap();
+            let mut all_signers: Vec<Keypair> = vec![fee_payer_copy];
+            all_signers.extend(keypairs.into_iter().filter(|k| k.pubkey() != fee_payer.pubkey()));
+
+            let mut tx: VersionedTransaction = VersionedTransaction {
+                signatures: vec![Signature::default(); all_signers.len()],
+                message: versioned_message.clone(),
+            };
+
+            // Sign message with all keypairs
+            for (i, keypair) in all_signers.iter().enumerate() {
+                tx.signatures[i] = keypair.sign_message(&versioned_message.serialize());
+            }
+
+            SmartTransaction::Versioned(tx)
+        } else {
+            let mut tx: Transaction = Transaction::new_with_payer(&final_instructions, Some(&fee_payer.pubkey()));
+
+            let mut signers: Vec<&Keypair> = vec![&fee_payer];
+            signers.extend(keypairs.iter().filter(|k| k.pubkey() != fee_payer.pubkey()));
+
+            tx.sign(&signers, recent_blockhash);
+
+            SmartTransaction::Legacy(tx)
+        };
+
+        // Send and confirm the transaction
+        match transaction {
+            SmartTransaction::Legacy(tx) => {
+                self.send_and_confirm_transaction(
+                    &tx,
+                    send_options.unwrap_or_default(),
+                    last_valid_block_hash,
+                    Some(timeout.unwrap_or_default().into()),
+                )
+                .await
+            }
+            SmartTransaction::Versioned(tx) => {
+                self.send_and_confirm_transaction(
+                    &tx,
+                    send_options.unwrap_or_default(),
+                    last_valid_block_hash,
+                    Some(timeout.unwrap_or_default().into()),
+                )
+                .await
+            }
+        }
     }
 }
