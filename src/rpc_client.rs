@@ -26,8 +26,8 @@ use crate::types::types::{RpcRequest, RpcResponse};
 use crate::types::{
     Asset, AssetList, AssetProof, EditionsList, GetAsset, GetAssetBatch, GetAssetProof, GetAssetProofBatch,
     GetAssetSignatures, GetAssetsByAuthority, GetAssetsByCreator, GetAssetsByGroup, GetAssetsByOwner, GetNftEditions,
-    GetPriorityFeeEstimateRequest, GetPriorityFeeEstimateResponse, GetRwaAssetRequest, GetRwaAssetResponse,
-    GetTokenAccounts, SearchAssets, TokenAccountsList, TransactionSignatureList,
+    GetPriorityFeeEstimateRequest, GetPriorityFeeEstimateResponse, GetTokenAccounts, SearchAssets, TokenAccountsList,
+    TransactionSignatureList,
 };
 
 use reqwest::{Client, Method, Url};
@@ -247,17 +247,5 @@ impl RpcClient {
         request: GetPriorityFeeEstimateRequest,
     ) -> Result<GetPriorityFeeEstimateResponse> {
         self.post_rpc_request("getPriorityFeeEstimate", vec![request]).await
-    }
-
-    /// Gets a Real-World Asset (RWA) based on its mint address
-    ///
-    /// # Arguments
-    /// * `request` - A struct containing the mint ID of the RWA
-    ///
-    /// # Returns
-    /// A `Result` that, if successful, wraps a `GetRwaAssetResponse` struct containing:
-    /// - `items`: Details of the RWA including controllers, registries, and policy engine data
-    pub async fn get_rwa_asset(&self, request: GetRwaAssetRequest) -> Result<GetRwaAssetResponse> {
-        self.post_rpc_request("getRwaAccountsByMint", request).await
     }
 }
