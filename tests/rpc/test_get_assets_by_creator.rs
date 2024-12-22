@@ -204,6 +204,7 @@ async fn test_get_assets_by_creator_success() {
         },
     ],
     errors: None,
+    native_balance: None,
 },
         id: "1".to_string(),
     };
