@@ -475,40 +475,34 @@ impl Helius {
         Ok(result.value.units_consumed)
     }
 
-    /// Sends a smart transaction using seed bytes
+    /// Creates a smart transaction using seed bytes for thread-safe transaction creation
     ///
-    /// This method allows for sending smart transactions in asynchronous contexts
-    /// where the Signer trait's lack of Send + Sync would otherwise cause issues.
-    /// It creates Keypairs from the provided seed bytes and uses them to sign the transaction.
+    /// Creates an optimized transaction using seed bytes instead of `Signers`` for thread-safe operations.
     ///
     /// # Arguments
-    ///
-    /// * `create_config` - A `CreateSmartTransactionSeedConfig` containing:
-    ///   - `instructions`: The instructions to be executed in the transaction.
-    ///   - `signer_seeds`: Seed bytes for generating signer keypairs.
-    ///   - `fee_payer_seed`: Optional seed bytes for generating the fee payer keypair.
-    ///   - `lookup_tables`: Optional address lookup tables for the transaction.
-    /// * `send_options` - Optional `RpcSendTransactionConfig` for sending the transaction.
-    /// * `timeout` - Optional `Timeout` wait time for polling transaction confirmation.
+    /// * `create_config` - Transaction configuration containing:
+    ///   - `instructions`: Instructions to execute
+    ///   - `signer_seeds`: Seed bytes for generating keypairs
+    ///   - `fee_payer_seed`: Optional fee payer seed (defaults to first signer)
+    ///   - `lookup_tables`: Optional address lookup tables for versioned transactions
+    ///   - `priority_fee_cap`: Optional maximum priority fee
     ///
     /// # Returns
-    ///
-    /// A `Result<Signature>` containing the transaction signature if successful, or an error if not.
+    /// A tuple containing:
+    /// - `SmartTransaction`: The created transaction (legacy or versioned)
+    /// - `u64`: Last valid block height for the transaction
     ///
     /// # Errors
-    ///
-    /// This function will return an error if keypair creation from seeds fails, the transaction sending fails,
-    /// or no signer seeds are provided
-    ///
-    /// # Notes
-    ///
-    /// If no `fee_payer_seed` is provided, the first signer (i.e., derived from the first seed in `signer_seeds`) will be used as the fee payer
-    pub async fn send_smart_transaction_with_seeds(
+    /// Returns `HeliusError` if:
+    /// - No signer seeds provided
+    /// - Failed to create keypairs from seeds
+    /// - Failed to get compute units
+    /// - Failed to estimate priority fees
+    /// - Transaction creation fails
+    pub async fn create_smart_transaction_with_seeds(
         &self,
-        create_config: CreateSmartTransactionSeedConfig,
-        send_options: Option<RpcSendTransactionConfig>,
-        timeout: Option<Timeout>,
-    ) -> Result<Signature> {
+        create_config: &CreateSmartTransactionSeedConfig,
+    ) -> Result<(SmartTransaction, u64)> {
         if create_config.signer_seeds.is_empty() {
             return Err(HeliusError::InvalidInput(
                 "At least one signer seed must be provided".to_string(),
@@ -517,8 +511,8 @@ impl Helius {
 
         let keypairs: Vec<Keypair> = create_config
             .signer_seeds
-            .into_iter()
-            .map(|seed| keypair_from_seed(&seed).expect("Failed to create keypair from seed"))
+            .iter()
+            .map(|seed| keypair_from_seed(seed).expect("Failed to create keypair from seed"))
             .collect();
 
         // Create the fee payer keypair if provided. Otherwise, we default to the first signer
@@ -596,10 +590,10 @@ impl Helius {
         };
 
         final_instructions.push(ComputeBudgetInstruction::set_compute_unit_limit(customers_cu));
-        final_instructions.extend(create_config.instructions);
+        final_instructions.extend(create_config.instructions.clone());
 
         // Create the final transaction
-        let transaction: SmartTransaction = if let Some(lookup_tables) = create_config.lookup_tables {
+        let transaction: SmartTransaction = if let Some(lookup_tables) = &create_config.lookup_tables {
             let message: v0::Message = v0::Message::try_compile(
                 &fee_payer.pubkey(),
                 &final_instructions,
@@ -635,7 +629,51 @@ impl Helius {
             SmartTransaction::Legacy(tx)
         };
 
-        // Send and confirm the transaction
+        Ok((transaction, last_valid_block_hash))
+    }
+
+    /// Sends a smart transaction using seed bytes
+    ///
+    /// This method allows for sending smart transactions in asynchronous contexts
+    /// where the Signer trait's lack of Send + Sync would otherwise cause issues.
+    /// It creates Keypairs from the provided seed bytes and uses them to sign the transaction.
+    ///
+    /// # Arguments
+    ///
+    /// * `create_config` - A `CreateSmartTransactionSeedConfig` containing:
+    ///   - `instructions`: The instructions to be executed in the transaction.
+    ///   - `signer_seeds`: Seed bytes for generating signer keypairs.
+    ///   - `fee_payer_seed`: Optional seed bytes for generating the fee payer keypair.
+    ///   - `lookup_tables`: Optional address lookup tables for the transaction.
+    /// * `send_options` - Optional `RpcSendTransactionConfig` for sending the transaction.
+    /// * `timeout` - Optional `Timeout` wait time for polling transaction confirmation.
+    ///
+    /// # Returns
+    ///
+    /// A `Result<Signature>` containing the transaction signature if successful, or an error if not.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if keypair creation from seeds fails, the transaction sending fails,
+    /// or no signer seeds are provided
+    ///
+    /// # Notes
+    ///
+    /// If no `fee_payer_seed` is provided, the first signer (i.e., derived from the first seed in `signer_seeds`) will be used as the fee payer
+    pub async fn send_smart_transaction_with_seeds(
+        &self,
+        create_config: CreateSmartTransactionSeedConfig,
+        send_options: Option<RpcSendTransactionConfig>,
+        timeout: Option<Timeout>,
+    ) -> Result<Signature> {
+        if create_config.signer_seeds.is_empty() {
+            return Err(HeliusError::InvalidInput(
+                "At least one signer seed required".to_string(),
+            ));
+        }
+
+        let (transaction, last_valid_block_hash) = self.create_smart_transaction_with_seeds(&create_config).await?;
+
         match transaction {
             SmartTransaction::Legacy(tx) => {
                 self.send_and_confirm_transaction(
