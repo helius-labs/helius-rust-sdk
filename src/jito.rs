@@ -269,7 +269,7 @@ impl Helius {
         })
     }
 
-    /// Sends a smart transaction as a Jito bundle with a tip using seed bytes
+    /// Sends a smart transaction as a Jito bundle with a tip using seed bytes to create the transaction
     ///
     /// This method provides a thread-safe way to send transactions with Jito tips by using seed bytes instead of `Signers`. It
     /// combines the functionality of `send_smart_transaction_with_seeds` with Jito's bundles, therefore, allowing for them
