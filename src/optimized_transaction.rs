@@ -1,7 +1,8 @@
 use crate::error::{HeliusError, Result};
 use crate::types::{
     CreateSmartTransactionConfig, CreateSmartTransactionSeedConfig, GetPriorityFeeEstimateOptions,
-    GetPriorityFeeEstimateRequest, GetPriorityFeeEstimateResponse, SmartTransaction, SmartTransactionConfig, Timeout,
+    GetPriorityFeeEstimateRequest, GetPriorityFeeEstimateResponse, PriorityLevel, SmartTransaction,
+    SmartTransactionConfig, Timeout,
 };
 use crate::Helius;
 use std::sync::Arc;
@@ -230,7 +231,7 @@ impl Helius {
             transaction: Some(transaction_base58),
             account_keys: None,
             options: Some(GetPriorityFeeEstimateOptions {
-                recommended: Some(true),
+                priority_level: Some(PriorityLevel::High),
                 ..Default::default()
             }),
         };
@@ -543,7 +544,7 @@ impl Helius {
             transaction: Some(transaction_base58),
             account_keys: None,
             options: Some(GetPriorityFeeEstimateOptions {
-                recommended: Some(true),
+                priority_level: Some(PriorityLevel::High),
                 ..Default::default()
             }),
         };
