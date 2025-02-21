@@ -116,7 +116,9 @@ Our SDK is designed to provide a seamless developer experience when building on 
 - [`get_nft_edition`](https://docs.helius.dev/compression-and-das-api/digital-asset-standard-das-api/get-nft-editions) - Gets all the NFT editions  associated with a specific master NFT
 
 ### Mint API
+- [`delegate_collection_authority`](https://github.com/helius-labs/helius-rust-sdk/blob/6d3630c5fbafaaf450302789251ffaeed3cf7fcc/src/mint_api.rs#L24-L59) - Delegates collection authority to a new authority for a given collection mint
 - [`mint_compressed_nft`](https://docs.helius.dev/compression-and-das-api/mint-api/mint-compressed-nft) - The easiest way to mint a compressed NFT (cNFT)
+- [`revoke_collection_authority`](https://github.com/helius-labs/helius-rust-sdk/blob/6d3630c5fbafaaf450302789251ffaeed3cf7fcc/src/mint_api.rs#L61-L93) - Revokes a delegated collection authority for a given collection mint
 
 ### Enhanced Transactions API
 - [`parse_transactions`](https://docs.helius.dev/solana-apis/enhanced-transactions-api/parse-transaction-s) - Parses transactions given an array of transaction IDs
@@ -132,18 +134,21 @@ Our SDK is designed to provide a seamless developer experience when building on 
 - [`remove_addresses_from_webhook`](https://github.com/helius-labs/helius-rust-sdk/blob/bf24259e3333ae93126bb65b342c2c63e80e07a6/src/webhook.rs#L75-L105) - Removes a list of addresses from an existing webhook by its ID
 
 ### Smart Transactions
-- [`create_smart_transaction`](https://github.com/helius-labs/helius-rust-sdk/blob/bd9e0b10c81ab9ea56dfcd286336b086f6737b64/src/optimized_transaction.rs#L131-L331) - Creates an optimized transaction based on the provided configuration
+- [`create_smart_transaction`](https://github.com/helius-labs/helius-rust-sdk/blob/bd9e0b10c81ab9ea56dfcd286336b086f6737b64/src/optimized_transaction.rs#L131-L331) - Creates an optimized transaction based on the provided configuration 
+- [`create_smart_transaction_with_seeds`](https://github.com/helius-labs/helius-rust-sdk/blob/8102d87c6551c7645389a813e60a832a2eaf98c7/src/optimized_transaction.rs#L478-L633) - Creates a thread-safe, optimized transaction using seed bytes
 - [`get_compute_units`](https://github.com/helius-labs/helius-rust-sdk/blob/bd9e0b10c81ab9ea56dfcd286336b086f6737b64/src/optimized_transaction.rs#L34-L87) - Simulates a transaction to get the total compute units consumed
+- [`get_compute_units_thread_safe`](https://github.com/helius-labs/helius-rust-sdk/blob/8102d87c6551c7645389a813e60a832a2eaf98c7/src/optimized_transaction.rs#L421-L476) - A thread-safe version of `get_compute_units`
 - [`poll_transaction_confirmation`](https://github.com/helius-labs/helius-rust-sdk/blob/bd9e0b10c81ab9ea56dfcd286336b086f6737b64/src/optimized_transaction.rs#L89-L129) - Polls a transaction to check whether it has been confirmed in 5 second intervals with a 15 second timeout
 - [`send_smart_transaction`](https://github.com/helius-labs/helius-rust-sdk/blob/bd9e0b10c81ab9ea56dfcd286336b086f6737b64/src/optimized_transaction.rs#L333-L364) - Builds and sends an optimized transaction, and handles its confirmation status
 - [`send_and_confirm_transaction`](https://github.com/helius-labs/helius-rust-sdk/blob/bd9e0b10c81ab9ea56dfcd286336b086f6737b64/src/optimized_transaction.rs#L366-L412) - Sends a transaction and handles its confirmation status with retry logic
-- [`send_smart_transaction_with_seeds`](https://github.com/helius-labs/helius-rust-sdk/blob/bd9e0b10c81ab9ea56dfcd286336b086f6737b64/src/optimized_transaction.rs#L414-L487) - Sends a smart transaction using seed bytes
+- [`send_smart_transaction_with_seeds`](https://github.com/helius-labs/helius-rust-sdk/blob/bd9e0b10c81ab9ea56dfcd286336b086f6737b64/src/optimized_transaction.rs#L414-L487) - Sends a smart transaction using seed bytes. This function is thread-safe
 
 ### Jito Smart Transactions and Helper Methods
 - [`add_tip_instruction`](https://github.com/helius-labs/helius-rust-sdk/blob/02b351a5ee3fe16a36078b40f92dc72d0ad077ed/src/jito.rs#L66-L83) - Adds a tip instruction to the instructions provided
 - [`create_smart_transaction_with_tip`](https://github.com/helius-labs/helius-rust-sdk/blob/bd9e0b10c81ab9ea56dfcd286336b086f6737b64/src/jito.rs#L85-L125) - Creates a smart transaction with a Jito tip
 - [`get_bundle_statuses`](https://github.com/helius-labs/helius-rust-sdk/blob/bd9e0b10c81ab9ea56dfcd286336b086f6737b64/src/jito.rs#L170-L203) - Get the status of Jito bundles
 - [`send_jito_bundle`](https://github.com/helius-labs/helius-rust-sdk/blob/bd9e0b10c81ab9ea56dfcd286336b086f6737b64/src/jito.rs#L127-L168) - Sends a bundle of transactions to the Jito Block Engine
+- [`send_smart_transaction_with_seeds_and_tip`](https://github.com/helius-labs/helius-rust-sdk/blob/8102d87c6551c7645389a813e60a832a2eaf98c7/src/jito.rs#L272-L353) - Sends a smart transaction as a Jito bundle with a tip using seed bytes to create the transaction
 - [`send_smart_transaction_with_tip`](https://github.com/helius-labs/helius-rust-sdk/blob/bd9e0b10c81ab9ea56dfcd286336b086f6737b64/src/jito.rs#L205-L270) - Sends a smart transaction as a Jito bundle with a tip
 
 ### Helper Methods

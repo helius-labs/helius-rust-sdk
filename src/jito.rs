@@ -7,8 +7,8 @@
 /// the status of sent bundles  
 use crate::error::{HeliusError, Result};
 use crate::types::{
-    BasicRequest, CreateSmartTransactionConfig, GetPriorityFeeEstimateOptions, GetPriorityFeeEstimateRequest,
-    GetPriorityFeeEstimateResponse, SmartTransaction, SmartTransactionConfig,
+    BasicRequest, CreateSmartTransactionConfig, CreateSmartTransactionSeedConfig, GetPriorityFeeEstimateOptions,
+    GetPriorityFeeEstimateRequest, GetPriorityFeeEstimateResponse, SmartTransaction, SmartTransactionConfig, Timeout,
 };
 use crate::Helius;
 
@@ -21,6 +21,7 @@ use serde::Serialize;
 use serde_json::Value;
 use solana_client::rpc_config::{RpcSendTransactionConfig, RpcSimulateTransactionConfig};
 use solana_client::rpc_response::{Response, RpcSimulateTransactionResult};
+use solana_sdk::signature::keypair_from_seed;
 use solana_sdk::system_instruction;
 use solana_sdk::{
     address_lookup_table::AddressLookupTableAccount,
@@ -210,7 +211,7 @@ impl Helius {
     /// * `region` - The Jito Block Engine region. Defaults to `"Default"`
     ///
     /// # Returns
-    /// A `Result` containing the bundle IDc
+    /// A `Result` containing the bundle ID
     pub async fn send_smart_transaction_with_tip(
         &self,
         config: SmartTransactionConfig,
@@ -260,6 +261,88 @@ impl Helius {
             }
 
             sleep(interval).await;
+        }
+
+        Err(HeliusError::Timeout {
+            code: StatusCode::REQUEST_TIMEOUT,
+            text: "Bundle failed to confirm within the timeout period".to_string(),
+        })
+    }
+
+    /// Sends a smart transaction as a Jito bundle with a tip using seed bytes to create the transaction
+    ///
+    /// This method provides a thread-safe way to send transactions with Jito tips by using seed bytes instead of `Signers`. It
+    /// combines the functionality of `send_smart_transaction_with_seeds` with Jito's bundles, therefore, allowing for them
+    /// in async contexts
+    ///
+    /// # Arguments
+    /// * `create_config`: The configuration for creating the transaction
+    /// * `tip_amount`: Optional amount of lamports to tip Jito validators. Defaults to 1000
+    /// * `region`: Optional Jito region for the block engine. Defaults to "Default"
+    /// * `timeout`: Optional duration for polling the transaction confirmation in seconds. Defaults to 60s
+    ///
+    /// # Returns a `Result<String>` containing the bundle ID if successful
+    pub async fn send_smart_transaction_with_seeds_and_tip(
+        &self,
+        mut create_config: CreateSmartTransactionSeedConfig,
+        tip_amount: Option<u64>,
+        region: Option<JitoRegion>,
+        timeout: Option<Duration>,
+    ) -> Result<String> {
+        // Add Jito tip instruction
+        let fee_payer_pubkey = if let Some(fee_payer_seed) = &create_config.fee_payer_seed {
+            keypair_from_seed(fee_payer_seed)
+                .expect("Failed to create fee payer keypair from seed")
+                .pubkey()
+        } else {
+            keypair_from_seed(&create_config.signer_seeds[0])
+                .expect("Failed to create keypair from first seed")
+                .pubkey()
+        };
+
+        // Add Jito tip
+        let tip: u64 = tip_amount.unwrap_or(1000);
+        let random_tip_account = *JITO_TIP_ACCOUNTS.choose(&mut rand::thread_rng()).unwrap();
+        create_config.instructions.push(system_instruction::transfer(
+            &fee_payer_pubkey,
+            &Pubkey::from_str(random_tip_account).unwrap(),
+            tip,
+        ));
+
+        // Create transaction and convert to base58
+        let (transaction, _) = self.create_smart_transaction_with_seeds(&create_config).await?;
+        let serialized_tx = match &transaction {
+            SmartTransaction::Legacy(tx) => serialize(tx).map_err(|e| HeliusError::InvalidInput(e.to_string()))?,
+            SmartTransaction::Versioned(tx) => serialize(tx).map_err(|e| HeliusError::InvalidInput(e.to_string()))?,
+        };
+        let tx_base58: String = encode(&serialized_tx).into_string();
+
+        // Send via Jito
+        let jito_region: &str = *JITO_API_URLS
+            .get(region.unwrap_or("Default"))
+            .ok_or_else(|| HeliusError::InvalidInput("Invalid Jito region".to_string()))?;
+        let jito_api_url = format!("{}/api/v1/bundles", jito_region);
+
+        let bundle_id: String = self.send_jito_bundle(vec![tx_base58], &jito_api_url).await?;
+
+        // Poll for the bundle confirmation
+        let timeout: Duration = timeout.unwrap_or(Duration::from_secs(60));
+        let start: tokio::time::Instant = tokio::time::Instant::now();
+
+        while start.elapsed() < timeout {
+            let bundle_statuses = self.get_bundle_statuses(vec![bundle_id.clone()], &jito_api_url).await?;
+
+            if let Some(values) = bundle_statuses["result"]["value"].as_array() {
+                if !values.is_empty() {
+                    if let Some(status) = values[0]["confirmation_status"].as_str() {
+                        if status == "confirmed" {
+                            return Ok(values[0]["transactions"][0].as_str().unwrap().to_string());
+                        }
+                    }
+                }
+            }
+
+            sleep(Duration::from_secs(5)).await;
         }
 
         Err(HeliusError::Timeout {
