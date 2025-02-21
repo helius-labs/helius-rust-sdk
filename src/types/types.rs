@@ -914,6 +914,7 @@ impl CreateSmartTransactionConfig {
         }
     }
 }
+
 pub struct Timeout {
     pub duration: Duration,
 }
