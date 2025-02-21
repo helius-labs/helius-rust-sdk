@@ -1,0 +1,52 @@
+
+## Project Context
+
+The Helius SDK is a Rust library that provides seamless access to various Helius APIs for interacting with Solana. The codebase is written in Rust, utilizes the `solana-client` crate for core blockchain operations, and is designed for high performance and reliability. It is structured to offer robust, modular tooling for developers building on Solana.
+
+## Coding Guidelines
+
+- **Rust & Architecture:**  
+  - Follow best practices for Rust development, ensuring clear separation of concerns and modularity.
+  - Organize functionality into logical modules (e.g., DAS API, Mint API, Webhooks, Smart Transactions, and Helper Methods).
+  - Leverage Rust’s type system for maximum safety and reliability.
+
+- **Rust & Code Quality:**  
+  - Enforce strict type safety with well-defined structs, enums, and traits.
+  - Always use descriptive names for variables, functions, and types, avoiding abbreviations.
+  - Use `let` and `const` for immutability by default, opting for `mut` only when reassignment is necessary.
+  - Prefer the use of `Result<T, E>` and `Option<T>` for error handling over panics. Always return errors with proper context.
+  - Avoid unnecessary cloning. Use references where possible to improve performance.
+  - Refer and adhere to the contributions file (i.e., `CONTRIBUTIONS.md`) before making a pull request.
+
+- **Concurrency & Asynchronous Patterns:**  
+  - Leverage Rust’s async/await for asynchronous operations.
+  - Ensure that all async functions return `Result` or `Option` for proper error handling.
+  - Use `tokio` for async runtimes, ensuring proper error propagation and handling with `try/catch`-like patterns.
+
+- **Documentation & Comments:**  
+  - Use `///` for public documentation, providing clear and concise explanations for methods, structs, and modules.
+  - Include usage examples, especially for complex or nuanced functionality, in the `/examples` directory.
+  - Add comments for critical areas of code where logic might not be immediately obvious or where performance considerations are involved.
+
+- **Blockchain & API Integration:**  
+  - Use `solana-client` and related crates for Solana interactions, ensuring correct integration with the Helius API.
+  - Follow Solana's best practices for API consumption and make sure to handle edge cases like network timeouts and rate limiting.
+  - Use structured logging for debugging, especially for blockchain interaction-related errors.
+
+- **Project Tools & Conventions:**  
+  - Use `cargo` for dependency management, ensuring the `Cargo.toml` is properly updated for project dependencies.
+  - Ensure the code is modular, testable, and maintainable. Consider using the Rust module system to organize features logically.
+  - Write unit and integration tests using `cargo test` for critical components to guarantee reliable performance.
+  - Follow Rust’s idioms and conventions for consistency and readability across the codebase.
+  - Run `rustfmt` and `clippy` regularly to ensure consistent formatting and to catch potential issues early.
+
+- **Error Handling:**  
+  - All error handling in the Helius SDK should utilize the custom `Result<T>` type, which uses `HeliusError` for error management:
+  
+    ```rust
+    /// A handy type alias for handling results across the Helius SDK
+    pub type Result<T> = std::result::Result<T, HeliusError>;
+    ```
+
+  - The `HeliusError` type should be used to wrap all errors, providing a consistent and detailed error handling strategy across the SDK.
+  - Ensure all errors are clearly documented and include useful context where necessary.
