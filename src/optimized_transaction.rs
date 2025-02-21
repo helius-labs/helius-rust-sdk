@@ -657,4 +657,161 @@ impl Helius {
             }
         }
     }
+
+    /// Creates an optimized transaction without requiring any signers
+    ///
+    /// This version builds the transaction (legacy or versioned) without signing,
+    /// and requires that a fee payer is provided
+    ///
+    /// # Arguments
+    /// * `config` - The configuration for the smart transaction. Note that the `fee_payer` field must be provided.
+    ///
+    /// # Returns
+    /// An unsigned `SmartTransaction` (i.e., `Transaction` or `VersionedTransaction`) and the `last_valid_block_height`
+    pub async fn create_smart_transaction_without_signers(
+        &self,
+        config: &CreateSmartTransactionConfig,
+    ) -> Result<(SmartTransaction, u64)> {
+        // The payer must be provided
+        let fee_payer: &Arc<dyn Signer> = config.fee_payer.as_ref().ok_or_else(|| {
+            HeliusError::InvalidInput("Fee payer must be provided for unsigned transactions".to_string())
+        })?;
+        let payer_pubkey: Pubkey = fee_payer.pubkey();
+
+        let (recent_blockhash, last_valid_block_hash) = self
+            .connection()
+            .get_latest_blockhash_with_commitment(CommitmentConfig::confirmed())?;
+
+        let mut final_instructions: Vec<Instruction> = vec![];
+
+        // Ensure that no compute budget ixs are included in the input
+        let existing_compute_budget_instructions: bool = config.instructions.iter().any(|instruction| {
+            instruction.program_id == ComputeBudgetInstruction::set_compute_unit_limit(0).program_id
+                || instruction.program_id == ComputeBudgetInstruction::set_compute_unit_price(0).program_id
+        });
+
+        if existing_compute_budget_instructions {
+            return Err(HeliusError::InvalidInput(
+                "Cannot provide instructions that set the compute unit price and/or limit".to_string(),
+            ));
+        }
+
+        // Determine if we need to build a versioned tx based on lookup tables
+        let is_versioned: bool = config.lookup_tables.is_some();
+        let mut legacy_transaction: Option<Transaction> = None;
+        let mut versioned_transaction: Option<VersionedTransaction> = None;
+
+        // Build the initial unsigned transaction (without any signatures)
+        if is_versioned {
+            let lookup_tables: &[AddressLookupTableAccount] = config.lookup_tables.as_deref().unwrap_or_default();
+            let v0_message: v0::Message =
+                v0::Message::try_compile(&payer_pubkey, &config.instructions, lookup_tables, recent_blockhash)?;
+            let versioned_message: VersionedMessage = VersionedMessage::V0(v0_message);
+
+            versioned_transaction = Some(VersionedTransaction {
+                signatures: vec![], // No signatures added
+                message: versioned_message,
+            });
+        } else {
+            let mut tx: Transaction = Transaction::new_with_payer(&config.instructions, Some(&payer_pubkey));
+            tx.message.recent_blockhash = recent_blockhash;
+            legacy_transaction = Some(tx);
+        }
+
+        // Serialize the unsigned tx
+        let serialized_tx: Vec<u8> = if let Some(tx) = &legacy_transaction {
+            serialize(&tx).map_err(|e: Box<ErrorKind>| HeliusError::InvalidInput(e.to_string()))?
+        } else if let Some(tx) = &versioned_transaction {
+            serialize(&tx).map_err(|e: Box<ErrorKind>| HeliusError::InvalidInput(e.to_string()))?
+        } else {
+            return Err(HeliusError::InvalidInput("No transaction available".to_string()));
+        };
+
+        // Encode the tx to base58 for priority fee estimation
+        let transaction_base58: String = encode(&serialized_tx).into_string();
+
+        let priority_fee_request = GetPriorityFeeEstimateRequest {
+            transaction: Some(transaction_base58),
+            account_keys: None,
+            options: Some(GetPriorityFeeEstimateOptions {
+                recommended: Some(true),
+                ..Default::default()
+            }),
+        };
+
+        let priority_fee_estimate: GetPriorityFeeEstimateResponse =
+            self.rpc().get_priority_fee_estimate(priority_fee_request).await?;
+
+        let priority_fee_recommendation: u64 = priority_fee_estimate
+            .priority_fee_estimate
+            .ok_or_else(|| HeliusError::InvalidInput("Priority fee estimate not available".to_string()))?
+            as u64;
+
+        let priority_fee: u64 = if let Some(provided_fee) = config.priority_fee_cap {
+            std::cmp::min(priority_fee_recommendation, provided_fee)
+        } else {
+            priority_fee_recommendation
+        };
+
+        // Add the compute unit price ix with the estimated fee at the start
+        let compute_budget_ix = ComputeBudgetInstruction::set_compute_unit_price(priority_fee);
+        final_instructions.push(compute_budget_ix);
+
+        // Get the optimal CUs
+        let units: Option<u64> = self
+            .get_compute_units(
+                config.instructions.clone(), // Use original instructions to simulate
+                payer_pubkey,
+                config.lookup_tables.clone().unwrap_or_default(),
+                None, // No signers provided for simulation
+            )
+            .await?;
+
+        if units.is_none() {
+            return Err(HeliusError::InvalidInput(
+                "Error fetching compute units for the provided instructions".to_string(),
+            ));
+        }
+
+        let compute_units = units.unwrap();
+        let customers_cu: u32 = if compute_units < 1000 {
+            1000
+        } else {
+            (compute_units as f64 * 1.1).ceil() as u32
+        };
+
+        // Add the compute unit limit ix at the start
+        let compute_units_ix = ComputeBudgetInstruction::set_compute_unit_limit(customers_cu);
+        final_instructions.push(compute_units_ix);
+
+        // Append the original instructions back
+        final_instructions.extend(config.instructions.clone());
+
+        // Rebuild the final unsigned tx with the updated ixs
+        if is_versioned {
+            let lookup_tables: &[AddressLookupTableAccount] = config.lookup_tables.as_deref().unwrap();
+            let v0_message: v0::Message =
+                v0::Message::try_compile(&payer_pubkey, &final_instructions, lookup_tables, recent_blockhash)?;
+            let versioned_message: VersionedMessage = VersionedMessage::V0(v0_message);
+
+            versioned_transaction = Some(VersionedTransaction {
+                signatures: vec![],
+                message: versioned_message,
+            });
+
+            Ok((
+                SmartTransaction::Versioned(versioned_transaction.unwrap()),
+                last_valid_block_hash,
+            ))
+        } else {
+            let mut tx: Transaction = Transaction::new_with_payer(&final_instructions, Some(&payer_pubkey));
+            tx.message.recent_blockhash = recent_blockhash;
+            legacy_transaction = Some(tx);
+
+            Ok((
+                SmartTransaction::Legacy(legacy_transaction.unwrap()),
+                last_valid_block_hash,
+            ))
+        }
+    }
 }
