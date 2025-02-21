@@ -701,7 +701,7 @@ impl Helius {
         let mut legacy_transaction: Option<Transaction> = None;
         let mut versioned_transaction: Option<VersionedTransaction> = None;
 
-        // Build the initial unsigned transaction (without any signatures)
+        // Build the initial unsigned tx
         if is_versioned {
             let lookup_tables: &[AddressLookupTableAccount] = config.lookup_tables.as_deref().unwrap_or_default();
             let v0_message: v0::Message =
@@ -709,7 +709,7 @@ impl Helius {
             let versioned_message: VersionedMessage = VersionedMessage::V0(v0_message);
 
             versioned_transaction = Some(VersionedTransaction {
-                signatures: vec![], // No signatures added
+                signatures: vec![],
                 message: versioned_message,
             });
         } else {
@@ -760,10 +760,10 @@ impl Helius {
         // Get the optimal CUs
         let units: Option<u64> = self
             .get_compute_units(
-                config.instructions.clone(), // Use original instructions to simulate
+                config.instructions.clone(),
                 payer_pubkey,
                 config.lookup_tables.clone().unwrap_or_default(),
-                None, // No signers provided for simulation
+                None,
             )
             .await?;
 
@@ -784,7 +784,7 @@ impl Helius {
         let compute_units_ix = ComputeBudgetInstruction::set_compute_unit_limit(customers_cu);
         final_instructions.push(compute_units_ix);
 
-        // Append the original instructions back
+        // Append the original ixs back
         final_instructions.extend(config.instructions.clone());
 
         // Rebuild the final unsigned tx with the updated ixs
