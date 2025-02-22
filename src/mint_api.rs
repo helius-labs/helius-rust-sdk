@@ -17,6 +17,10 @@ impl Helius {
     ///
     /// # Returns
     /// A `Result` containing a `MintResponse` detailing the transaction signature, asset ID, and whether the cNFT was minted successfully
+    #[deprecated(
+        since = "0.2.5",
+        note = "Please refer to ZK Compression for all future compression-related work: https://docs.helius.dev/zk-compression-and-photon-api/what-is-zk-compression-on-solana"
+    )]
     pub async fn mint_compressed_nft(&self, request: MintCompressedNftRequest) -> Result<MintResponse> {
         self.rpc_client.post_rpc_request("mintCompressedNft", request).await
     }

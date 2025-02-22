@@ -39,6 +39,7 @@ async fn main() -> Result<()> {
         confirm_transaction: Some(true),
     };
 
+    #[allow(deprecated)]
     let response: Result<MintResponse> = helius.mint_compressed_nft(request).await;
     println!("Assets: {:?}", response);
 
