@@ -81,6 +81,7 @@ async fn test_mint_compressed_nft() {
         confirm_transaction: Some(true),
     };
 
+    #[allow(deprecated)]
     let result: Result<MintResponse> = helius.mint_compressed_nft(request).await;
     assert!(result.is_ok(), "API call failed with error: {:?}", result.err());
 
@@ -156,6 +157,7 @@ async fn test_get_asset_proof_failure() {
         confirm_transaction: Some(true),
     };
 
+    #[allow(deprecated)]
     let result: Result<MintResponse> = helius.mint_compressed_nft(request).await;
     assert!(result.is_err(), "Expected an error but got success");
 }
