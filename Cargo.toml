@@ -1,11 +1,11 @@
 [package]
 name = "helius"
-version = "0.2.4"
+version = "0.2.5"
 edition = "2021"
 description = "An asynchronous Helius Rust SDK for building the future of Solana"
 keywords = ["helius", "solana", "asynchronous-sdk", "das", "cryptocurrency"]
 repository = "https://github.com/helius-labs/helius-rust-sdk"
-docs = "https://docs.rs/helius/latest/helius/"
+documentation = "https://docs.rs/helius/latest/helius/"
 license = "MIT"
 authors = ["0xIchigo <0xIchigo@protonmail.com>"]
 readme = "README.md"
