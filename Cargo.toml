@@ -20,6 +20,7 @@ futures-util = "0.3.30"
 mpl-token-metadata = { version = "5.0.0-beta.0" }
 phf = { version = "0.11.2", features = ["macros"] }
 rand = "0.8.5"
+reqwest = { version = "0.11.22", default-features = false }
 semver = "1.0.23"
 serde = "1.0.198"
 serde-enum-str = "0.4.0"
@@ -36,12 +37,6 @@ tokio-stream = "0.1.15"
 tokio-tungstenite = "0.24.0"
 url = "2.5.0"
 spl-token = { version = "6.0", features = ["no-entrypoint"] }
-
-[dependencies.reqwest]
-version = "0.11.22"
-default-features = false
-# Default features, minus `default-tls`
-features = ["json", "charset", "http2", "macos-system-configuration"]
 
 [dev-dependencies]
 mockito = "1.4.0"
