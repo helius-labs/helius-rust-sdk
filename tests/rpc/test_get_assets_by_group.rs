@@ -40,7 +40,7 @@ async fn test_get_assets_by_group_success() {
                             contexts: None,
                         }]),
                         metadata: Metadata {
-                            attributes: Some(vec![Attribute {
+                            attributes: Some(Attributes::List(vec![Attribute {
                                 value: Value::String("Jedi Master".to_string()),
                                 trait_type: "Rank".to_string(),
                             }, Attribute {
@@ -49,7 +49,7 @@ async fn test_get_assets_by_group_success() {
                             }, Attribute {
                                 value: Value::String("Jedi Order".to_string()),
                                 trait_type: "Affiliation".to_string(),
-                            }]),
+                            }])),
                             description: Some("Obi-Wan Kenobi was a legendary Force-sensitive human male Jedi Master who served on the Jedi High Council during the final years of the Republic Era".to_string()),
                             name: Some("Obi-Wan Kenobi".to_string()),
                             symbol: Some("Guiding Light".to_string()),

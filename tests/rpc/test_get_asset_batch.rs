@@ -5,9 +5,9 @@ use helius::config::Config;
 use helius::error::Result;
 use helius::rpc_client::RpcClient;
 use helius::types::{
-    ApiResponse, Asset, Attribute, Authorities, Cluster, CollectionMetadata, Compression, Content, Creator, File,
-    GetAssetBatch, GetAssetOptions, Group, HeliusEndpoints, Interface, Links, Metadata, Ownership, OwnershipModel,
-    Royalty, RoyaltyModel, Scope, Supply,
+    ApiResponse, Asset, Attribute, Attributes, Authorities, Cluster, CollectionMetadata, Compression, Content, Creator,
+    File, GetAssetBatch, GetAssetOptions, Group, HeliusEndpoints, Interface, Links, Metadata, Ownership,
+    OwnershipModel, Royalty, RoyaltyModel, Scope, Supply,
 };
 
 use mockito::{self, Server};
@@ -36,7 +36,7 @@ async fn test_get_asset_batch_success() {
                         contexts: None,
                     }]),
                     metadata: Metadata {
-                        attributes: Some(vec![
+                        attributes: Some(Attributes::List(vec![
                             Attribute {
                                 value: Value::String("112vepK9Upx7juv4pCdwqzm7reBo6VYEQHKRNmU6PEaKX1ese5NE".to_string()),
                                 trait_type: "ecc_compact".to_string(),
@@ -45,7 +45,7 @@ async fn test_get_asset_batch_success() {
                                 value: Value::Bool(true),
                                 trait_type: "rewardable".to_string(),
                             }
-                        ]),
+                        ])),
                         description: Some("A hotspot NFT on Helium".to_string()),
                         name: Some("gentle-mandarin-ferret".to_string()),
                         symbol: Some("HOTSPOT".to_string()),
@@ -141,7 +141,7 @@ async fn test_get_asset_batch_success() {
                         },
                     ]),
                     metadata: Metadata {
-                        attributes: Some(vec![
+                        attributes: Some(Attributes::List(vec![
                             Attribute {
                                 value: serde_json::Value::String("1".to_string()),
                                 trait_type: "Season".to_string(),
@@ -154,7 +154,7 @@ async fn test_get_asset_batch_success() {
                                 value: serde_json::Value::String("Legendary".to_string()),
                                 trait_type: "Rarity".to_string(),
                             }
-                        ]),
+                        ])),
                         description: Some("Aerial photograph of a parking structure in LA depicting the photographer, Andrew Mason, \"sliding\" through the image.".to_string()),
                         name: Some("Slide".to_string()),
                         symbol: Some("".to_string()),
