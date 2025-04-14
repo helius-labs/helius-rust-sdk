@@ -2,9 +2,7 @@ use helius::config::Config;
 use helius::error::Result;
 use helius::rpc_client::RpcClient;
 use helius::types::{
-    ApiResponse, Asset, AssetList, Attribute, Authorities, Cluster, Compression, Content, Creator, File,
-    GetAssetsByCreator, Group, HeliusEndpoints, Interface, Links, Metadata, Ownership, OwnershipModel, Royalty,
-    RoyaltyModel, Scope, Supply,
+    ApiResponse, Asset, AssetList, Attribute, Attributes, Authorities, Cluster, Compression, Content, Creator, File, GetAssetsByCreator, Group, HeliusEndpoints, Interface, Links, Metadata, Ownership, OwnershipModel, Royalty, RoyaltyModel, Scope, Supply
 };
 use helius::Helius;
 
@@ -69,7 +67,7 @@ async fn test_get_assets_by_creator_success() {
                         ],
                     ),
                     metadata: Metadata {
-                        attributes: Some(
+                        attributes: Some(Attributes::List(
                             vec![
                                 Attribute {
                                     value: Value::String("Male".to_string()),
@@ -96,7 +94,7 @@ async fn test_get_assets_by_creator_success() {
                                     trait_type: "Background".to_string(),
                                 },
                             ],
-                        ),
+                        )),
                         description: Some(
                             "Fock it.".to_string(),
                         ),

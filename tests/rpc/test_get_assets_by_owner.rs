@@ -2,9 +2,7 @@ use helius::config::Config;
 use helius::error::Result;
 use helius::rpc_client::RpcClient;
 use helius::types::{
-    ApiResponse, Asset, AssetList, Attribute, Authorities, Cluster, Compression, Content, Creator, File,
-    GetAssetsByOwner, Group, HeliusEndpoints, Interface, Links, Metadata, Ownership, OwnershipModel, Royalty,
-    RoyaltyModel, Scope, Supply,
+    ApiResponse, Asset, AssetList, Attribute, Attributes, Authorities, Cluster, Compression, Content, Creator, File, GetAssetsByOwner, Group, HeliusEndpoints, Interface, Links, Metadata, Ownership, OwnershipModel, Royalty, RoyaltyModel, Scope, Supply
 };
 use helius::Helius;
 
@@ -45,7 +43,7 @@ async fn test_get_assets_by_owner_success() {
                         contexts: None,
                     }]),
                     metadata: Metadata {
-                        attributes: Some(vec![
+                        attributes: Some(Attributes::List(vec![
                             Attribute {
                                 value: Value::String("https://3000jup.com".to_string()),
                                 trait_type: "Website".to_string(),
@@ -62,7 +60,7 @@ async fn test_get_assets_by_owner_success() {
                                 value: Value::String("35 minutes!".to_string()),
                                 trait_type: "Time Left".to_string(),
                             },
-                        ]),
+                        ])),
                         description: Some(
                             "Visit the domain shown in the picture and claim your exclusive voucher 3000jup.com"
                                 .to_string(),
