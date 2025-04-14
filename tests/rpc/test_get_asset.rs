@@ -42,7 +42,7 @@ async fn test_get_asset_success() {
                             ],
                         ),
                         metadata: Metadata {
-                            attributes: Some(
+                            attributes: Some(Attributes::List(
                                 vec![
                                     Attribute {
                                         value: Value::String("Common".to_string()),
@@ -57,7 +57,7 @@ async fn test_get_asset_success() {
                                         trait_type: "signed".to_string(),
                                     },
                                 ],
-                            ),
+                            )),
                             description: Some(
                                 "Apt323 the 36 page Collectors Edition.".to_string(),
                             ),
