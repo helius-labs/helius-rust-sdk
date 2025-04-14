@@ -5,7 +5,9 @@ use helius::config::Config;
 use helius::error::Result;
 use helius::rpc_client::RpcClient;
 use helius::types::{
-    ApiResponse, Asset, Attribute, Attributes, Authorities, Cluster, CollectionMetadata, Compression, Content, Creator, File, GetAssetBatch, GetAssetOptions, Group, HeliusEndpoints, Interface, Links, Metadata, Ownership, OwnershipModel, Royalty, RoyaltyModel, Scope, Supply
+    ApiResponse, Asset, Attribute, Attributes, Authorities, Cluster, CollectionMetadata, Compression, Content, Creator,
+    File, GetAssetBatch, GetAssetOptions, Group, HeliusEndpoints, Interface, Links, Metadata, Ownership,
+    OwnershipModel, Royalty, RoyaltyModel, Scope, Supply,
 };
 
 use mockito::{self, Server};

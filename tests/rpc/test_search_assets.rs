@@ -2,7 +2,9 @@ use helius::config::Config;
 use helius::error::Result;
 use helius::rpc_client::RpcClient;
 use helius::types::{
-    ApiResponse, Asset, AssetList, Attribute, Attributes, Authorities, Cluster, Compression, Content, Creator, File, Group, HeliusEndpoints, Interface, Links, Metadata, Ownership, OwnershipModel, Royalty, RoyaltyModel, Scope, SearchAssets, Supply
+    ApiResponse, Asset, AssetList, Attribute, Attributes, Authorities, Cluster, Compression, Content, Creator, File,
+    Group, HeliusEndpoints, Interface, Links, Metadata, Ownership, OwnershipModel, Royalty, RoyaltyModel, Scope,
+    SearchAssets, Supply,
 };
 use helius::Helius;
 
