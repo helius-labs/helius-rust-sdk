@@ -578,8 +578,15 @@ pub struct FileQuality {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
+#[serde(untagged)]
+pub enum Attributes {
+    List(Vec<Attribute>),
+    Map(serde_json::Map<String, Value>),
+}
+
+#[derive(Serialize, Deserialize, Debug)]
 pub struct Metadata {
-    pub attributes: Option<Vec<Attribute>>,
+    pub attributes: Option<Attributes>,
     pub description: Option<String>,
     pub name: Option<String>,
     pub symbol: Option<String>,
