@@ -695,8 +695,8 @@ pub struct GroupDefinition {
     pub group_value: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub size: Option<u64>,
-    #[serde(skip_serializing)]
-    pub asset_id: Vec<u8>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub asset_id: Option<Vec<u8>>,
 }
 
 // #[derive(Debug, Serialize, Deserialize, JsonSchema)]
