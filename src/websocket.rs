@@ -1,4 +1,5 @@
 use crate::error::{HeliusError, Result};
+use crate::types::Cluster;
 use crate::types::{RpcTransactionsConfig, TransactionNotification};
 use futures_util::{
     future::{ready, BoxFuture, FutureExt},
@@ -29,7 +30,9 @@ use tokio_tungstenite::{
     MaybeTlsStream, WebSocketStream,
 };
 
-pub const ENHANCED_WEBSOCKET_URL: &str = "wss://atlas-mainnet.helius-rpc.com/?api-key=";
+pub const ENHANCED_WEBSOCKET_URL_MAINNET: &str = "wss://atlas-mainnet.helius-rpc.com/?api-key=";
+pub const ENHANCED_WEBSOCKET_URL_DEVNET: &str = "wss://atlas-devnet.helius-rpc.com/?api-key=";
+
 pub const DEFAULT_PING_DURATION_SECONDS: u64 = 10;
 pub const DEFAULT_MAX_FAILED_PINGS: usize = 3;
 
@@ -52,6 +55,56 @@ pub struct EnhancedWebsocket {
 }
 
 impl EnhancedWebsocket {
+    /// Constructs the complete websocket URL for connecting to Helius's enhanced websocket endpoints.
+    ///
+    /// # Arguments
+    ///
+    /// * `cluster` - The Solana cluster to connect to (MainnetBeta or Devnet)
+    /// * `api_key` - Your Helius API key
+    ///
+    /// # Returns
+    ///
+    /// Returns a Result containing the formatted websocket URL or an error if an unsupported cluster is specified.
+    ///
+    /// # Errors
+    ///
+    /// Returns `HeliusError::EnhancedWebsocket` if the specified cluster is not MainnetBeta or Devnet.
+    /// Note: StakedMainnetBeta is not supported for websocket connections.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use helius::websocket::EnhancedWebsocket;
+    /// use helius::types::Cluster;
+    ///
+    /// let api_key = "your_api_key";
+    ///
+    /// // For Mainnet
+    /// let mainnet_url = EnhancedWebsocket::get_url(&Cluster::MainnetBeta, api_key).expect("Failed to get URL");
+    /// println!("Mainnet URL: {}", mainnet_url);
+    /// assert!(mainnet_url.eq("wss://atlas-mainnet.helius-rpc.com/?api-key=your_api_key"));
+    ///
+    /// // For Devnet
+    /// let devnet_url = EnhancedWebsocket::get_url(&Cluster::Devnet, api_key).expect("Failed to get URL");
+    /// println!("Devnet URL: {}", devnet_url);
+    /// assert!(devnet_url.eq("wss://atlas-devnet.helius-rpc.com/?api-key=your_api_key"));
+    ///
+    /// // For Staked Mainnet (will error)
+    /// let staked_result = EnhancedWebsocket::get_url(&Cluster::StakedMainnetBeta, api_key);
+    /// assert!(staked_result.is_err());
+    /// ```
+    /// Expects enhanced websocket endpoint: wss://atlas-mainnet.helius-rpc.com?api-key=<API_KEY>
+    pub fn get_url(cluster: &Cluster, api_key: &str) -> Result<String> {
+        match cluster {
+            Cluster::MainnetBeta => Ok(format!("{}{}", ENHANCED_WEBSOCKET_URL_MAINNET, api_key)),
+            Cluster::Devnet => Ok(format!("{}{}", ENHANCED_WEBSOCKET_URL_DEVNET, api_key)),
+            Cluster::StakedMainnetBeta => Err(HeliusError::EnhancedWebsocket {
+                reason: "Unsupported cluster".into(),
+                message: "only mainnet and devnet are supported".into(),
+            }),
+        }
+    }
+
     /// Expects enhanced websocket endpoint: wss://atlas-mainnet.helius-rpc.com?api-key=<API_KEY>
     pub async fn new(url: &str, ping_interval_secs: Option<u64>, pong_timeout_secs: Option<u64>) -> Result<Self> {
         let (ws, _response) = connect_async(url).await.map_err(HeliusError::Tungstenite)?;

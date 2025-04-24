@@ -1,7 +1,7 @@
 use crate::error::{HeliusError, Result};
 use crate::rpc_client::RpcClient;
 use crate::types::{Cluster, HeliusEndpoints, MintApiAuthority};
-use crate::websocket::{EnhancedWebsocket, ENHANCED_WEBSOCKET_URL};
+use crate::websocket::EnhancedWebsocket;
 use crate::Helius;
 use reqwest::Client;
 use solana_client::nonblocking::rpc_client::RpcClient as AsyncSolanaRpcClient;
@@ -108,7 +108,7 @@ impl Config {
         let client: Client = Client::builder().build().map_err(HeliusError::ReqwestError)?;
         let rpc_client: Arc<RpcClient> = Arc::new(self.rpc_client_with_reqwest_client(client.clone())?);
 
-        let wss: String = format!("{}{}", ENHANCED_WEBSOCKET_URL, self.api_key);
+        let wss: String = EnhancedWebsocket::get_url(&self.cluster, &self.api_key)?;
         let ws_client: Arc<EnhancedWebsocket> =
             Arc::new(EnhancedWebsocket::new(&wss, ping_interval_secs, pong_timeout_secs).await?);
 
@@ -144,7 +144,7 @@ impl Config {
         let async_solana_client = Arc::new(AsyncSolanaRpcClient::new(rpc_url.to_string()));
 
         // Setup websocket
-        let wss: String = format!("{}{}", ENHANCED_WEBSOCKET_URL, self.api_key);
+        let wss: String = EnhancedWebsocket::get_url(&self.cluster, &self.api_key)?;
         let ws_client: Arc<EnhancedWebsocket> =
             Arc::new(EnhancedWebsocket::new(&wss, ping_interval_secs, pong_timeout_secs).await?);
 
