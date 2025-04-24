@@ -93,7 +93,6 @@ impl EnhancedWebsocket {
     /// let staked_result = EnhancedWebsocket::get_url(&Cluster::StakedMainnetBeta, api_key);
     /// assert!(staked_result.is_err());
     /// ```
-    /// Expects enhanced websocket endpoint: wss://atlas-mainnet.helius-rpc.com?api-key=<API_KEY>
     pub fn get_url(cluster: &Cluster, api_key: &str) -> Result<String> {
         match cluster {
             Cluster::MainnetBeta => Ok(format!("{}{}", ENHANCED_WEBSOCKET_URL_MAINNET, api_key)),
