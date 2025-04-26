@@ -4,7 +4,7 @@ use crate::config::Config;
 use crate::error::{HeliusError, Result};
 use crate::rpc_client::RpcClient;
 use crate::types::Cluster;
-use crate::websocket::{EnhancedWebsocket, ENHANCED_WEBSOCKET_URL};
+use crate::websocket::EnhancedWebsocket;
 
 use reqwest::Client;
 use solana_client::nonblocking::rpc_client::RpcClient as AsyncSolanaRpcClient;
@@ -106,10 +106,11 @@ impl Helius {
         ping_interval_secs: Option<u64>,
         pong_timeout_secs: Option<u64>,
     ) -> Result<Self> {
-        let config: Arc<Config> = Arc::new(Config::new(api_key, cluster)?);
+        let config: Arc<Config> = Arc::new(Config::new(api_key, cluster.clone())?);
         let client: Client = Client::builder().build().map_err(HeliusError::ReqwestError)?;
         let rpc_client: Arc<RpcClient> = Arc::new(RpcClient::new(Arc::new(client.clone()), config.clone())?);
-        let wss: String = format!("{}{}", ENHANCED_WEBSOCKET_URL, api_key);
+
+        let wss: String = EnhancedWebsocket::get_url(&cluster, api_key)?;
         let ws_client: Arc<EnhancedWebsocket> =
             Arc::new(EnhancedWebsocket::new(&wss, ping_interval_secs, pong_timeout_secs).await?);
 
