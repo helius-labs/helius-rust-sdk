@@ -8,6 +8,7 @@ pub mod mint_api;
 pub mod optimized_transaction;
 pub mod request_handler;
 pub mod rpc_client;
+pub mod staking;
 pub mod types;
 pub mod utils;
 pub mod webhook;
