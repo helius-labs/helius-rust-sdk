@@ -7,7 +7,7 @@ use crate::{
 
 use bincode;
 use once_cell::sync::Lazy;
-use solana_account_decoder::UiAccountEncoding; // we still need only the enum
+use solana_account_decoder::UiAccountEncoding;
 use solana_client::{
     rpc_config::{RpcAccountInfoConfig, RpcProgramAccountsConfig},
     rpc_filter::{Memcmp, MemcmpEncodedBytes, RpcFilterType},
