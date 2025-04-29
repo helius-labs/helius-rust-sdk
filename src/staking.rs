@@ -7,7 +7,13 @@ use crate::{
 
 use bincode;
 use once_cell::sync::Lazy;
+use solana_account_decoder::UiAccountEncoding; // we still need only the enum
+use solana_client::{
+    rpc_config::{RpcAccountInfoConfig, RpcProgramAccountsConfig},
+    rpc_filter::{Memcmp, MemcmpEncodedBytes, RpcFilterType},
+};
 use solana_program::hash::Hash;
+use solana_sdk::account::Account;
 use solana_sdk::{
     bs58,
     commitment_config::CommitmentConfig,
@@ -316,5 +322,48 @@ impl Helius {
             .get_minimum_balance_for_rent_exemption(StakeStateV2::size_of())?;
 
         Ok(lamports.saturating_sub(rent_exempt))
+    }
+
+    /// Return every stake-program account whose `Authorized::staker` (offset 44)
+    /// matches `wallet`. It uses the plain `get_program_accounts_with_config` call
+    /// because the *parsed* variant is not available in Solana-client v2.2.x
+    ///
+    /// ```text
+    /// offset 0  –   meta (8 bytes)
+    /// offset 8  –   rent-exempt reserve (8)
+    /// offset 16 –   credits observed etc. ...
+    /// offset 44 –   Authorized::staker (Pubkey, 32 bytes)
+    /// ```
+    /// # Arguments
+    /// * `wallet` – the Pubkey we filter for
+    ///
+    /// # Returns
+    ///
+    /// `Vec<(Pubkey, Account)>` – keyed raw accounts.  You can deserialize them with
+    /// `StakeStateV2::deserialize()` if you need to
+    pub async fn get_stake_accounts(&self, wallet: Pubkey) -> Result<Vec<(Pubkey, Account)>> {
+        let filters: Option<Vec<RpcFilterType>> = Some(vec![RpcFilterType::Memcmp(Memcmp::new(
+            44,
+            MemcmpEncodedBytes::Base58(wallet.to_string()),
+        ))]);
+
+        let acct_cfg: RpcAccountInfoConfig = RpcAccountInfoConfig {
+            encoding: Some(UiAccountEncoding::Base64),
+            ..Default::default()
+        };
+
+        let cfg: RpcProgramAccountsConfig = RpcProgramAccountsConfig {
+            filters,
+            account_config: acct_cfg,
+            with_context: None,
+            ..Default::default()
+        };
+
+        let accounts: Vec<(Pubkey, Account)> = self
+            .connection()
+            .get_program_accounts_with_config(&stake::program::id(), cfg)
+            .map_err(|e| HeliusError::InvalidInput(e.to_string()))?;
+
+        Ok(accounts)
     }
 }
