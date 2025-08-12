@@ -115,11 +115,6 @@ Our SDK is designed to provide a seamless developer experience when building on 
 - [`get_token_accounts`](https://docs.helius.dev/compression-and-das-api/digital-asset-standard-das-api/get-token-accounts) - Gets information about all token accounts for a specific mint or owner
 - [`get_nft_edition`](https://docs.helius.dev/compression-and-das-api/digital-asset-standard-das-api/get-nft-editions) - Gets all the NFT editions  associated with a specific master NFT
 
-### Mint API (Deprecated)
-- [`delegate_collection_authority`](https://github.com/helius-labs/helius-rust-sdk/blob/6d3630c5fbafaaf450302789251ffaeed3cf7fcc/src/mint_api.rs#L24-L59) - Delegates collection authority to a new authority for a given collection mint
-- [`mint_compressed_nft`](https://docs.helius.dev/compression-and-das-api/deprecated-mint-api) - The easiest way to mint a compressed NFT (cNFT)
-- [`revoke_collection_authority`](https://github.com/helius-labs/helius-rust-sdk/blob/6d3630c5fbafaaf450302789251ffaeed3cf7fcc/src/mint_api.rs#L61-L93) - Revokes a delegated collection authority for a given collection mint
-
 ### Enhanced Transactions API
 - [`parse_transactions`](https://docs.helius.dev/solana-apis/enhanced-transactions-api/parse-transaction-s) - Parses transactions given an array of transaction IDs
 - [`parsed_transaction_history`](https://docs.helius.dev/solana-apis/enhanced-transactions-api/parsed-transaction-history) - Retrieves a parsed transaction history for a specific address
