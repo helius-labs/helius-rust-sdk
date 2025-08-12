@@ -530,15 +530,25 @@ impl Helius {
         let mut final_instructions: Vec<Instruction> = vec![];
 
         // Get priority fee estimate
-        let transaction: Transaction = Transaction::new_signed_with_payer(
-            &create_config.instructions,
-            Some(&fee_payer.pubkey()),
-            &[&fee_payer],
-            recent_blockhash,
-        );
-
-        let serialized_tx: Vec<u8> = serialize(&transaction).map_err(|e| HeliusError::InvalidInput(e.to_string()))?;
-        let transaction_base58: String = encode(&serialized_tx).into_string();
+        let transaction_base58: String = if let Some(lookup_tables) = &create_config.lookup_tables {
+            // Versioned (v0) unsigned
+            let message: v0::Message = v0::Message::try_compile(
+                &fee_payer.pubkey(),
+                &create_config.instructions,
+                &lookup_tables,
+                recent_blockhash,
+            )?;
+            let versioned: VersionedTransaction = VersionedTransaction {
+                signatures: vec![], // unsigned
+                message: VersionedMessage::V0(message),
+            };
+            encode(&serialize(&versioned).map_err(|e| HeliusError::InvalidInput(e.to_string()))?).into_string()
+        } else {
+            // Legacy unsigned
+            let mut tx: Transaction = Transaction::new_with_payer(&create_config.instructions, Some(&fee_payer.pubkey()));
+            tx.message.recent_blockhash = recent_blockhash;
+            encode(&serialize(&tx).map_err(|e| HeliusError::InvalidInput(e.to_string()))?).into_string()
+        };
 
         let priority_fee_request: GetPriorityFeeEstimateRequest = GetPriorityFeeEstimateRequest {
             transaction: Some(transaction_base58),
@@ -571,12 +581,21 @@ impl Helius {
         let mut test_instructions: Vec<Instruction> = final_instructions.clone();
         test_instructions.extend(create_config.instructions.clone());
 
+        let mut all_signers: Vec<&Keypair> = vec![&fee_payer];
+        let mut seen: std::collections::HashSet<Pubkey> = std::collections::HashSet::new();
+        seen.insert(fee_payer.pubkey());
+        for kp in &keypairs {
+            if seen.insert(kp.pubkey()) {
+                all_signers.push(kp);
+            }
+        }
+
         let units: Option<u64> = self
             .get_compute_units_thread_safe(
                 test_instructions,
                 fee_payer.pubkey(),
                 create_config.lookup_tables.clone().unwrap_or_default(),
-                Some(&[&fee_payer]),
+                Some(&all_signers),
             )
             .await?;
 
