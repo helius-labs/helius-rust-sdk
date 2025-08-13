@@ -33,6 +33,29 @@ use std::time::{Duration, Instant};
 use tokio::time::sleep;
 
 impl Helius {
+    // Builds a minimal, unsigned transaction for fee estimation: v0 if LUTs included, legacy otherwise
+    fn build_unsigned_preflight_tx(
+        payer: &Pubkey,
+        instructions: &[Instruction],
+        lookup_tables: Option<&[AddressLookupTableAccount]>,
+        recent_blockhash: Hash,
+    ) -> Result<Vec<u8>> {
+        if let Some(luts) = lookup_tables {
+            // Versioned v0 with LUT compression
+            let v0_message: v0::Message = v0::Message::try_compile(payer, instructions, luts, recent_blockhash)?;
+            let versioned_tx: VersionedTransaction = VersionedTransaction {
+                signatures: vec![],
+                message: VersionedMessage::V0(v0_message),
+            };
+            serialize(&versioned_tx).map_err(|e: Box<ErrorKind>| crate::error::HeliusError::InvalidInput(e.to_string()))
+        } else {
+            // Legacy unsigned, but include the recent blockhash to mirror final layout
+            let mut tx: Transaction = Transaction::new_with_payer(instructions, Some(payer));
+            tx.message.recent_blockhash = recent_blockhash;
+            serialize(&tx).map_err(|e: Box<ErrorKind>| crate::error::HeliusError::InvalidInput(e.to_string()))
+        }
+    }
+
     /// Simulates a transaction to get the total compute units consumed
     ///
     /// # Arguments
@@ -171,60 +194,15 @@ impl Helius {
 
         // Determine if we need to use a versioned transaction
         let is_versioned: bool = config.lookup_tables.is_some();
-        let mut legacy_transaction: Option<Transaction> = None;
-        let mut versioned_transaction: Option<VersionedTransaction> = None;
-
-        // Build the initial transaction based on whether lookup tables are present
-        if is_versioned {
-            let lookup_tables: &[AddressLookupTableAccount] = config.lookup_tables.as_deref().unwrap_or_default();
-            let v0_message: v0::Message =
-                v0::Message::try_compile(&payer_pubkey, &config.instructions, lookup_tables, recent_blockhash)?;
-            let versioned_message: VersionedMessage = VersionedMessage::V0(v0_message);
-
-            let all_signers: Vec<Arc<dyn Signer>> = if let Some(fee_payer) = &config.fee_payer {
-                let mut all_signers = config.signers.clone();
-                if !all_signers.iter().any(|signer| signer.pubkey() == fee_payer.pubkey()) {
-                    all_signers.push(fee_payer.clone());
-                }
-
-                all_signers
-            } else {
-                config.signers.clone()
-            };
-
-            // Sign the versioned transaction
-            let signatures: Vec<Signature> = all_signers
-                .iter()
-                .map(|signer| signer.try_sign_message(versioned_message.serialize().as_slice()))
-                .collect::<std::result::Result<Vec<_>, _>>()?;
-
-            versioned_transaction = Some(VersionedTransaction {
-                signatures,
-                message: versioned_message,
-            });
-        } else {
-            // If no lookup tables are present, we build a regular transaction
-            let mut tx: Transaction = Transaction::new_with_payer(&config.instructions, Some(&payer_pubkey));
-            tx.try_partial_sign(&config.signers, recent_blockhash)?;
-
-            if let Some(fee_payer) = config.fee_payer.as_ref() {
-                tx.try_partial_sign(&[fee_payer], recent_blockhash)?;
-            }
-
-            legacy_transaction = Some(tx);
-        }
-
-        // Serialize the transaction
-        let serialized_tx: Vec<u8> = if let Some(tx) = &legacy_transaction {
-            serialize(&tx).map_err(|e: Box<ErrorKind>| HeliusError::InvalidInput(e.to_string()))?
-        } else if let Some(tx) = &versioned_transaction {
-            serialize(&tx).map_err(|e: Box<ErrorKind>| HeliusError::InvalidInput(e.to_string()))?
-        } else {
-            return Err(HeliusError::InvalidInput("No transaction available".to_string()));
-        };
+        let preflight_bytes: Vec<u8> = Helius::build_unsigned_preflight_tx(
+            &payer_pubkey,
+            &config.instructions,
+            config.lookup_tables.as_deref(),
+            recent_blockhash,
+        )?;
 
         // Encode the transaction
-        let transaction_base58: String = encode(&serialized_tx).into_string();
+        let transaction_base58: String = encode(&preflight_bytes).into_string();
 
         // Get the priority fee estimate based on the serialized transaction
         let priority_fee_request: GetPriorityFeeEstimateRequest = GetPriorityFeeEstimateRequest {
@@ -276,7 +254,6 @@ impl Helius {
         }
 
         let compute_units: u64 = units.unwrap();
-        println!("{}", compute_units);
         let customers_cu: u32 = if compute_units < 1000 {
             1000
         } else {
@@ -312,13 +289,13 @@ impl Helius {
                 .map(|signer| signer.try_sign_message(versioned_message.serialize().as_slice()))
                 .collect::<std::result::Result<Vec<_>, _>>()?;
 
-            versioned_transaction = Some(VersionedTransaction {
+            let versioned_transaction = VersionedTransaction {
                 signatures,
                 message: versioned_message,
-            });
+            };
 
             Ok((
-                SmartTransaction::Versioned(versioned_transaction.unwrap()),
+                SmartTransaction::Versioned(versioned_transaction),
                 last_valid_block_hash,
             ))
         } else {
@@ -329,12 +306,7 @@ impl Helius {
                 tx.try_partial_sign(&[fee_payer], recent_blockhash)?;
             }
 
-            legacy_transaction = Some(tx);
-
-            Ok((
-                SmartTransaction::Legacy(legacy_transaction.unwrap()),
-                last_valid_block_hash,
-            ))
+            Ok((SmartTransaction::Legacy(tx), last_valid_block_hash))
         }
     }
 
@@ -545,7 +517,8 @@ impl Helius {
             encode(&serialize(&versioned).map_err(|e| HeliusError::InvalidInput(e.to_string()))?).into_string()
         } else {
             // Legacy unsigned
-            let mut tx: Transaction = Transaction::new_with_payer(&create_config.instructions, Some(&fee_payer.pubkey()));
+            let mut tx: Transaction =
+                Transaction::new_with_payer(&create_config.instructions, Some(&fee_payer.pubkey()));
             tx.message.recent_blockhash = recent_blockhash;
             encode(&serialize(&tx).map_err(|e| HeliusError::InvalidInput(e.to_string()))?).into_string()
         };
