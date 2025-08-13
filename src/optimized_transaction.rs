@@ -501,27 +501,14 @@ impl Helius {
 
         let mut final_instructions: Vec<Instruction> = vec![];
 
-        // Get priority fee estimate
-        let transaction_base58: String = if let Some(lookup_tables) = &create_config.lookup_tables {
-            // Versioned (v0) unsigned
-            let message: v0::Message = v0::Message::try_compile(
-                &fee_payer.pubkey(),
-                &create_config.instructions,
-                &lookup_tables,
-                recent_blockhash,
-            )?;
-            let versioned: VersionedTransaction = VersionedTransaction {
-                signatures: vec![], // unsigned
-                message: VersionedMessage::V0(message),
-            };
-            encode(&serialize(&versioned).map_err(|e| HeliusError::InvalidInput(e.to_string()))?).into_string()
-        } else {
-            // Legacy unsigned
-            let mut tx: Transaction =
-                Transaction::new_with_payer(&create_config.instructions, Some(&fee_payer.pubkey()));
-            tx.message.recent_blockhash = recent_blockhash;
-            encode(&serialize(&tx).map_err(|e| HeliusError::InvalidInput(e.to_string()))?).into_string()
-        };
+        // Get priority fee estimate (unsigned v0 if LUTs, legacy otherwise)
+        let preflight_bytes = Self::build_unsigned_preflight_tx(
+            &fee_payer.pubkey(),
+            &create_config.instructions,
+            create_config.lookup_tables.as_deref(),
+            recent_blockhash,
+        )?;
+        let transaction_base58: String = encode(&preflight_bytes).into_string();
 
         let priority_fee_request: GetPriorityFeeEstimateRequest = GetPriorityFeeEstimateRequest {
             transaction: Some(transaction_base58),
@@ -729,37 +716,15 @@ impl Helius {
 
         // Determine if we need to build a versioned tx based on lookup tables
         let is_versioned: bool = config.lookup_tables.is_some();
-        let mut legacy_transaction: Option<Transaction> = None;
-        let mut versioned_transaction: Option<VersionedTransaction> = None;
 
         // Build the initial unsigned tx
-        if is_versioned {
-            let lookup_tables: &[AddressLookupTableAccount] = config.lookup_tables.as_deref().unwrap_or_default();
-            let v0_message: v0::Message =
-                v0::Message::try_compile(&payer_pubkey, &config.instructions, lookup_tables, recent_blockhash)?;
-            let versioned_message: VersionedMessage = VersionedMessage::V0(v0_message);
-
-            versioned_transaction = Some(VersionedTransaction {
-                signatures: vec![],
-                message: versioned_message,
-            });
-        } else {
-            let mut tx: Transaction = Transaction::new_with_payer(&config.instructions, Some(&payer_pubkey));
-            tx.message.recent_blockhash = recent_blockhash;
-            legacy_transaction = Some(tx);
-        }
-
-        // Serialize the unsigned tx
-        let serialized_tx: Vec<u8> = if let Some(tx) = &legacy_transaction {
-            serialize(&tx).map_err(|e: Box<ErrorKind>| HeliusError::InvalidInput(e.to_string()))?
-        } else if let Some(tx) = &versioned_transaction {
-            serialize(&tx).map_err(|e: Box<ErrorKind>| HeliusError::InvalidInput(e.to_string()))?
-        } else {
-            return Err(HeliusError::InvalidInput("No transaction available".to_string()));
-        };
-
-        // Encode the tx to base58 for priority fee estimation
-        let transaction_base58: String = encode(&serialized_tx).into_string();
+        let preflight_bytes: Vec<u8> = Self::build_unsigned_preflight_tx(
+            &payer_pubkey,
+            &config.instructions,
+            config.lookup_tables.as_deref(),
+            recent_blockhash,
+        )?;
+        let transaction_base58: String = encode(&preflight_bytes).into_string();
 
         let priority_fee_request = GetPriorityFeeEstimateRequest {
             transaction: Some(transaction_base58),
@@ -825,24 +790,20 @@ impl Helius {
                 v0::Message::try_compile(&payer_pubkey, &final_instructions, lookup_tables, recent_blockhash)?;
             let versioned_message: VersionedMessage = VersionedMessage::V0(v0_message);
 
-            versioned_transaction = Some(VersionedTransaction {
+            let versioned_transaction: VersionedTransaction = VersionedTransaction {
                 signatures: vec![],
                 message: versioned_message,
-            });
+            };
 
             Ok((
-                SmartTransaction::Versioned(versioned_transaction.unwrap()),
+                SmartTransaction::Versioned(versioned_transaction),
                 last_valid_block_hash,
             ))
         } else {
             let mut tx: Transaction = Transaction::new_with_payer(&final_instructions, Some(&payer_pubkey));
             tx.message.recent_blockhash = recent_blockhash;
-            legacy_transaction = Some(tx);
 
-            Ok((
-                SmartTransaction::Legacy(legacy_transaction.unwrap()),
-                last_valid_block_hash,
-            ))
+            Ok((SmartTransaction::Legacy(tx), last_valid_block_hash))
         }
     }
 }
