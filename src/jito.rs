@@ -71,6 +71,10 @@ impl Helius {
     /// * `fee_payer` - The public key of the fee payer
     /// * `tip_account` - The public key of the tip account as a string
     /// * `tip_amount` - The amount of lamports to tip
+    #[deprecated(
+        since = "0.2.7",
+        note = "Please use Helius Sender for ultra-low latency transaction submission: https://www.helius.dev/docs/sending-transactions/sender"
+    )]
     pub fn add_tip_instruction(
         &self,
         instructions: &mut Vec<Instruction>,
@@ -91,6 +95,10 @@ impl Helius {
     ///
     /// # Returns
     /// A `Result` containing the serialized transaction as a base58-encoded string and the last valid block height
+    #[deprecated(
+        since = "0.2.7",
+        note = "Please use Helius Sender for ultra-low latency transaction submission: https://www.helius.dev/docs/sending-transactions/sender"
+    )]
     pub async fn create_smart_transaction_with_tip(
         &self,
         mut config: CreateSmartTransactionConfig,
@@ -109,6 +117,7 @@ impl Helius {
             .as_ref()
             .map_or_else(|| config.signers[0].pubkey(), |signer| signer.pubkey());
 
+        #[allow(deprecated)]
         self.add_tip_instruction(&mut config.instructions, payer_key, random_tip_account, tip_amount);
 
         let (smart_transaction, last_valid_block_height) = self.create_smart_transaction(&config).await?;
@@ -133,6 +142,10 @@ impl Helius {
     ///
     /// # Returns
     /// A `Result` containing the bundle ID
+    #[deprecated(
+        since = "0.2.7",
+        note = "Please use Helius Sender for ultra-low latency transaction submission: https://www.helius.dev/docs/sending-transactions/sender"
+    )]
     pub async fn send_jito_bundle(&self, serialized_transactions: Vec<String>, jito_api_url: &str) -> Result<String> {
         let request: BasicRequest = BasicRequest {
             jsonrpc: "2.0".to_string(),
@@ -176,6 +189,10 @@ impl Helius {
     ///
     /// # Returns
     /// A `Result` containing the status of the bundles as a `serde_json::Value`
+    #[deprecated(
+        since = "0.2.7",
+        note = "Please use Helius Sender for ultra-low latency transaction submission: https://www.helius.dev/docs/sending-transactions/sender"
+    )]
     pub async fn get_bundle_statuses(&self, bundle_ids: Vec<String>, jito_api_url: &str) -> Result<Value> {
         let request: BasicRequest = BasicRequest {
             jsonrpc: "2.0".to_string(),
@@ -212,6 +229,10 @@ impl Helius {
     ///
     /// # Returns
     /// A `Result` containing the bundle ID
+    #[deprecated(
+        since = "0.2.7",
+        note = "Please use Helius Sender for ultra-low latency transaction submission: https://www.helius.dev/docs/sending-transactions/sender"
+    )]
     pub async fn send_smart_transaction_with_tip(
         &self,
         config: SmartTransactionConfig,
@@ -233,11 +254,13 @@ impl Helius {
         let jito_api_url: &str = jito_api_url_string.as_str();
 
         // Create the smart transaction with tip
+        #[allow(deprecated)]
         let (serialized_transaction, last_valid_block_height) = self
             .create_smart_transaction_with_tip(config.create_config, Some(tip))
             .await?;
 
         // Send the transaction as a Jito bundle
+        #[allow(deprecated)]
         let bundle_id: String = self
             .send_jito_bundle(vec![serialized_transaction], jito_api_url)
             .await?;
@@ -248,6 +271,7 @@ impl Helius {
         let start: tokio::time::Instant = tokio::time::Instant::now();
 
         while start.elapsed() < timeout || self.connection().get_block_height()? <= last_valid_block_height {
+            #[allow(deprecated)]
             let bundle_statuses: Value = self.get_bundle_statuses(vec![bundle_id.clone()], jito_api_url).await?;
 
             if let Some(values) = bundle_statuses["result"]["value"].as_array() {
@@ -282,6 +306,10 @@ impl Helius {
     /// * `timeout`: Optional duration for polling the transaction confirmation in seconds. Defaults to 60s
     ///
     /// # Returns a `Result<String>` containing the bundle ID if successful
+    #[deprecated(
+        since = "0.2.7",
+        note = "Please use Helius Sender for ultra-low latency transaction submission: https://www.helius.dev/docs/sending-transactions/sender"
+    )]
     pub async fn send_smart_transaction_with_seeds_and_tip(
         &self,
         mut create_config: CreateSmartTransactionSeedConfig,
@@ -323,6 +351,7 @@ impl Helius {
             .ok_or_else(|| HeliusError::InvalidInput("Invalid Jito region".to_string()))?;
         let jito_api_url = format!("{}/api/v1/bundles", jito_region);
 
+        #[allow(deprecated)]
         let bundle_id: String = self.send_jito_bundle(vec![tx_base58], &jito_api_url).await?;
 
         // Poll for the bundle confirmation
@@ -330,6 +359,7 @@ impl Helius {
         let start: tokio::time::Instant = tokio::time::Instant::now();
 
         while start.elapsed() < timeout {
+            #[allow(deprecated)]
             let bundle_statuses = self.get_bundle_statuses(vec![bundle_id.clone()], &jito_api_url).await?;
 
             if let Some(values) = bundle_statuses["result"]["value"].as_array() {
