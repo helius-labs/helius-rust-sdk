@@ -48,6 +48,7 @@ async fn main() {
     };
 
     // Send the optimized transaction with a 10k lamport tip using the New York region's API URL
+    #[allow(deprecated)]
     match helius
         .send_smart_transaction_with_tip(config, Some(10000), Some("NY"))
         .await
