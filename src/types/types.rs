@@ -994,3 +994,26 @@ impl CreateSmartTransactionSeedConfig {
         self
     }
 }
+
+/// Options for sending via Sender
+#[derive(Clone, Debug)]
+pub struct SenderSendOptions {
+    /// Must match a key in SENDER_ENDPOINTS (e.g., "Default", "US_EAST")
+    pub region: String,
+    /// If true, appends `?swqos_only=true` to `/fast`
+    pub swqos_only: bool,
+    /// Poll settings
+    pub poll_timeout_ms: u64,
+    pub poll_interval_ms: u64,
+}
+
+impl Default for SenderSendOptions {
+    fn default() -> Self {
+        Self {
+            region: "Default".to_string(),
+            swqos_only: false,
+            poll_timeout_ms: 60_000,
+            poll_interval_ms: 2_000,
+        }
+    }
+}
