@@ -88,13 +88,13 @@ fn sender_base_url(region: &str) -> &'static str {
     SENDER_ENDPOINTS.get(key).copied().unwrap_or(SENDER_DEFAULT_BASE)
 }
 
-/// `/fast` endpoint used for sending transactions (TS: senderFastUrl)
+/// `/fast` endpoint used for sending transactions
 #[inline]
 pub fn sender_fast_url(region: &str) -> String {
     format!("{}/fast", sender_base_url(region))
 }
 
-/// `/ping` endpoint used for connection warming (TS: senderPingUrl)
+/// `/ping` endpoint used for connection warming
 #[inline]
 pub fn sender_ping_url(region: &str) -> String {
     format!("{}/ping", sender_base_url(region))
