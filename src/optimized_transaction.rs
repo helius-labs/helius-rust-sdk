@@ -1,20 +1,26 @@
 use crate::error::{HeliusError, Result};
 use crate::types::{
     CreateSmartTransactionConfig, CreateSmartTransactionSeedConfig, GetPriorityFeeEstimateOptions,
-    GetPriorityFeeEstimateRequest, GetPriorityFeeEstimateResponse, PriorityLevel, SmartTransaction,
+    GetPriorityFeeEstimateRequest, GetPriorityFeeEstimateResponse, PriorityLevel, SenderSendOptions, SmartTransaction,
     SmartTransactionConfig, Timeout,
 };
 use crate::Helius;
+use std::str::FromStr;
 use std::sync::Arc;
 
+use base64::{engine::general_purpose::STANDARD as B64, Engine as _};
 use bincode::{serialize, ErrorKind};
+use phf::phf_map;
+use rand::Rng;
 use reqwest::StatusCode;
+use serde_json::json;
 use solana_client::{
     rpc_client::SerializableTransaction,
     rpc_config::{RpcSendTransactionConfig, RpcSimulateTransactionConfig},
     rpc_response::{Response, RpcSimulateTransactionResult},
 };
 use solana_sdk::signature::keypair_from_seed;
+use solana_sdk::system_instruction;
 use solana_sdk::{
     address_lookup_table::AddressLookupTableAccount,
     bs58::encode,
@@ -31,6 +37,128 @@ use solana_sdk::{
 use solana_transaction_status::TransactionConfirmationStatus;
 use std::time::{Duration, Instant};
 use tokio::time::sleep;
+
+const MIN_TIP_LAMPORTS_DUAL: u64 = 1_000_000; // 0.001 SOL
+const MIN_TIP_LAMPORTS_SWQOS: u64 = 500_000; // 0.0005 SOL
+
+const TIP_FLOOR_URL: &str = "https://bundles.jito.wtf/api/v1/bundles/tip_floor";
+
+const SENDER_TIP_ACCOUNTS: [&str; 10] = [
+    "4ACfpUFoaSD9bfPdeu6DBt89gB6ENTeHBXCAi87NhDEE",
+    "D2L6yPZ2FmmmTKPgzaMKdhu6EWZcTpLy1Vhx8uvZe7NZ",
+    "9bnz4RShgq1hAnLnZbP8kbgBg1kEmcJBYQq3gQbmnSta",
+    "5VY91ws6B2hMmBFRsXkoAAdsPHBJwRfBht4DXox3xkwn",
+    "2nyhqdwKcJZR2vcqCyrYsaPVdAnFoJjiksCXJ7hfEYgD",
+    "2q5pghRs6arqVjRvT5gfgWfWcHWmw1ZuCzphgd5KfWGJ",
+    "wyvPkWjVZz1M8fHQnMMCDTQDbkManefNNhweYk5WkcF",
+    "3KCKozbAaF75qEU33jtzozcJ29yJuaLJTy2jFdzUY8bT",
+    "4vieeGHPYPG2MmyPRcYjdiDmmhN3ww7hsFNap8pVN3Ey",
+    "4TQLFNWK8AovT1gFvda5jfw2oJeRMKEmw7aH6MGBJ3or",
+];
+
+pub static SENDER_ENDPOINTS: phf::Map<&'static str, &'static str> = phf_map! {
+    "Default"      => "http://slc-sender.helius-rpc.com",
+    "US_EAST"      => "http://ewr-sender.helius-rpc.com",
+    "EU_WEST"      => "http://lon-sender.helius-rpc.com",
+    "EU_CENTRAL"   => "http://fra-sender.helius-rpc.com",
+    "EU_NORTH"     => "http://ams-sender.helius-rpc.com",
+    "AP_SINGAPORE" => "http://sg-sender.helius-rpc.com",
+    "AP_TOKYO"     => "http://tyo-sender.helius-rpc.com",
+};
+
+pub static SENDER_REGION_ALIASES: phf::Map<&'static str, &'static str> = phf_map! {
+    "US-EAST"      => "US_EAST",
+    "EU-WEST"      => "EU_WEST",
+    "EU-CENTRAL"   => "EU_CENTRAL",
+    "EU-NORTH"     => "EU_NORTH",
+    "AP-SINGAPORE" => "AP_SINGAPORE",
+    "AP-TOKYO"     => "AP_TOKYO",
+};
+
+const SENDER_DEFAULT_BASE: &str = "http://slc-sender.helius-rpc.com";
+
+#[inline]
+fn normalize_region<'a>(region: &'a str) -> &'a str {
+    SENDER_REGION_ALIASES.get(region).copied().unwrap_or(region)
+}
+
+#[inline]
+fn sender_base_url(region: &str) -> &'static str {
+    let key: &str = normalize_region(region);
+    SENDER_ENDPOINTS.get(key).copied().unwrap_or(SENDER_DEFAULT_BASE)
+}
+
+/// `/fast` endpoint used for sending transactions
+#[inline]
+pub fn sender_fast_url(region: &str) -> String {
+    format!("{}/fast", sender_base_url(region))
+}
+
+/// `/ping` endpoint used for connection warming
+#[inline]
+pub fn sender_ping_url(region: &str) -> String {
+    format!("{}/ping", sender_base_url(region))
+}
+
+/// POST base64 wire-transaction to Sender via `/fast`.
+async fn post_to_sender(tx64: &str, opts: &SenderSendOptions) -> Result<Signature> {
+    let mut endpoint: String = sender_fast_url(&opts.region);
+    if opts.swqos_only {
+        endpoint.push_str("?swqos_only=true");
+    }
+
+    let body = json!({
+        "jsonrpc": "2.0",
+        "id": format!("helius-rust-{}", std::time::SystemTime::now()
+             .duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_millis()),
+        "method": "sendTransaction",
+        "params": [
+            tx64,
+            { "encoding": "base64", "skipPreflight": true, "maxRetries": 0 }
+        ]
+    });
+
+    let res = reqwest::Client::new()
+        .post(&endpoint)
+        .json(&body)
+        .send()
+        .await
+        .map_err(|e| HeliusError::InvalidInput(format!("Sender request error: {e}")))?;
+
+    let status = res.status();
+    if !status.is_success() {
+        // `text()` consumes `res` in this branch, and we return immediately.
+        let text = res.text().await.unwrap_or_default();
+        return Err(HeliusError::InvalidInput(format!(
+            "Sender HTTP {}: {}",
+            status,
+            text.chars().take(200).collect::<String>()
+        )));
+    } else {
+        // Success path: `json()` consumes `res` *here*, not above.
+        let val: serde_json::Value = res
+            .json()
+            .await
+            .map_err(|e| HeliusError::InvalidInput(format!("Sender JSON parse error: {e}")))?;
+
+        if let Some(s) = val.as_str() {
+            return Signature::from_str(s)
+                .map_err(|e| HeliusError::InvalidInput(format!("Invalid signature from Sender: {e}")));
+        }
+        if let Some(err) = val.get("error") {
+            return Err(HeliusError::InvalidInput(format!("Sender error: {err}")));
+        }
+        if let Some(result) = val.get("result").and_then(|r| r.as_str()) {
+            return Signature::from_str(result)
+                .map_err(|e| HeliusError::InvalidInput(format!("Invalid signature from Sender: {e}")));
+        }
+
+        return Err(HeliusError::InvalidInput(format!(
+            "Unexpected Sender response: {}",
+            val.to_string().chars().take(200).collect::<String>()
+        )));
+    }
+}
 
 impl Helius {
     // Builds a minimal, unsigned transaction for fee estimation: v0 if LUTs included, legacy otherwise
@@ -804,6 +932,180 @@ impl Helius {
             tx.message.recent_blockhash = recent_blockhash;
 
             Ok((SmartTransaction::Legacy(tx), last_valid_block_hash))
+        }
+    }
+
+    /// Fetches the 75th percentile landed tip floor from Jito's endpoint (in SOL).
+    /// Returns `None` if the fetch fails or the response is malformed.
+    pub async fn fetch_tip_floor_75th(&self) -> Result<Option<u64>> {
+        let res = reqwest::Client::new()
+            .get(TIP_FLOOR_URL)
+            .send()
+            .await
+            .map_err(|e| HeliusError::InvalidInput(format!("Tip floor fetch error: {e}")))?;
+
+        if !res.status().is_success() {
+            return Ok(None);
+        }
+
+        let json: serde_json::Value = res
+            .json()
+            .await
+            .map_err(|e| HeliusError::InvalidInput(format!("Tip floor JSON parse error: {e}")))?;
+
+        let val_sol = json
+            .get(0)
+            .and_then(|o| o.get("landed_tips_75th_percentile"))
+            .and_then(|v| v.as_f64());
+
+        Ok(val_sol.map(|sol| (sol * 1_000_000_000.0) as u64))
+    }
+
+    /// Determines the tip amount in lamports using the 75th percentile floor or falling back to the minimum.
+    pub async fn determine_tip_lamports(&self, swqos_only: bool) -> Result<u64> {
+        let min_lamports: u64 = if swqos_only {
+            MIN_TIP_LAMPORTS_SWQOS
+        } else {
+            MIN_TIP_LAMPORTS_DUAL
+        };
+        let floor_lamports: u64 = self.fetch_tip_floor_75th().await?.unwrap_or(min_lamports);
+
+        Ok(floor_lamports.max(min_lamports))
+    }
+
+    /// Creates an optimized smart transaction with an appended tip transfer instruction for Sender
+    /// Will rename once Jito functions are removed.
+    pub async fn create_smart_transaction_with_tip_for_sender(
+        &self,
+        mut config: CreateSmartTransactionConfig,
+        tip_amount: u64,
+    ) -> Result<(SmartTransaction, u64)> {
+        if config.signers.is_empty() {
+            return Err(HeliusError::InvalidInput(
+                "The fee payer must sign the transaction".to_string(),
+            ));
+        }
+
+        let payer_pubkey: Pubkey = config
+            .fee_payer
+            .as_ref()
+            .map_or(config.signers[0].pubkey(), |signer| signer.pubkey());
+
+        if tip_amount > 0 {
+            let mut rng = rand::thread_rng();
+            let idx = rng.gen_range(0..SENDER_TIP_ACCOUNTS.len());
+            let tip_pubkey = Pubkey::from_str(SENDER_TIP_ACCOUNTS[idx])
+                .map_err(|e| HeliusError::InvalidInput(format!("Invalid tip account: {e}")))?;
+
+            let tip_ix = system_instruction::transfer(&payer_pubkey, &tip_pubkey, tip_amount);
+            config.instructions.push(tip_ix);
+        }
+
+        self.create_smart_transaction(&config).await
+    }
+
+    /// Warm Sender connection by hitting `/ping`.
+    pub async fn warm_sender_connection(&self, region: &str) -> Result<()> {
+        let url = sender_ping_url(region);
+        let res = reqwest::Client::new()
+            .get(&url)
+            .send()
+            .await
+            .map_err(|e| HeliusError::InvalidInput(format!("Sender ping error: {e}")))?;
+        if !res.status().is_success() {
+            return Err(HeliusError::InvalidInput(format!("Sender ping HTTP {}", res.status())));
+        }
+        Ok(())
+    }
+
+    /// Send a signed tx via Sender `/fast` and poll until confirmed (or until timeout/last valid blockhash expiry).
+    /// NOTE: Uses `skipPreflight = true`, `maxRetries = 0`.
+    pub async fn send_and_confirm_via_sender<T>(
+        &self,
+        transaction: &T,
+        last_valid_block_height: u64,
+        opts: SenderSendOptions,
+    ) -> Result<Signature>
+    where
+        T: SerializableTransaction + serde::Serialize + ?Sized,
+    {
+        let wire: Vec<u8> =
+            bincode::serialize(transaction).map_err(|e: Box<ErrorKind>| HeliusError::InvalidInput(e.to_string()))?;
+
+        // Base64 encode the wire transaction for Sender
+        let tx64: String = B64.encode(&wire);
+
+        // Send to Sender
+        let sig: Signature = post_to_sender(&tx64, &opts).await?;
+
+        // Poll until confirmed (or timeout/last valid blockhash expiry)
+        let start: Instant = Instant::now();
+        let timeout: Duration = Duration::from_millis(opts.poll_timeout_ms);
+        let interval: Duration = Duration::from_millis(opts.poll_interval_ms);
+
+        loop {
+            if start.elapsed() >= timeout {
+                return Err(HeliusError::Timeout {
+                    code: StatusCode::REQUEST_TIMEOUT,
+                    text: format!("Transaction {}'s confirmation timed out", sig),
+                });
+            }
+
+            if self.connection().get_block_height()? > last_valid_block_height {
+                return Err(HeliusError::Timeout {
+                    code: StatusCode::REQUEST_TIMEOUT,
+                    text: format!(
+                        "Transaction {} expired (last_valid_block_height={})",
+                        sig, last_valid_block_height
+                    ),
+                });
+            }
+
+            match self.poll_transaction_confirmation(sig).await {
+                Ok(confirmed) => return Ok(confirmed),
+                Err(_) => sleep(interval).await,
+            }
+        }
+    }
+
+    /// Build an optimized tx and send via Sender.
+    /// If you need a tip transfer, prepend it to `config.create_config.instructions` before calling.
+    pub async fn send_smart_transaction_with_sender(
+        &self,
+        config: SmartTransactionConfig,
+        sender_opts: SenderSendOptions,
+    ) -> Result<Signature> {
+        if sender_opts.region.trim().is_empty() {
+            return Err(HeliusError::InvalidInput("Sender region must be specified".to_string()));
+        }
+
+        // Determine tip and enforce floor (all in lamports)
+        let mut tip_lamports = self.determine_tip_lamports(sender_opts.swqos_only).await?;
+        let floor = if sender_opts.swqos_only {
+            MIN_TIP_LAMPORTS_SWQOS
+        } else {
+            MIN_TIP_LAMPORTS_DUAL
+        };
+
+        if tip_lamports < floor {
+            tip_lamports = floor;
+        }
+
+        let create_cfg: CreateSmartTransactionConfig = config.create_config;
+
+        let (transaction, last_valid_block_height) = self
+            .create_smart_transaction_with_tip_for_sender(create_cfg, tip_lamports)
+            .await?;
+
+        match transaction {
+            SmartTransaction::Legacy(tx) => {
+                self.send_and_confirm_via_sender(&tx, last_valid_block_height, sender_opts)
+                    .await
+            }
+            SmartTransaction::Versioned(tx) => {
+                self.send_and_confirm_via_sender(&tx, last_valid_block_height, sender_opts)
+                    .await
+            }
         }
     }
 }
