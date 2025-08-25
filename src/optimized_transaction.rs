@@ -57,7 +57,8 @@ const SENDER_TIP_ACCOUNTS: [&str; 10] = [
 ];
 
 pub static SENDER_ENDPOINTS: phf::Map<&'static str, &'static str> = phf_map! {
-    "Default"      => "http://slc-sender.helius-rpc.com",
+    "Default"      => "http://sender.helius-rpc.com",
+    "US_SLC"       => "http://slc-sender.helius-rpc.com",
     "US_EAST"      => "http://ewr-sender.helius-rpc.com",
     "EU_WEST"      => "http://lon-sender.helius-rpc.com",
     "EU_CENTRAL"   => "http://fra-sender.helius-rpc.com",
@@ -68,6 +69,7 @@ pub static SENDER_ENDPOINTS: phf::Map<&'static str, &'static str> = phf_map! {
 
 pub static SENDER_REGION_ALIASES: phf::Map<&'static str, &'static str> = phf_map! {
     "US-EAST"      => "US_EAST",
+    "US-SLC"       => "US_SLC",
     "EU-WEST"      => "EU_WEST",
     "EU-CENTRAL"   => "EU_CENTRAL",
     "EU-NORTH"     => "EU_NORTH",
