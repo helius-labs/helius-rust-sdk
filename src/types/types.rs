@@ -695,8 +695,8 @@ pub struct GroupDefinition {
     pub group_value: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub size: Option<u64>,
-    #[serde(skip_serializing)]
-    pub asset_id: Vec<u8>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub asset_id: Option<Vec<u8>>,
 }
 
 // #[derive(Debug, Serialize, Deserialize, JsonSchema)]
@@ -992,5 +992,28 @@ impl CreateSmartTransactionSeedConfig {
     pub fn with_lookup_tables(mut self, lookup_tables: Vec<AddressLookupTableAccount>) -> Self {
         self.lookup_tables = Some(lookup_tables);
         self
+    }
+}
+
+/// Options for sending via Sender
+#[derive(Clone, Debug)]
+pub struct SenderSendOptions {
+    /// Must match a key in SENDER_ENDPOINTS (e.g., "Default", "US_EAST")
+    pub region: String,
+    /// If true, appends `?swqos_only=true` to `/fast`
+    pub swqos_only: bool,
+    /// Poll settings
+    pub poll_timeout_ms: u64,
+    pub poll_interval_ms: u64,
+}
+
+impl Default for SenderSendOptions {
+    fn default() -> Self {
+        Self {
+            region: "Default".to_string(),
+            swqos_only: false,
+            poll_timeout_ms: 60_000,
+            poll_interval_ms: 2_000,
+        }
     }
 }
