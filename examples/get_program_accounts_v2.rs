@@ -70,7 +70,7 @@ async fn main() -> Result<()> {
         }
     }
 
-    // Incremental updates
+    // Incremental updates (change to a more recent slot)
     let recent_slot: u64 = 363340000;
     let config4: GetProgramAccountsV2Config = GetProgramAccountsV2Config {
         encoding: Some(Encoding::JsonParsed),
