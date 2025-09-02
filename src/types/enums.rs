@@ -745,3 +745,29 @@ pub enum SmartTransaction {
     Legacy(Transaction),
     Versioned(VersionedTransaction),
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum Encoding {
+    #[serde(rename = "jsonParsed")]
+    JsonParsed,
+    #[serde(rename = "base58")]
+    Base58,
+    #[serde(rename = "base64")]
+    Base64,
+    #[serde(rename = "base64+zstd")]
+    Base64Zstd,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum GpaFilter {
+    DataSize { #[serde(rename = "dataSize")] data_size: u64 },
+    Memcmp { memcmp: GpaMemcmp },
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum TokenAccountsOwnerFilter {
+    Mint { mint: String },
+    Program { #[serde(rename = "programId")] program_id: String },
+}
