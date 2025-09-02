@@ -1,7 +1,6 @@
 use helius::error::Result;
 use helius::types::*;
 use helius::Helius;
-use std::collections::HashMap;
 
 #[tokio::main]
 async fn main() -> Result<()> {
