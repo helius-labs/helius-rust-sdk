@@ -16,7 +16,7 @@ async fn main() -> Result<()> {
         limit: Some(10),
         ..Default::default()
     };
-    let first_page = helius
+    let first_page: GetProgramAccountsV2Response = helius
         .rpc()
         .get_program_accounts_v2(token_program_id.clone(), config1)
         .await?;
@@ -90,7 +90,7 @@ async fn main() -> Result<()> {
     );
 
     // Using memcmp filter
-    let specific_owner = "86xCnPeV69n6t3DnyGvkKobf9FdN2H9oiVDdaMpo2MMY".to_string();
+    let specific_owner: String = "86xCnPeV69n6t3DnyGvkKobf9FdN2H9oiVDdaMpo2MMY".to_string();
     let config6: GetProgramAccountsV2Config = GetProgramAccountsV2Config {
         encoding: Some(Encoding::Base64),
         limit: Some(5),
