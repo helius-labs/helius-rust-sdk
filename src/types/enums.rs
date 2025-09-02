@@ -761,13 +761,23 @@ pub enum Encoding {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum GpaFilter {
-    DataSize { #[serde(rename = "dataSize")] data_size: u64 },
-    Memcmp { memcmp: GpaMemcmp },
+    DataSize {
+        #[serde(rename = "dataSize")]
+        data_size: u64,
+    },
+    Memcmp {
+        memcmp: GpaMemcmp,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum TokenAccountsOwnerFilter {
-    Mint { mint: String },
-    Program { #[serde(rename = "programId")] program_id: String },
+    Mint {
+        mint: String,
+    },
+    Program {
+        #[serde(rename = "programId")]
+        program_id: String,
+    },
 }

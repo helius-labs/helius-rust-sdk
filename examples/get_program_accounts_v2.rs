@@ -20,7 +20,7 @@ async fn main() -> Result<()> {
         .rpc()
         .get_program_accounts_v2(token_program_id.clone(), config1)
         .await?;
-    
+
     println!("Fetched {} accounts", first_page.accounts.len());
     println!("Pagination key: {:?}", first_page.pagination_key);
     if !first_page.accounts.is_empty() {
@@ -61,13 +61,17 @@ async fn main() -> Result<()> {
         if let Some(parsed) = &account.account.data.as_object() {
             if let Some(info) = parsed.get("parsed").and_then(|p| p.get("info")) {
                 let mint = info.get("mint").and_then(|m| m.as_str()).unwrap_or("Unknown");
-                println!("  Token account {}... with mint: {}...", &account.pubkey[0..8], &mint[0..8]);
+                println!(
+                    "  Token account {}... with mint: {}...",
+                    &account.pubkey[0..8],
+                    &mint[0..8]
+                );
             }
         }
     }
 
     // Incremental updates
-    let recent_slot: u64 = 363340000; 
+    let recent_slot: u64 = 363340000;
     let config4: GetProgramAccountsV2Config = GetProgramAccountsV2Config {
         encoding: Some(Encoding::JsonParsed),
         limit: Some(5),
@@ -79,7 +83,11 @@ async fn main() -> Result<()> {
         .get_program_accounts_v2(token_program_id.clone(), config4)
         .await?;
 
-    println!("Found {} accounts changed since slot {}", changed_accounts.accounts.len(), recent_slot);
+    println!(
+        "Found {} accounts changed since slot {}",
+        changed_accounts.accounts.len(),
+        recent_slot
+    );
 
     // Using memcmp filter
     let specific_owner = "86xCnPeV69n6t3DnyGvkKobf9FdN2H9oiVDdaMpo2MMY".to_string();
@@ -102,7 +110,11 @@ async fn main() -> Result<()> {
         .get_program_accounts_v2(token_program_id.clone(), config6)
         .await?;
 
-    println!("Found {} accounts owned by {}...", memcmp_accounts.accounts.len(), &specific_owner[0..8]);
+    println!(
+        "Found {} accounts owned by {}...",
+        memcmp_accounts.accounts.len(),
+        &specific_owner[0..8]
+    );
 
     Ok(())
 }

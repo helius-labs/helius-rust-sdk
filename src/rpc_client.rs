@@ -24,7 +24,12 @@ use crate::error::Result;
 use crate::request_handler::RequestHandler;
 use crate::types::types::{RpcRequest, RpcResponse};
 use crate::types::{
-    Asset, AssetList, AssetProof, EditionsList, GetAsset, GetAssetBatch, GetAssetProof, GetAssetProofBatch, GetAssetSignatures, GetAssetsByAuthority, GetAssetsByCreator, GetAssetsByGroup, GetAssetsByOwner, GetNftEditions, GetPriorityFeeEstimateRequest, GetPriorityFeeEstimateResponse, GetProgramAccountsV2Config, GetProgramAccountsV2Request, GetProgramAccountsV2Response, GetTokenAccounts, GetTokenAccountsByOwnerV2Config, GetTokenAccountsByOwnerV2Request, GetTokenAccountsByOwnerV2Response, SearchAssets, TokenAccountsList, TokenAccountsOwnerFilter, TransactionSignatureList
+    Asset, AssetList, AssetProof, EditionsList, GetAsset, GetAssetBatch, GetAssetProof, GetAssetProofBatch,
+    GetAssetSignatures, GetAssetsByAuthority, GetAssetsByCreator, GetAssetsByGroup, GetAssetsByOwner, GetNftEditions,
+    GetPriorityFeeEstimateRequest, GetPriorityFeeEstimateResponse, GetProgramAccountsV2Config,
+    GetProgramAccountsV2Request, GetProgramAccountsV2Response, GetTokenAccounts, GetTokenAccountsByOwnerV2Config,
+    GetTokenAccountsByOwnerV2Request, GetTokenAccountsByOwnerV2Response, SearchAssets, TokenAccountsList,
+    TokenAccountsOwnerFilter, TransactionSignatureList,
 };
 
 use reqwest::{Client, Method, Url};
@@ -245,22 +250,22 @@ impl RpcClient {
 
     /// An enhanced version of getProgramAccounts with cursor-based pagination and changedSlotSince support for efficiently querying large sets of accounts owned by specific Solana
     /// programs with incremental updates.
-    /// 
+    ///
     /// # Arguments
     /// * `program_id` - The given program's public key to query accounts for, as a base58 encoded string
     /// * `config` - A config struct that controls the encoding, pagination, memcmp/data size filters, and incremental updates defined by the type `GetProgramAccountsV2Config`
-    /// 
+    ///
     /// # Returns
     /// A `GetProgramAccountsV2Response` with:
     /// * `accounts` - The page of program accounts, each with a pubkey and the relevant account info
     /// * `pagination_key` - The cursor for the next page
     /// * `total_results` - The total matches, if available. Otherwise, it returns `None`
-    /// 
+    ///
     /// # Pagination
     /// * If `pagination_key` is `Some`, pass it into the **next** request to continue
     /// * If `pagination_key` is `None`, ypu've reached the end
     /// * Note that if there are fewer than `limit` accounts in a given page it does not imply the end; always check the cursor
-    /// 
+    ///
     /// # Incremental Updates
     /// * Set `config.changed_since_slot = Some(slot)` to return only the accounts modified at or after that slot
     /// * Omit `changed_since_slot` for a full scan
@@ -275,12 +280,12 @@ impl RpcClient {
 
     /// An enhanced version of getTokenAccountsByOwner with cursor-based pagination and changedSinceSlot support to incrementally
     /// retrieve SPL token accounts owned by a given wallet.
-    /// 
+    ///
     /// # Arguments
     /// * `owner` - The Base58 wallet address whose token accounts you want to fetch
     /// * `filter` - The filtering options for the token accounts fetched defined by `TokenAccountsOwnerFilter` (e.g., limiting the mint or program ID)
     /// * `config` - A config struct that controls the encoding, pagination, and `changed_since_slot` defined by the type `GetTokenAccountsByOwnerV2Config`
-    /// 
+    ///
     /// # Returns
     /// A `GetTokenAccountsByOwnerV2Response` with:
     /// * `context` - An optional RPC context (i.e., slot and API version)
@@ -292,7 +297,7 @@ impl RpcClient {
     /// * If `pagination_key` is `Some`, pass it into the **next** request to continue
     /// * If `pagination_key` is `None`, ypu've reached the end
     /// * Note that if there are fewer than `limit` accounts in a given page it does not imply the end; always check the cursor
-    /// 
+    ///
     /// # Incremental Updates
     /// * Set `config.changed_since_slot = Some(slot)` to return only the accounts modified at or after that slot
     /// * Omit `changed_since_slot` for a full scan

@@ -10,7 +10,10 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use solana_client::rpc_config::RpcSendTransactionConfig;
-use solana_sdk::{address_lookup_table::AddressLookupTableAccount, commitment_config::CommitmentLevel, instruction::Instruction, signature::Signer};
+use solana_sdk::{
+    address_lookup_table::AddressLookupTableAccount, commitment_config::CommitmentLevel, instruction::Instruction,
+    signature::Signer,
+};
 
 /// Defines the available clusters supported by Helius
 #[derive(Debug, Clone, PartialEq)]
@@ -1100,7 +1103,7 @@ pub struct GetTokenAccountsByOwnerV2Config {
     pub encoding: Option<Encoding>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub limit: Option<u32>, 
+    pub limit: Option<u32>,
     #[serde(rename = "paginationKey", skip_serializing_if = "Option::is_none")]
     pub pagination_key: Option<String>,
     #[serde(rename = "changedSinceSlot", skip_serializing_if = "Option::is_none")]
