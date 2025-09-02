@@ -28,8 +28,8 @@ use crate::types::{
     GetAssetSignatures, GetAssetsByAuthority, GetAssetsByCreator, GetAssetsByGroup, GetAssetsByOwner, GetNftEditions,
     GetPriorityFeeEstimateRequest, GetPriorityFeeEstimateResponse, GetProgramAccountsV2Config,
     GetProgramAccountsV2Request, GetProgramAccountsV2Response, GetTokenAccounts, GetTokenAccountsByOwnerV2Config,
-    GetTokenAccountsByOwnerV2Request, GetTokenAccountsByOwnerV2Response, SearchAssets, TokenAccountsList,
-    TokenAccountsOwnerFilter, TransactionSignatureList,
+    GetTokenAccountsByOwnerV2Request, GetTokenAccountsByOwnerV2Response, GpaAccount, SearchAssets, TokenAccountRecord,
+    TokenAccountsList, TokenAccountsOwnerFilter, TransactionSignatureList,
 };
 
 use reqwest::{Client, Method, Url};
@@ -309,5 +309,88 @@ impl RpcClient {
     ) -> Result<GetTokenAccountsByOwnerV2Response> {
         let params: GetTokenAccountsByOwnerV2Request = (owner, filter, config);
         self.post_rpc_request("getTokenAccountsByOwnerV2", params).await
+    }
+
+    /// Get all program accounts by auto-paginating through results
+    ///
+    /// Automatically handles pagination to fetch all accounts. Please use with caution for programs with many accounts
+    ///
+    /// # Arguments
+    /// * `program_id` - The program ID to query
+    /// * `config` - A config struct that controls the encoding, pagination, memcmp/data size filters, and incremental updates defined by the type `GetProgramAccountsV2Config`.
+    /// Note `limit`` defaults to `10000`, if not provided, and the `pagination_key` is ignored since the method auto-paginates
+    ///
+    /// # Returns
+    /// A vector of all program accounts
+    pub async fn get_all_program_accounts(
+        &self,
+        program_id: String,
+        mut config: GetProgramAccountsV2Config,
+    ) -> Result<Vec<GpaAccount>> {
+        // Ignore the user-provided pagination_key since we auto-paginate
+        config.pagination_key = None;
+
+        // Default to 10k
+        if config.limit.is_none() {
+            config.limit = Some(10000);
+        }
+
+        let mut all_accounts: Vec<GpaAccount> = Vec::new();
+        loop {
+            let response: GetProgramAccountsV2Response =
+                self.get_program_accounts_v2(program_id.clone(), config.clone()).await?;
+            all_accounts.extend(response.accounts);
+
+            println!("Fetched {} accounts so far", all_accounts.len());
+
+            if let Some(key) = response.pagination_key {
+                config.pagination_key = Some(key);
+            } else {
+                break;
+            }
+        }
+
+        Ok(all_accounts)
+    }
+
+    /// Get all token accounts by owner by auto-paginating through results
+    ///
+    /// # Arguments
+    /// * `owner` - The Base58 wallet address whose token accounts you want to fetch
+    /// * `filter` - Filter by mint or programId
+    /// * `config` - A config struct that controls the encoding, pagination, and `changed_since_slot` defined by the type `GetTokenAccountsByOwnerV2Config`.
+    /// Note `limit`` defaults to `10000`, if not provided, and the `pagination_key` is ignored since the method auto-paginates
+    ///
+    /// # Returns
+    /// A vector of all token account records
+    pub async fn get_all_token_accounts_by_owner(
+        &self,
+        owner: String,
+        filter: TokenAccountsOwnerFilter,
+        mut config: GetTokenAccountsByOwnerV2Config,
+    ) -> Result<Vec<TokenAccountRecord>> {
+        // Ignore the user-provided pagination_key since we auto-paginate
+        config.pagination_key = None;
+
+        // Default to 10k
+        if config.limit.is_none() {
+            config.limit = Some(10000);
+        }
+
+        let mut all_accounts: Vec<TokenAccountRecord> = Vec::new();
+        loop {
+            let response: GetTokenAccountsByOwnerV2Response = self
+                .get_token_accounts_by_owner_v2(owner.clone(), filter.clone(), config.clone())
+                .await?;
+            all_accounts.extend(response.value.accounts);
+
+            if let Some(key) = response.value.pagination_key {
+                config.pagination_key = Some(key);
+            } else {
+                break;
+            }
+        }
+
+        Ok(all_accounts)
     }
 }
