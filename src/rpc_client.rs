@@ -318,7 +318,7 @@ impl RpcClient {
     /// # Arguments
     /// * `program_id` - The program ID to query
     /// * `config` - A config struct that controls the encoding, pagination, memcmp/data size filters, and incremental updates defined by the type `GetProgramAccountsV2Config`.
-    /// Note `limit`` defaults to `10000`, if not provided, and the `pagination_key` is ignored since the method auto-paginates
+    ///   Note `limit` defaults to `10000`, if not provided, and the `pagination_key` is ignored since the method auto-paginates
     ///
     /// # Returns
     /// A vector of all program accounts
@@ -359,7 +359,7 @@ impl RpcClient {
     /// * `owner` - The Base58 wallet address whose token accounts you want to fetch
     /// * `filter` - Filter by mint or programId
     /// * `config` - A config struct that controls the encoding, pagination, and `changed_since_slot` defined by the type `GetTokenAccountsByOwnerV2Config`.
-    /// Note `limit`` defaults to `10000`, if not provided, and the `pagination_key` is ignored since the method auto-paginates
+    ///   Note `limit` defaults to `10000`, if not provided, and the `pagination_key` is ignored since the method auto-paginates
     ///
     /// # Returns
     /// A vector of all token account records
