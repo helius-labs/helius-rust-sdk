@@ -22,12 +22,14 @@ use std::sync::Arc;
 use crate::config::Config;
 use crate::error::Result;
 use crate::request_handler::RequestHandler;
-use crate::types::types::{RpcRequest, RpcResponse};
+use crate::types::inner::{RpcRequest, RpcResponse};
 use crate::types::{
     Asset, AssetList, AssetProof, EditionsList, GetAsset, GetAssetBatch, GetAssetProof, GetAssetProofBatch,
     GetAssetSignatures, GetAssetsByAuthority, GetAssetsByCreator, GetAssetsByGroup, GetAssetsByOwner, GetNftEditions,
-    GetPriorityFeeEstimateRequest, GetPriorityFeeEstimateResponse, GetTokenAccounts, SearchAssets, TokenAccountsList,
-    TransactionSignatureList,
+    GetPriorityFeeEstimateRequest, GetPriorityFeeEstimateResponse, GetProgramAccountsV2Config,
+    GetProgramAccountsV2Request, GetProgramAccountsV2Response, GetTokenAccounts, GetTokenAccountsByOwnerV2Config,
+    GetTokenAccountsByOwnerV2Request, GetTokenAccountsByOwnerV2Response, GpaAccount, SearchAssets, TokenAccountRecord,
+    TokenAccountsList, TokenAccountsOwnerFilter, TransactionSignatureList,
 };
 
 use reqwest::{Client, Method, Url};
@@ -239,13 +241,156 @@ impl RpcClient {
     /// A `Result` that, if successful, wraps the `GetPriorityFeeEstimateResponse` struct, containing:
     /// - `priority_fee_estimate`: The estimated priority fee in micro lamports
     /// - `priority_fee_levels`: A detailed breakdown of potential priority fees at various levels
-    ///
-    /// # Errors
-    /// Returns
     pub async fn get_priority_fee_estimate(
         &self,
         request: GetPriorityFeeEstimateRequest,
     ) -> Result<GetPriorityFeeEstimateResponse> {
         self.post_rpc_request("getPriorityFeeEstimate", vec![request]).await
+    }
+
+    /// An enhanced version of getProgramAccounts with cursor-based pagination and changedSlotSince support for efficiently querying large sets of accounts owned by specific Solana
+    /// programs with incremental updates.
+    ///
+    /// # Arguments
+    /// * `program_id` - The given program's public key to query accounts for, as a base58 encoded string
+    /// * `config` - A config struct that controls the encoding, pagination, memcmp/data size filters, and incremental updates defined by the type `GetProgramAccountsV2Config`
+    ///
+    /// # Returns
+    /// A `GetProgramAccountsV2Response` with:
+    /// * `accounts` - The page of program accounts, each with a pubkey and the relevant account info
+    /// * `pagination_key` - The cursor for the next page
+    /// * `total_results` - The total matches, if available. Otherwise, it returns `None`
+    ///
+    /// # Pagination
+    /// * If `pagination_key` is `Some`, pass it into the **next** request to continue
+    /// * If `pagination_key` is `None`, ypu've reached the end
+    /// * Note that if there are fewer than `limit` accounts in a given page it does not imply the end; always check the cursor
+    ///
+    /// # Incremental Updates
+    /// * Set `config.changed_since_slot = Some(slot)` to return only the accounts modified at or after that slot
+    /// * Omit `changed_since_slot` for a full scan
+    pub async fn get_program_accounts_v2(
+        &self,
+        program_id: String,
+        config: GetProgramAccountsV2Config,
+    ) -> Result<GetProgramAccountsV2Response> {
+        let params: GetProgramAccountsV2Request = (program_id, config);
+        self.post_rpc_request("getProgramAccountsV2", params).await
+    }
+
+    /// An enhanced version of getTokenAccountsByOwner with cursor-based pagination and changedSinceSlot support to incrementally
+    /// retrieve SPL token accounts owned by a given wallet.
+    ///
+    /// # Arguments
+    /// * `owner` - The Base58 wallet address whose token accounts you want to fetch
+    /// * `filter` - The filtering options for the token accounts fetched defined by `TokenAccountsOwnerFilter` (e.g., limiting the mint or program ID)
+    /// * `config` - A config struct that controls the encoding, pagination, and `changed_since_slot` defined by the type `GetTokenAccountsByOwnerV2Config`
+    ///
+    /// # Returns
+    /// A `GetTokenAccountsByOwnerV2Response` with:
+    /// * `context` - An optional RPC context (i.e., slot and API version)
+    /// * `value` - The page of token accounts, each with a pubkey and the relevant account info
+    /// * `pagination_key` - The cursor for the next page
+    /// * `total_results` - The total matches, if available. Otherwise, it returns `None`
+    ///     
+    /// # Pagination
+    /// * If `pagination_key` is `Some`, pass it into the **next** request to continue
+    /// * If `pagination_key` is `None`, ypu've reached the end
+    /// * Note that if there are fewer than `limit` accounts in a given page it does not imply the end; always check the cursor
+    ///
+    /// # Incremental Updates
+    /// * Set `config.changed_since_slot = Some(slot)` to return only the accounts modified at or after that slot
+    /// * Omit `changed_since_slot` for a full scan
+    pub async fn get_token_accounts_by_owner_v2(
+        &self,
+        owner: String,
+        filter: TokenAccountsOwnerFilter,
+        config: GetTokenAccountsByOwnerV2Config,
+    ) -> Result<GetTokenAccountsByOwnerV2Response> {
+        let params: GetTokenAccountsByOwnerV2Request = (owner, filter, config);
+        self.post_rpc_request("getTokenAccountsByOwnerV2", params).await
+    }
+
+    /// Get all program accounts by auto-paginating through results
+    ///
+    /// Automatically handles pagination to fetch all accounts. Please use with caution for programs with many accounts
+    ///
+    /// # Arguments
+    /// * `program_id` - The program ID to query
+    /// * `config` - A config struct that controls the encoding, pagination, memcmp/data size filters, and incremental updates defined by the type `GetProgramAccountsV2Config`.
+    ///   Note `limit` defaults to `10000`, if not provided, and the `pagination_key` is ignored since the method auto-paginates
+    ///
+    /// # Returns
+    /// A vector of all program accounts
+    pub async fn get_all_program_accounts(
+        &self,
+        program_id: String,
+        mut config: GetProgramAccountsV2Config,
+    ) -> Result<Vec<GpaAccount>> {
+        // Ignore the user-provided pagination_key since we auto-paginate
+        config.pagination_key = None;
+
+        // Default to 10k
+        if config.limit.is_none() {
+            config.limit = Some(10000);
+        }
+
+        let mut all_accounts: Vec<GpaAccount> = Vec::new();
+        loop {
+            let response: GetProgramAccountsV2Response =
+                self.get_program_accounts_v2(program_id.clone(), config.clone()).await?;
+            all_accounts.extend(response.accounts);
+
+            println!("Fetched {} accounts so far", all_accounts.len());
+
+            if let Some(key) = response.pagination_key {
+                config.pagination_key = Some(key);
+            } else {
+                break;
+            }
+        }
+
+        Ok(all_accounts)
+    }
+
+    /// Get all token accounts by owner by auto-paginating through results
+    ///
+    /// # Arguments
+    /// * `owner` - The Base58 wallet address whose token accounts you want to fetch
+    /// * `filter` - Filter by mint or programId
+    /// * `config` - A config struct that controls the encoding, pagination, and `changed_since_slot` defined by the type `GetTokenAccountsByOwnerV2Config`.
+    ///   Note `limit` defaults to `10000`, if not provided, and the `pagination_key` is ignored since the method auto-paginates
+    ///
+    /// # Returns
+    /// A vector of all token account records
+    pub async fn get_all_token_accounts_by_owner(
+        &self,
+        owner: String,
+        filter: TokenAccountsOwnerFilter,
+        mut config: GetTokenAccountsByOwnerV2Config,
+    ) -> Result<Vec<TokenAccountRecord>> {
+        // Ignore the user-provided pagination_key since we auto-paginate
+        config.pagination_key = None;
+
+        // Default to 10k
+        if config.limit.is_none() {
+            config.limit = Some(10000);
+        }
+
+        let mut all_accounts: Vec<TokenAccountRecord> = Vec::new();
+        loop {
+            let response: GetTokenAccountsByOwnerV2Response = self
+                .get_token_accounts_by_owner_v2(owner.clone(), filter.clone(), config.clone())
+                .await?;
+            all_accounts.extend(response.value.accounts);
+
+            if let Some(key) = response.value.pagination_key {
+                config.pagination_key = Some(key);
+            } else {
+                break;
+            }
+        }
+
+        Ok(all_accounts)
     }
 }

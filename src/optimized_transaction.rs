@@ -1006,7 +1006,7 @@ impl Helius {
         self.create_smart_transaction(&config).await
     }
 
-    /// Warm Sender connection by hitting `/ping`.
+    /// Warms Sender connection by hitting `/ping`.
     pub async fn warm_sender_connection(&self, region: &str) -> Result<()> {
         let url = sender_ping_url(region);
         let res = reqwest::Client::new()
@@ -1020,7 +1020,7 @@ impl Helius {
         Ok(())
     }
 
-    /// Send a signed tx via Sender `/fast` and poll until confirmed (or until timeout/last valid blockhash expiry).
+    /// Sends a signed tx via Sender `/fast` and polls until confirmed (or until timeout/last valid blockhash expiry).
     /// NOTE: Uses `skipPreflight = true`, `maxRetries = 0`.
     pub async fn send_and_confirm_via_sender<T>(
         &self,
@@ -1070,7 +1070,7 @@ impl Helius {
         }
     }
 
-    /// Build an optimized tx and send via Sender.
+    /// Builds an optimized tx and sends via Sender.
     /// If you need a tip transfer, prepend it to `config.create_config.instructions` before calling.
     pub async fn send_smart_transaction_with_sender(
         &self,

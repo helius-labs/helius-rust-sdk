@@ -3,14 +3,17 @@ use super::{
     AccountWebhookEncoding, CollectionIdentifier, PriorityLevel, SearchAssetsOptions, SearchConditionType, TokenType,
     TransactionStatus, TransactionType, UiTransactionEncoding, WebhookType,
 };
-use crate::types::{DisplayOptions, GetAssetOptions};
+use crate::types::{DisplayOptions, Encoding, GetAssetOptions, GpaFilter, TokenAccountsOwnerFilter};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::sync::Arc;
 use std::time::Duration;
 
 use solana_client::rpc_config::RpcSendTransactionConfig;
-use solana_sdk::{address_lookup_table::AddressLookupTableAccount, instruction::Instruction, signature::Signer};
+use solana_sdk::{
+    address_lookup_table::AddressLookupTableAccount, commitment_config::CommitmentLevel, instruction::Instruction,
+    signature::Signer,
+};
 
 /// Defines the available clusters supported by Helius
 #[derive(Debug, Clone, PartialEq)]
@@ -1016,4 +1019,126 @@ impl Default for SenderSendOptions {
             poll_interval_ms: 2_000,
         }
     }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DataSlice {
+    pub length: u64,
+    pub offset: u64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GpaMemcmp {
+    pub offset: u64,
+    pub bytes: String, // base58 string
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct GetProgramAccountsV2Config {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub commitment: Option<CommitmentLevel>,
+
+    // camelCase in JSON:
+    #[serde(rename = "minContextSlot", skip_serializing_if = "Option::is_none")]
+    pub min_context_slot: Option<u64>,
+    #[serde(rename = "withContext", skip_serializing_if = "Option::is_none")]
+    pub with_context: Option<bool>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub encoding: Option<Encoding>,
+    #[serde(rename = "dataSlice", skip_serializing_if = "Option::is_none")]
+    pub data_slice: Option<DataSlice>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub limit: Option<u32>,
+
+    #[serde(rename = "paginationKey", skip_serializing_if = "Option::is_none")]
+    pub pagination_key: Option<String>,
+    #[serde(rename = "changedSinceSlot", skip_serializing_if = "Option::is_none")]
+    pub changed_since_slot: Option<u64>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub filters: Option<Vec<GpaFilter>>,
+}
+
+pub type GetProgramAccountsV2Request = (String, GetProgramAccountsV2Config);
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GpaAccount {
+    pub pubkey: String,
+    pub account: AccountInfo,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AccountInfo {
+    pub lamports: u64,
+    pub owner: String,
+    pub data: Value, // Varies by encoding
+    pub executable: bool,
+    #[serde(rename = "rentEpoch")]
+    pub rent_epoch: u64,
+    #[serde(default)]
+    pub space: Option<u64>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct GetProgramAccountsV2Response {
+    pub accounts: Vec<GpaAccount>,
+    #[serde(rename = "paginationKey")]
+    pub pagination_key: Option<String>,
+    #[serde(rename = "totalResults")]
+    pub total_results: Option<u64>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct GetTokenAccountsByOwnerV2Config {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub commitment: Option<CommitmentLevel>,
+    #[serde(rename = "minContextSlot", skip_serializing_if = "Option::is_none")]
+    pub min_context_slot: Option<u64>,
+
+    #[serde(rename = "dataSlice", skip_serializing_if = "Option::is_none")]
+    pub data_slice: Option<DataSlice>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub encoding: Option<Encoding>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub limit: Option<u32>,
+    #[serde(rename = "paginationKey", skip_serializing_if = "Option::is_none")]
+    pub pagination_key: Option<String>,
+    #[serde(rename = "changedSinceSlot", skip_serializing_if = "Option::is_none")]
+    pub changed_since_slot: Option<u64>,
+}
+
+pub type GetTokenAccountsByOwnerV2Request = (String, TokenAccountsOwnerFilter, GetTokenAccountsByOwnerV2Config);
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RpcContext {
+    pub slot: u64,
+    #[serde(rename = "apiVersion")]
+    pub api_version: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TokenAccountRecord {
+    pub pubkey: String,
+    pub account: AccountInfo,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct GetTokenAccountsByOwnerV2Response {
+    pub context: Option<RpcContext>,
+    pub value: GetTokenAccountsByOwnerV2Value,
+    #[serde(rename = "paginationKey")]
+    pub pagination_key: Option<String>,
+    #[serde(rename = "totalResults")]
+    pub total_results: Option<u64>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct GetTokenAccountsByOwnerV2Value {
+    pub accounts: Vec<TokenAccountRecord>,
+    #[serde(rename = "paginationKey")]
+    pub pagination_key: Option<String>,
+    pub count: u64,
 }
