@@ -128,9 +128,18 @@ Our SDK is designed to provide a seamless developer experience when building on 
 - [`get_webhook_by_id`](https://docs.helius.dev/webhooks-and-websockets/api-reference/get-webhook) - Gets a webhook config given a webhook ID
 - [`remove_addresses_from_webhook`](https://github.com/helius-labs/helius-rust-sdk/blob/bf24259e3333ae93126bb65b342c2c63e80e07a6/src/webhook.rs#L75-L105) - Removes a list of addresses from an existing webhook by its ID
 
+### Helius Sender
+- [`create_smart_transaction_with_tip_for_sender`](https://github.com/helius-labs/helius-rust-sdk/blob/47d68afcf644938bc474f609368b214170423bba/src/optimized_transaction.rs#L978-L1007) - Creates an optimized smart transaction with an appended tip transfer instruction for Sender
+- [`determine_tip_lamports`](https://github.com/helius-labs/helius-rust-sdk/blob/47d68afcf644938bc474f609368b214170423bba/src/optimized_transaction.rs#L966-L976) - Determines the tip amount in lamports using the 75th percentile floor or falling back to the minimum required by Sender
+- [`fetch_tip_floor_75th`](https://github.com/helius-labs/helius-rust-sdk/blob/47d68afcf644938bc474f609368b214170423bba/src/optimized_transaction.rs#L940-L964) - Fetches the 75th percentile landed tip floor from Jito's endpoint (in SOL)
+- [`send_and_confirm_via_sender`](https://github.com/helius-labs/helius-rust-sdk/blob/47d68afcf644938bc474f609368b214170423bba/src/optimized_transaction.rs#L1023-L1071) - Send a signed tx via Sender `/fast` and poll until confirmed (or until timeout/last valid blockhash expiry)
+- [`send_smart_transaction_with_sender`](https://github.com/helius-labs/helius-rust-sdk/blob/47d68afcf644938bc474f609368b214170423bba/src/optimized_transaction.rs#L1073-L1113) - Builds an optimized tx and sent via Sender
+- [`warm_sender_connection`](https://github.com/helius-labs/helius-rust-sdk/blob/47d68afcf644938bc474f609368b214170423bba/src/optimized_transaction.rs#L1009-L1021) - Warms Sender connection by hitting `/ping`
+
 ### Smart Transactions
 - [`create_smart_transaction`](https://github.com/helius-labs/helius-rust-sdk/blob/bd9e0b10c81ab9ea56dfcd286336b086f6737b64/src/optimized_transaction.rs#L131-L331) - Creates an optimized transaction based on the provided configuration 
 - [`create_smart_transaction_with_seeds`](https://github.com/helius-labs/helius-rust-sdk/blob/8102d87c6551c7645389a813e60a832a2eaf98c7/src/optimized_transaction.rs#L478-L633) - Creates a thread-safe, optimized transaction using seed bytes
+- [`create_smart_transaction_without_signers`](https://github.com/helius-labs/helius-rust-sdk/blob/47d68afcf644938bc474f609368b214170423bba/src/optimized_transaction.rs#L809-L938) - Creates an optimized transaction without requiring any signers
 - [`get_compute_units`](https://github.com/helius-labs/helius-rust-sdk/blob/bd9e0b10c81ab9ea56dfcd286336b086f6737b64/src/optimized_transaction.rs#L34-L87) - Simulates a transaction to get the total compute units consumed
 - [`get_compute_units_thread_safe`](https://github.com/helius-labs/helius-rust-sdk/blob/8102d87c6551c7645389a813e60a832a2eaf98c7/src/optimized_transaction.rs#L421-L476) - A thread-safe version of `get_compute_units`
 - [`poll_transaction_confirmation`](https://github.com/helius-labs/helius-rust-sdk/blob/bd9e0b10c81ab9ea56dfcd286336b086f6737b64/src/optimized_transaction.rs#L89-L129) - Polls a transaction to check whether it has been confirmed in 5 second intervals with a 15 second timeout
@@ -138,7 +147,10 @@ Our SDK is designed to provide a seamless developer experience when building on 
 - [`send_and_confirm_transaction`](https://github.com/helius-labs/helius-rust-sdk/blob/bd9e0b10c81ab9ea56dfcd286336b086f6737b64/src/optimized_transaction.rs#L366-L412) - Sends a transaction and handles its confirmation status with retry logic
 - [`send_smart_transaction_with_seeds`](https://github.com/helius-labs/helius-rust-sdk/blob/bd9e0b10c81ab9ea56dfcd286336b086f6737b64/src/optimized_transaction.rs#L414-L487) - Sends a smart transaction using seed bytes. This function is thread-safe
 
-### Jito Smart Transactions and Helper Methods
+### Jito Smart Transactions and Helper Methods (Deprecated)
+
+Note that these methods have been deprecated, and will be removed in a future release. Instead, please use [Helius Sender](https://www.helius.dev/docs/sending-transactions/sender) for ultra-low latency transaction submission
+
 - [`add_tip_instruction`](https://github.com/helius-labs/helius-rust-sdk/blob/02b351a5ee3fe16a36078b40f92dc72d0ad077ed/src/jito.rs#L66-L83) - Adds a tip instruction to the instructions provided
 - [`create_smart_transaction_with_tip`](https://github.com/helius-labs/helius-rust-sdk/blob/bd9e0b10c81ab9ea56dfcd286336b086f6737b64/src/jito.rs#L85-L125) - Creates a smart transaction with a Jito tip
 - [`get_bundle_statuses`](https://github.com/helius-labs/helius-rust-sdk/blob/bd9e0b10c81ab9ea56dfcd286336b086f6737b64/src/jito.rs#L170-L203) - Get the status of Jito bundles
