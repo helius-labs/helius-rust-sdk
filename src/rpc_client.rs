@@ -22,7 +22,7 @@ use std::sync::Arc;
 use crate::config::Config;
 use crate::error::Result;
 use crate::request_handler::RequestHandler;
-use crate::types::types::{RpcRequest, RpcResponse};
+use crate::types::inner::{RpcRequest, RpcResponse};
 use crate::types::{
     Asset, AssetList, AssetProof, EditionsList, GetAsset, GetAssetBatch, GetAssetProof, GetAssetProofBatch,
     GetAssetSignatures, GetAssetsByAuthority, GetAssetsByCreator, GetAssetsByGroup, GetAssetsByOwner, GetNftEditions,
