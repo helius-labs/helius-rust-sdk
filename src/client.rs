@@ -73,6 +73,7 @@ impl Helius {
     /// ```rust
     /// use helius::client::Helius;
     /// use helius::types::Cluster;
+    /// use solana_commitment_config::CommitmentConfig;
     ///
     /// let helius = Helius::new_with_commitment("your_api_key", Cluster::Devnet, CommitmentConfig::confirmed()).expect("Failed to create a Helius client");
     /// ```
@@ -142,6 +143,7 @@ impl Helius {
     /// ```rust
     /// use helius::Helius;
     /// use helius::types::Cluster;
+    /// use solana_commitment_config::CommitmentConfig;
     ///
     /// let helius = Helius::new_with_async_solana_and_commitment("your_api_key", Cluster::Devnet, CommitmentConfig::confirmed()).expect("Failed to create a Helius client");
     /// ```
