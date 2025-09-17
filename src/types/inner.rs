@@ -62,7 +62,7 @@ impl<T> RpcRequest<T> {
     pub fn new(method: String, parameters: T) -> Self {
         Self {
             jsonrpc: "2.0".to_string(),
-            id: "1".to_string(),
+            id: "helius-rust-sdk".to_string(),
             method,
             parameters,
         }

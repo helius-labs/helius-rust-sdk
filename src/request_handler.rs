@@ -61,6 +61,8 @@ impl RequestHandler {
     {
         let mut request_builder: RequestBuilder = self.http_client.request(method, url);
 
+        request_builder = request_builder.header("User-Agent", "helius-rust-sdk");
+
         if let Some(body) = body {
             request_builder = request_builder.json(body);
         }
