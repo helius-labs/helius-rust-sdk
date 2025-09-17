@@ -9,6 +9,7 @@ use crate::websocket::EnhancedWebsocket;
 use reqwest::Client;
 use solana_client::nonblocking::rpc_client::RpcClient as AsyncSolanaRpcClient;
 use solana_client::rpc_client::RpcClient as SolanaRpcClient;
+use solana_commitment_config::CommitmentConfig;
 
 /// The `Helius` struct is the main entry point to interacting with the SDK
 ///
@@ -58,6 +59,44 @@ impl Helius {
         })
     }
 
+    /// Creates a new instance of `Helius` configured with a specific API key, target cluster, and a commitment config
+    ///
+    /// # Arguments
+    /// * `api_key` - The API key required for authenticating the requests made
+    /// * `cluster` - The Solana cluster (Devnet or MainnetBeta) that defines the given network environment
+    /// * `commitment` - The commitment level to use for the Solana client
+    ///
+    /// # Returns
+    /// An instance of `Helius` if successful. A `HeliusError` is returned if an error occurs during configuration or initialization of the HTTP or RPC client
+    ///
+    /// # Example
+    /// ```rust
+    /// use helius::client::Helius;
+    /// use helius::types::Cluster;
+    /// use solana_commitment_config::CommitmentConfig;
+    ///
+    /// let helius = Helius::new_with_commitment("your_api_key", Cluster::Devnet, CommitmentConfig::confirmed()).expect("Failed to create a Helius client");
+    /// ```
+    pub fn new_with_commitment(api_key: &str, cluster: Cluster, commitment: CommitmentConfig) -> Result<Self> {
+        let config: Arc<Config> = Arc::new(Config::new(api_key, cluster)?);
+        let client: Client = Client::builder().build().map_err(HeliusError::ReqwestError)?;
+        let rpc_client: Arc<RpcClient> = Arc::new(RpcClient::new_with_commitment(
+            Arc::new(client.clone()),
+            config.clone(),
+            commitment,
+        )?);
+
+        Ok(Helius {
+            config,
+            client,
+            rpc_client,
+            async_rpc_client: None,
+            ws_client: None,
+        })
+    }
+
+    /// Creates a new instance of `Helius` with an asynchronous Solana client and a commitment config
+
     /// Creates a new instance of `Helius` with an asynchronous Solana client
     ///
     /// # Arguments
@@ -84,6 +123,50 @@ impl Helius {
             config: config.clone(),
             client: client.clone(),
             rpc_client: Arc::new(RpcClient::new(Arc::new(client), config.clone())?),
+            async_rpc_client: Some(async_solana_client),
+            ws_client: None,
+        })
+    }
+
+    /// Creates a new instance of `Helius` with an asynchronous Solana client
+    /// and a commitment config
+    ///
+    /// # Arguments
+    /// * `api_key` - The API key required for authenticating the requests made
+    /// * `cluster` - The Solana cluster (Devnet or MainnetBeta) that defines the given network environment
+    /// * `commitment` - The commitment level to use for the asynchronous Solana client
+    ///
+    /// # Returns
+    /// An instance of `Helius` if successful. A `HeliusError` is returned if an error occurs during configuration or initialization of the HTTP or RPC client
+    ///
+    /// # Example
+    /// ```rust
+    /// use helius::Helius;
+    /// use helius::types::Cluster;
+    /// use solana_commitment_config::CommitmentConfig;
+    ///
+    /// let helius = Helius::new_with_async_solana_and_commitment("your_api_key", Cluster::Devnet, CommitmentConfig::confirmed()).expect("Failed to create a Helius client");
+    /// ```
+    ///
+    pub fn new_with_async_solana_and_commitment(
+        api_key: &str,
+        cluster: Cluster,
+        commitment: CommitmentConfig,
+    ) -> Result<Self> {
+        let config: Arc<Config> = Arc::new(Config::new(api_key, cluster)?);
+        let client: Client = Client::builder().build().map_err(HeliusError::ReqwestError)?;
+        let url: String = format!("{}/?api-key={}", config.endpoints.rpc, config.api_key);
+        let async_solana_client: Arc<AsyncSolanaRpcClient> =
+            Arc::new(AsyncSolanaRpcClient::new_with_commitment(url, commitment));
+
+        Ok(Helius {
+            config: config.clone(),
+            client: client.clone(),
+            rpc_client: Arc::new(RpcClient::new_with_commitment(
+                Arc::new(client),
+                config.clone(),
+                commitment,
+            )?),
             async_rpc_client: Some(async_solana_client),
             ws_client: None,
         })

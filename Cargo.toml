@@ -29,6 +29,7 @@ solana-client = "2.1.4"
 solana-program = "2.1.4"
 solana-rpc-client-api = "2.1.4"
 solana-sdk = "2.1.4"
+solana-commitment-config = "2.1.4"
 solana-transaction-status = "2.1.4"
 thiserror = "1.0.58"
 tokio = { version = "1.37.0", features = ["macros", "rt-multi-thread", "net", "time"] }

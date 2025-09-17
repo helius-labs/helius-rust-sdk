@@ -36,6 +36,7 @@ use reqwest::{Client, Method, Url};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use solana_client::rpc_client::RpcClient as SolanaRpcClient;
+use solana_commitment_config::CommitmentConfig;
 
 pub struct RpcClient {
     pub handler: RequestHandler,
@@ -59,6 +60,30 @@ impl RpcClient {
         let handler: RequestHandler = RequestHandler::new(client)?;
         let url: String = format!("{}/?api-key={}", config.endpoints.rpc, config.api_key);
         let solana_client: Arc<SolanaRpcClient> = Arc::new(SolanaRpcClient::new(url));
+
+        Ok(RpcClient {
+            handler,
+            config,
+            solana_client,
+        })
+    }
+
+    /// Initializes a new RpcClient instance with an embedded Solana client and a commitment config
+    ///
+    /// # Arguments
+    /// * `client` - Shared HTTP client for making requests
+    /// * `config` - Configuration holding a given API key and endpoint URLs
+    /// * `commitment` - Commitment level to use for the Solana client
+    ///
+    /// # Returns
+    /// A result that, if successful, contains the initialized RpcClient
+    ///
+    /// # Errors
+    /// Returns `HeliusError` if the URL isn't formatted correctly or the `RequestHandler` fails to initialize
+    pub fn new_with_commitment(client: Arc<Client>, config: Arc<Config>, commitment: CommitmentConfig) -> Result<Self> {
+        let handler: RequestHandler = RequestHandler::new(client)?;
+        let url: String = format!("{}/?api-key={}", config.endpoints.rpc, config.api_key);
+        let solana_client: Arc<SolanaRpcClient> = Arc::new(SolanaRpcClient::new_with_commitment(url, commitment));
 
         Ok(RpcClient {
             handler,
