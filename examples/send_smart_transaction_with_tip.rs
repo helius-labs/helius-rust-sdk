@@ -33,6 +33,7 @@ async fn main() {
         lookup_tables: None,
         fee_payer: None,
         priority_fee_cap: None,
+        cu_buffer_multiplier: None,
     };
 
     let config: SmartTransactionConfig = SmartTransactionConfig {
