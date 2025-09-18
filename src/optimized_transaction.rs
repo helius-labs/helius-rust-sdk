@@ -386,11 +386,7 @@ impl Helius {
         }
 
         // Default to 200k CUs if sim fails
-        let compute_units: u64 = if let Some(u) = units {
-            u
-        } else {
-            200_000u64
-        };
+        let compute_units: u64 = if let Some(u) = units { u } else { 200_000u64 };
 
         let multiplier: f32 = config.cu_buffer_multiplier.unwrap_or(CU_BUFFER_MULTIPLIER_DEFAULT);
 
@@ -700,13 +696,11 @@ impl Helius {
             .await?;
 
         // Default to 200k CUs if sim fails
-        let compute_units: u64 = if let Some(u) = units {
-            u
-        } else {
-            200_000u64
-        };
+        let compute_units: u64 = if let Some(u) = units { u } else { 200_000u64 };
 
-        let multiplier: f32 = create_config.cu_buffer_multiplier.unwrap_or(CU_BUFFER_MULTIPLIER_DEFAULT);
+        let multiplier: f32 = create_config
+            .cu_buffer_multiplier
+            .unwrap_or(CU_BUFFER_MULTIPLIER_DEFAULT);
 
         let customers_cu: u32 = if compute_units < 1000 {
             1000
@@ -915,11 +909,7 @@ impl Helius {
         }
 
         // Default to 200k CUs if sim fails
-        let compute_units: u64 = if let Some(u) = units {
-            u
-        } else {
-            200_000u64
-        };
+        let compute_units: u64 = if let Some(u) = units { u } else { 200_000u64 };
 
         let multiplier: f32 = config.cu_buffer_multiplier.unwrap_or(CU_BUFFER_MULTIPLIER_DEFAULT);
 
