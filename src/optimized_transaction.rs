@@ -38,6 +38,8 @@ use solana_transaction_status::TransactionConfirmationStatus;
 use std::time::{Duration, Instant};
 use tokio::time::sleep;
 
+const CU_BUFFER_MULTIPLIER_DEFAULT: f32 = 1.25;
+
 const MIN_TIP_LAMPORTS_DUAL: u64 = 1_000_000; // 0.001 SOL
 const MIN_TIP_LAMPORTS_SWQOS: u64 = 500_000; // 0.0005 SOL
 
@@ -383,11 +385,19 @@ impl Helius {
             ));
         }
 
-        let compute_units: u64 = units.unwrap();
+        // Default to 200k CUs if sim fails
+        let compute_units: u64 = if let Some(u) = units {
+            u
+        } else {
+            200_000u64
+        };
+
+        let multiplier: f32 = config.cu_buffer_multiplier.unwrap_or(CU_BUFFER_MULTIPLIER_DEFAULT);
+
         let customers_cu: u32 = if compute_units < 1000 {
             1000
         } else {
-            (compute_units as f64 * 1.1).ceil() as u32
+            (compute_units as f64 * multiplier as f64).ceil() as u32
         };
 
         // Add the compute unit limit instruction with a margin
@@ -689,14 +699,19 @@ impl Helius {
             )
             .await?;
 
-        let compute_units: u64 = units.ok_or(HeliusError::InvalidInput(
-            "Error fetching compute units for the instructions provided".to_string(),
-        ))?;
+        // Default to 200k CUs if sim fails
+        let compute_units: u64 = if let Some(u) = units {
+            u
+        } else {
+            200_000u64
+        };
+
+        let multiplier: f32 = create_config.cu_buffer_multiplier.unwrap_or(CU_BUFFER_MULTIPLIER_DEFAULT);
 
         let customers_cu: u32 = if compute_units < 1000 {
             1000
         } else {
-            (compute_units as f64 * 1.1).ceil() as u32
+            (compute_units as f64 * multiplier as f64).ceil() as u32
         };
 
         final_instructions.push(ComputeBudgetInstruction::set_compute_unit_limit(customers_cu));
@@ -899,11 +914,19 @@ impl Helius {
             ));
         }
 
-        let compute_units = units.unwrap();
+        // Default to 200k CUs if sim fails
+        let compute_units: u64 = if let Some(u) = units {
+            u
+        } else {
+            200_000u64
+        };
+
+        let multiplier: f32 = config.cu_buffer_multiplier.unwrap_or(CU_BUFFER_MULTIPLIER_DEFAULT);
+
         let customers_cu: u32 = if compute_units < 1000 {
             1000
         } else {
-            (compute_units as f64 * 1.1).ceil() as u32
+            (compute_units as f64 * multiplier as f64).ceil() as u32
         };
 
         // Add the compute unit limit ix at the start
