@@ -56,6 +56,7 @@ async fn main() {
             fee_payer_seed: None,
             lookup_tables: Some(address_lut),
             priority_fee_cap: Some(100000),
+            cu_buffer_multiplier: None,
         };
 
         // Configure send options (optional)

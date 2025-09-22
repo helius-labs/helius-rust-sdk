@@ -62,7 +62,7 @@ impl<T> RpcRequest<T> {
     pub fn new(method: String, parameters: T) -> Self {
         Self {
             jsonrpc: "2.0".to_string(),
-            id: "1".to_string(),
+            id: "helius-rust-sdk".to_string(),
             method,
             parameters,
         }
@@ -911,6 +911,20 @@ pub struct CreateSmartTransactionConfig {
     pub lookup_tables: Option<Vec<AddressLookupTableAccount>>,
     pub fee_payer: Option<Arc<dyn Signer>>,
     pub priority_fee_cap: Option<u64>,
+    pub cu_buffer_multiplier: Option<f32>,
+}
+
+impl Default for CreateSmartTransactionConfig {
+    fn default() -> Self {
+        Self {
+            instructions: Vec::new(),
+            signers: Vec::new(),
+            lookup_tables: None,
+            fee_payer: None,
+            priority_fee_cap: None,
+            cu_buffer_multiplier: Some(1.25),
+        }
+    }
 }
 
 impl CreateSmartTransactionConfig {
@@ -921,6 +935,7 @@ impl CreateSmartTransactionConfig {
             lookup_tables: None,
             fee_payer: None,
             priority_fee_cap: None,
+            cu_buffer_multiplier: None,
         }
     }
 }
@@ -974,6 +989,20 @@ pub struct CreateSmartTransactionSeedConfig {
     pub fee_payer_seed: Option<[u8; 32]>,
     pub lookup_tables: Option<Vec<AddressLookupTableAccount>>,
     pub priority_fee_cap: Option<u64>,
+    pub cu_buffer_multiplier: Option<f32>,
+}
+
+impl Default for CreateSmartTransactionSeedConfig {
+    fn default() -> Self {
+        Self {
+            instructions: Vec::new(),
+            signer_seeds: Vec::new(),
+            fee_payer_seed: None,
+            lookup_tables: None,
+            priority_fee_cap: None,
+            cu_buffer_multiplier: Some(1.25),
+        }
+    }
 }
 
 impl CreateSmartTransactionSeedConfig {
@@ -984,6 +1013,7 @@ impl CreateSmartTransactionSeedConfig {
             fee_payer_seed: None,
             lookup_tables: None,
             priority_fee_cap: None,
+            cu_buffer_multiplier: None,
         }
     }
 
