@@ -293,7 +293,7 @@ impl EnhancedWebsocket {
                   ));
                 }
 
-                ws.send(Message::Ping(Vec::new())).await?;
+                ws.send(Message::Ping(Default::default())).await?;
                 unmatched_pings += 1;
               },
               // Read message for subscribe
@@ -301,7 +301,7 @@ impl EnhancedWebsocket {
                 request_id += 1;
                 let method = format!("{operation}Subscribe");
                 let body = json!({"jsonrpc":"2.0","id":request_id,"method":method,"params":params});
-                ws.send(Message::Text(body.to_string())).await?;
+                ws.send(body.to_string().into()).await?;
                 requests_subscribe.insert(request_id, (operation, response_sender));
               },
               // Read message for unsubscribe
@@ -310,14 +310,14 @@ impl EnhancedWebsocket {
                 request_id += 1;
                 let method = format!("{operation}Unsubscribe");
                 let text = json!({"jsonrpc":"2.0","id":request_id,"method":method,"params":[sid]}).to_string();
-                ws.send(Message::Text(text)).await?;
+                ws.send(text.into()).await?;
                 requests_unsubscribe.insert(request_id, response_sender);
               },
               // Read message for other requests
               Some((method, params, response_sender)) = request_receiver.recv() => {
                 request_id += 1;
                 let text = json!({"jsonrpc":"2.0","id":request_id,"method":method,"params":params}).to_string();
-                ws.send(Message::Text(text)).await?;
+                ws.send(text.into()).await?;
                 other_requests.insert(request_id, response_sender);
               }
               // Read incoming WebSocket message
@@ -351,7 +351,7 @@ impl EnhancedWebsocket {
                 // `{"jsonrpc":"2.0","result":5308752,"id":1}`
                 if let Some(id) = json.get("id") {
                   let id = id.as_u64().ok_or_else(|| {
-                      HeliusError::EnhancedWebsocket { reason: "invalid `id` field".into(), message: text.clone() }
+                      HeliusError::EnhancedWebsocket { reason: "invalid `id` field".into(), message: text.as_str().to_string() }
                   })?;
 
                   let err = json.get("error").map(|error_object| {
@@ -370,11 +370,11 @@ impl EnhancedWebsocket {
                   if let Some(response_sender) = other_requests.remove(&id) {
                     match err {
                       Some(reason) => {
-                        let _ = response_sender.send(Err(HeliusError::EnhancedWebsocket { reason, message: text.clone()}));
+                        let _ = response_sender.send(Err(HeliusError::EnhancedWebsocket { reason, message: text.as_str().to_string()}));
                       },
                       None => {
                         let json_result = json.get("result").ok_or_else(|| {
-                            HeliusError::EnhancedWebsocket { reason: "missing `result` field".into(), message: text.clone() }
+                            HeliusError::EnhancedWebsocket { reason: "missing `result` field".into(), message: text.as_str().to_string() }
                         })?;
                         if response_sender.send(Ok(json_result.clone())).is_err() {
                             break;
@@ -386,12 +386,12 @@ impl EnhancedWebsocket {
                   } else if let Some((operation, response_sender)) = requests_subscribe.remove(&id) {
                     match err {
                       Some(reason) => {
-                        let _ = response_sender.send(Err(HeliusError::EnhancedWebsocket { reason, message: text.clone()}));
+                        let _ = response_sender.send(Err(HeliusError::EnhancedWebsocket { reason, message: text.as_str().to_string() }));
                       },
                       None => {
                         // Subscribe Id
                         let sid = json.get("result").and_then(Value::as_u64).ok_or_else(|| {
-                          HeliusError::EnhancedWebsocket { reason: "invalid `result` field".into(), message: text.clone() }
+                          HeliusError::EnhancedWebsocket { reason: "invalid `result` field".into(), message: text.as_str().to_string() }
                         })?;
 
                         // Create notifications channel and unsubscribe function

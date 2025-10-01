@@ -150,9 +150,9 @@ impl MintApiAuthority {
     }
 }
 
-impl Into<Pubkey> for MintApiAuthority {
-    fn into(self) -> Pubkey {
-        match self {
+impl From<MintApiAuthority> for Pubkey {
+    fn from(value: MintApiAuthority) -> Self {
+        match value {
             MintApiAuthority::Mainnet(s) => s,
             MintApiAuthority::Devnet(s) => s,
         }

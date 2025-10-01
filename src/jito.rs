@@ -15,6 +15,7 @@ use crate::Helius;
 use bincode::{serialize, ErrorKind};
 use chrono::format::parse;
 use phf::phf_map;
+use rand::prelude::IndexedRandom;
 use rand::seq::SliceRandom;
 use reqwest::{Method, StatusCode, Url};
 use serde::Serialize;
@@ -22,12 +23,8 @@ use serde_json::Value;
 use solana_client::rpc_config::{RpcSendTransactionConfig, RpcSimulateTransactionConfig};
 use solana_client::rpc_response::{Response, RpcSimulateTransactionResult};
 use solana_sdk::signature::keypair_from_seed;
-use solana_sdk::system_instruction;
 use solana_sdk::{
-    address_lookup_table::AddressLookupTableAccount,
     bs58::encode,
-    commitment_config::CommitmentConfig,
-    compute_budget::ComputeBudgetInstruction,
     hash::Hash,
     instruction::Instruction,
     message::{v0, VersionedMessage},
@@ -35,6 +32,7 @@ use solana_sdk::{
     signature::{Signature, Signer},
     transaction::{Transaction, VersionedTransaction},
 };
+use solana_system_interface::instruction as system_instruction;
 use std::str::FromStr;
 use std::time::{Duration, Instant};
 use tokio::time::{sleep, timeout_at};
@@ -111,7 +109,7 @@ impl Helius {
         }
 
         let tip_amount: u64 = tip_amount.unwrap_or(1000);
-        let random_tip_account: &str = *JITO_TIP_ACCOUNTS.choose(&mut rand::thread_rng()).unwrap();
+        let random_tip_account: &str = JITO_TIP_ACCOUNTS.choose(&mut rand::rng()).unwrap();
         let payer_key: Pubkey = config
             .fee_payer
             .as_ref()
@@ -247,7 +245,7 @@ impl Helius {
 
         let tip: u64 = tip_amount.unwrap_or(1000);
         let user_provided_region: &str = region.unwrap_or("Default");
-        let jito_region: &str = *JITO_API_URLS
+        let jito_region: &str = JITO_API_URLS
             .get(user_provided_region)
             .ok_or_else(|| HeliusError::InvalidInput("Invalid Jito region".to_string()))?;
         let jito_api_url_string: String = format!("{}/api/v1/bundles", jito_region);
@@ -330,7 +328,7 @@ impl Helius {
 
         // Add Jito tip
         let tip: u64 = tip_amount.unwrap_or(1000);
-        let random_tip_account = *JITO_TIP_ACCOUNTS.choose(&mut rand::thread_rng()).unwrap();
+        let random_tip_account = *JITO_TIP_ACCOUNTS.choose(&mut rand::rng()).unwrap();
         create_config.instructions.push(system_instruction::transfer(
             &fee_payer_pubkey,
             &Pubkey::from_str(random_tip_account).unwrap(),
@@ -346,7 +344,7 @@ impl Helius {
         let tx_base58: String = encode(&serialized_tx).into_string();
 
         // Send via Jito
-        let jito_region: &str = *JITO_API_URLS
+        let jito_region: &str = JITO_API_URLS
             .get(region.unwrap_or("Default"))
             .ok_or_else(|| HeliusError::InvalidInput("Invalid Jito region".to_string()))?;
         let jito_api_url = format!("{}/api/v1/bundles", jito_region);

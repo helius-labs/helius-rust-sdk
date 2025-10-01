@@ -3,8 +3,8 @@ use helius::Helius;
 use solana_client::rpc_config::RpcSendTransactionConfig;
 use solana_sdk::{
     instruction::Instruction, native_token::LAMPORTS_PER_SOL, pubkey::Pubkey, signature::Keypair, signer::Signer,
-    system_instruction::transfer,
 };
+use solana_system_interface::instruction::transfer;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
