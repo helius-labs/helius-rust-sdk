@@ -10,10 +10,8 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use solana_client::rpc_config::RpcSendTransactionConfig;
-use solana_sdk::{
-    address_lookup_table::AddressLookupTableAccount, commitment_config::CommitmentLevel, instruction::Instruction,
-    signature::Signer,
-};
+use solana_commitment_config::CommitmentLevel;
+use solana_sdk::{instruction::Instruction, message::AddressLookupTableAccount, signature::Signer};
 
 /// Defines the available clusters supported by Helius
 #[derive(Debug, Clone, PartialEq)]
@@ -952,9 +950,9 @@ impl Default for Timeout {
     }
 }
 
-impl Into<Duration> for Timeout {
-    fn into(self) -> Duration {
-        self.duration
+impl From<Timeout> for Duration {
+    fn from(timeout: Timeout) -> Self {
+        timeout.duration
     }
 }
 

@@ -3,7 +3,8 @@ use helius::Helius;
 use solana_client::rpc_config::RpcSendTransactionConfig;
 use solana_sdk::signature::Keypair;
 use solana_sdk::signer::Signer;
-use solana_sdk::{bs58, native_token::LAMPORTS_PER_SOL, pubkey::Pubkey, system_instruction};
+use solana_sdk::{bs58, native_token::LAMPORTS_PER_SOL, pubkey::Pubkey};
+use solana_system_interface::instruction as system_instruction;
 use std::{str::FromStr, time::Duration};
 use tokio::time::sleep;
 
@@ -22,7 +23,7 @@ async fn main() {
         let to_pubkey: Pubkey = Pubkey::from_str("recipient_address").unwrap();
 
         // Get the sender's public key for balance checking
-        let from_pubkey: Pubkey = Keypair::from_bytes(&keypair_bytes).unwrap().pubkey();
+        let from_pubkey: Pubkey = Keypair::try_from(keypair_bytes.as_slice()).unwrap().pubkey();
 
         println!("From wallet address: {}", from_pubkey);
         println!("To wallet address: {}", to_pubkey);
@@ -47,7 +48,7 @@ async fn main() {
         seed.copy_from_slice(&keypair_bytes[..32]);
 
         // For testing purposes. In a production setting, you'd actually create or pass in an existing ATL
-        let address_lut: Vec<solana_sdk::address_lookup_table::AddressLookupTableAccount> = vec![];
+        let address_lut: Vec<solana_sdk::message::AddressLookupTableAccount> = vec![];
 
         // Configure the smart transaction
         let config: CreateSmartTransactionSeedConfig = CreateSmartTransactionSeedConfig {
