@@ -12,12 +12,20 @@ async fn main() -> Result<()> {
     // Uses custom ping-pong timeouts to ping every 15s and timeout after 45s of no pong
     let helius: Helius = Helius::new_with_ws_with_timeouts(api_key, cluster, Some(15), Some(45)).await?;
 
-    let key: pubkey::Pubkey = pubkey!("BtsmiEEvnSuUnKxqXj2PZRYpPJAc7C34mGz8gtJ1DAaH");
+    let key = pubkey!("BtsmiEEvnSuUnKxqXj2PZRYpPJAc7C34mGz8gtJ1DAaH");
 
-    let config: RpcTransactionsConfig = RpcTransactionsConfig {
-        filter: TransactionSubscribeFilter::standard(&key),
+    let config = RpcTransactionsConfig {
+        filter: TransactionSubscribeFilter {
+            account_include: Some(vec![key.to_string()]),
+            vote: Some(false),          // optional customization
+            failed: None,
+            signature: None,
+            account_exclude: None,
+            account_required: None,
+        },
         options: TransactionSubscribeOptions::default(),
     };
+
 
     if let Some(ws) = helius.ws() {
         let (mut stream, _unsub) = ws.transaction_subscribe(config).await?;
