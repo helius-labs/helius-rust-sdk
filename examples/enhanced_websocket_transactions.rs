@@ -17,7 +17,7 @@ async fn main() -> Result<()> {
     let config = RpcTransactionsConfig {
         filter: TransactionSubscribeFilter {
             account_include: Some(vec![key.to_string()]),
-            vote: Some(false),          // optional customization
+            vote: Some(false),
             failed: None,
             signature: None,
             account_exclude: None,
@@ -25,7 +25,6 @@ async fn main() -> Result<()> {
         },
         options: TransactionSubscribeOptions::default(),
     };
-
 
     if let Some(ws) = helius.ws() {
         let (mut stream, _unsub) = ws.transaction_subscribe(config).await?;
