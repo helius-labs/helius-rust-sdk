@@ -170,7 +170,7 @@ pub enum PriorityLevel {
     Default,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq)]
 pub enum UiTransactionEncoding {
     Binary,
     Base64,
