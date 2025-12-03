@@ -1235,6 +1235,7 @@ pub struct SignatureFilter {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
+#[serde(rename_all = "camelCase")]
 pub struct GetTransactionsFilters {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub slot: Option<SlotFilter>,
