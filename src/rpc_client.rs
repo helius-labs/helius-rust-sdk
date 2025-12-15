@@ -28,7 +28,8 @@ use crate::types::{
     GetAssetSignatures, GetAssetsByAuthority, GetAssetsByCreator, GetAssetsByGroup, GetAssetsByOwner, GetNftEditions,
     GetPriorityFeeEstimateRequest, GetPriorityFeeEstimateResponse, GetProgramAccountsV2Config,
     GetProgramAccountsV2Request, GetProgramAccountsV2Response, GetTokenAccounts, GetTokenAccountsByOwnerV2Config,
-    GetTokenAccountsByOwnerV2Request, GetTokenAccountsByOwnerV2Response, GpaAccount, SearchAssets, TokenAccountRecord,
+    GetTokenAccountsByOwnerV2Request, GetTokenAccountsByOwnerV2Response, GetTransactionsForAddressOptions,
+    GetTransactionsForAddressRequest, GetTransactionsForAddressResponse, GpaAccount, SearchAssets, TokenAccountRecord,
     TokenAccountsList, TokenAccountsOwnerFilter, TransactionSignatureList,
 };
 
@@ -417,5 +418,22 @@ impl RpcClient {
         }
 
         Ok(all_accounts)
+    }
+
+    /// Gets transactions for a specific address with advanced filtering and sorting
+    ///
+    /// # Arguments
+    /// * `address` - The base58 encoded public key of the account
+    /// * `options` - Options for filtering, sorting, and pagination
+    ///
+    /// # Returns
+    /// A `Result` containing the transaction data and an optional pagination token.
+    pub async fn get_transactions_for_address(
+        &self,
+        address: String,
+        options: GetTransactionsForAddressOptions,
+    ) -> Result<GetTransactionsForAddressResponse> {
+        let params: GetTransactionsForAddressRequest = (address, options);
+        self.post_rpc_request("getTransactionsForAddress", params).await
     }
 }

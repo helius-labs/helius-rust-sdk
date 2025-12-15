@@ -1170,3 +1170,111 @@ pub struct GetTokenAccountsByOwnerV2Value {
     pub pagination_key: Option<String>,
     pub count: u64,
 }
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default)]
+#[serde(rename_all = "camelCase")]
+pub enum TransactionDetails {
+    #[default]
+    Signatures,
+    Full,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default)]
+#[serde(rename_all = "camelCase")]
+pub enum SortOrder {
+    #[default]
+    Desc,
+    Asc,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default)]
+#[serde(rename_all = "camelCase")]
+pub enum TransactionStatusFilter {
+    #[default]
+    Any,
+    Succeeded,
+    Failed,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+pub struct SlotFilter {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub gte: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub gt: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub lte: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub lt: Option<u64>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+pub struct BlockTimeFilter {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub gte: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub gt: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub lte: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub lt: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub eq: Option<i64>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+pub struct SignatureFilter {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub gte: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub gt: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub lte: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub lt: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct GetTransactionsFilters {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub slot: Option<SlotFilter>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub block_time: Option<BlockTimeFilter>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub signature: Option<SignatureFilter>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub status: Option<TransactionStatusFilter>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct GetTransactionsForAddressOptions {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub transaction_details: Option<TransactionDetails>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sort_order: Option<SortOrder>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub limit: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub pagination_token: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub commitment: Option<CommitmentLevel>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub filters: Option<GetTransactionsFilters>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub encoding: Option<UiTransactionEncoding>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_supported_transaction_version: Option<u8>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub min_context_slot: Option<u64>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct GetTransactionsForAddressResponse {
+    pub data: Vec<serde_json::Value>,
+    pub pagination_token: Option<String>,
+}
+
+pub type GetTransactionsForAddressRequest = (String, GetTransactionsForAddressOptions);
