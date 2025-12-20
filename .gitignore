@@ -2,3 +2,4 @@
 /src/main.rs
 /Cargo.lock
 .idea/
+.claude/
