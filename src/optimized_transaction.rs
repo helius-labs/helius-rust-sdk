@@ -19,21 +19,21 @@ use solana_client::{
     rpc_config::{RpcSendTransactionConfig, RpcSimulateTransactionConfig},
     rpc_response::{Response, RpcSimulateTransactionResult},
 };
+use solana_commitment_config::CommitmentConfig;
+use solana_compute_budget_interface::ComputeBudgetInstruction;
 use solana_sdk::signature::keypair_from_seed;
-use solana_sdk::system_instruction;
 use solana_sdk::{
-    address_lookup_table::AddressLookupTableAccount,
     bs58::encode,
-    commitment_config::CommitmentConfig,
-    compute_budget::ComputeBudgetInstruction,
     hash::Hash,
     instruction::Instruction,
+    message::AddressLookupTableAccount,
     message::{v0, VersionedMessage},
     pubkey::Pubkey,
     signature::{Signature, Signer},
     signer::keypair::Keypair,
     transaction::{Transaction, VersionedTransaction},
 };
+use solana_system_interface::instruction as system_instruction;
 use solana_transaction_status::TransactionConfirmationStatus;
 use std::time::{Duration, Instant};
 use tokio::time::sleep;
@@ -82,7 +82,7 @@ pub static SENDER_REGION_ALIASES: phf::Map<&'static str, &'static str> = phf_map
 const SENDER_DEFAULT_BASE: &str = "http://slc-sender.helius-rpc.com";
 
 #[inline]
-fn normalize_region<'a>(region: &'a str) -> &'a str {
+fn normalize_region(region: &str) -> &str {
     SENDER_REGION_ALIASES.get(region).copied().unwrap_or(region)
 }
 
@@ -133,11 +133,11 @@ async fn post_to_sender(tx64: &str, opts: &SenderSendOptions) -> Result<Signatur
     if !status.is_success() {
         // `text()` consumes `res` in this branch, and we return immediately.
         let text = res.text().await.unwrap_or_default();
-        return Err(HeliusError::InvalidInput(format!(
+        Err(HeliusError::InvalidInput(format!(
             "Sender HTTP {}: {}",
             status,
             text.chars().take(200).collect::<String>()
-        )));
+        )))
     } else {
         // Success path: `json()` consumes `res` *here*, not above.
         let val: serde_json::Value = res
@@ -157,10 +157,10 @@ async fn post_to_sender(tx64: &str, opts: &SenderSendOptions) -> Result<Signatur
                 .map_err(|e| HeliusError::InvalidInput(format!("Invalid signature from Sender: {e}")));
         }
 
-        return Err(HeliusError::InvalidInput(format!(
+        Err(HeliusError::InvalidInput(format!(
             "Unexpected Sender response: {}",
             val.to_string().chars().take(200).collect::<String>()
-        )));
+        )))
     }
 }
 
@@ -289,7 +289,7 @@ impl Helius {
     ///
     /// # Arguments
     /// * `config` - The configuration for the smart transaction, which includes the transaction's instructions, signers, and lookup tables, depending on
-    /// whether it's a legacy or versioned smart transaction. The transaction's send configuration can also be changed, if provided
+    ///   whether it's a legacy or versioned smart transaction. The transaction's send configuration can also be changed, if provided
     ///
     /// # Returns
     /// An optimized `SmartTransaction` (i.e., `Transaction` or `VersionedTransaction`) and the `last_valid_block_height`
@@ -451,7 +451,7 @@ impl Helius {
     ///
     /// # Arguments
     /// * `config` - The configuration for the smart transaction, which includes the transaction's instructions, signers, and lookup tables, depending on
-    /// whether it's a legacy or versioned smart transaction. The transaction's send configuration can also be changed, if provided
+    ///   whether it's a legacy or versioned smart transaction. The transaction's send configuration can also be changed, if provided
     ///
     /// # Returns
     /// The transaction signature, if successful
@@ -629,7 +629,7 @@ impl Helius {
         let fee_payer: Keypair = if let Some(fee_payer_seed) = create_config.fee_payer_seed {
             keypair_from_seed(&fee_payer_seed).expect("Failed to create keypair from seed")
         } else {
-            Keypair::from_bytes(&keypairs[0].to_bytes()).unwrap()
+            keypairs[0].insecure_clone()
         };
 
         let (recent_blockhash, last_valid_block_hash) = self
@@ -718,13 +718,13 @@ impl Helius {
             let message: v0::Message = v0::Message::try_compile(
                 &fee_payer.pubkey(),
                 &final_instructions,
-                &lookup_tables,
+                lookup_tables,
                 recent_blockhash,
             )?;
 
             let versioned_message: VersionedMessage = VersionedMessage::V0(message);
 
-            let fee_payer_copy: Keypair = Keypair::from_bytes(&fee_payer.to_bytes()).unwrap();
+            let fee_payer_copy: Keypair = fee_payer.insecure_clone();
             let mut all_signers: Vec<Keypair> = vec![fee_payer_copy];
             all_signers.extend(keypairs.into_iter().filter(|k| k.pubkey() != fee_payer.pubkey()));
 
@@ -1010,8 +1010,8 @@ impl Helius {
             .map_or(config.signers[0].pubkey(), |signer| signer.pubkey());
 
         if tip_amount > 0 {
-            let mut rng = rand::thread_rng();
-            let idx = rng.gen_range(0..SENDER_TIP_ACCOUNTS.len());
+            let mut rng = rand::rng();
+            let idx = rng.random_range(0..SENDER_TIP_ACCOUNTS.len());
             let tip_pubkey = Pubkey::from_str(SENDER_TIP_ACCOUNTS[idx])
                 .map_err(|e| HeliusError::InvalidInput(format!("Invalid tip account: {e}")))?;
 

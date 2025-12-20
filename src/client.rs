@@ -95,8 +95,6 @@ impl Helius {
         })
     }
 
-    /// Creates a new instance of `Helius` with an asynchronous Solana client and a commitment config
-
     /// Creates a new instance of `Helius` with an asynchronous Solana client
     ///
     /// # Arguments

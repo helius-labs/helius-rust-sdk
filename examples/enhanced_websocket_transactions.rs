@@ -15,7 +15,14 @@ async fn main() -> Result<()> {
     let key: pubkey::Pubkey = pubkey!("BtsmiEEvnSuUnKxqXj2PZRYpPJAc7C34mGz8gtJ1DAaH");
 
     let config: RpcTransactionsConfig = RpcTransactionsConfig {
-        filter: TransactionSubscribeFilter::standard(&key),
+        filter: TransactionSubscribeFilter {
+            account_include: Some(vec![key.to_string()]),
+            vote: Some(false),
+            failed: None,
+            signature: None,
+            account_exclude: None,
+            account_required: None,
+        },
         options: TransactionSubscribeOptions::default(),
     };
 
