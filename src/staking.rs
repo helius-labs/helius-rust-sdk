@@ -12,20 +12,20 @@ use solana_client::{
     rpc_config::{RpcAccountInfoConfig, RpcProgramAccountsConfig},
     rpc_filter::{Memcmp, MemcmpEncodedBytes, RpcFilterType},
 };
+use solana_commitment_config::CommitmentConfig;
 use solana_program::hash::Hash;
 use solana_sdk::account::Account;
 use solana_sdk::{
     bs58,
-    commitment_config::CommitmentConfig,
     instruction::Instruction,
     native_token::LAMPORTS_PER_SOL,
     pubkey::Pubkey,
     signer::{keypair::Keypair, Signer},
-    stake::{
-        self, instruction as stake_instruction,
-        state::{Authorized, StakeStateV2},
-    },
     transaction::Transaction,
+};
+use solana_stake_interface::{
+    instruction as stake_instruction,
+    state::{Authorized, StakeStateV2},
 };
 
 pub static HELIUS_VALIDATOR_PUBKEY: Lazy<Pubkey> =
@@ -70,7 +70,7 @@ impl Helius {
             &owner,
             &stake_account.pubkey(),
             &authorized,
-            &stake::state::Lockup::default(),
+            &solana_stake_interface::state::Lockup::default(),
             lamports,
         );
 
@@ -210,7 +210,7 @@ impl Helius {
             &owner,
             &stake_account.pubkey(),
             &authorized,
-            &stake::state::Lockup::default(),
+            &solana_stake_interface::state::Lockup::default(),
             lamports,
         );
 
@@ -361,7 +361,7 @@ impl Helius {
 
         let accounts: Vec<(Pubkey, Account)> = self
             .connection()
-            .get_program_accounts_with_config(&stake::program::id(), cfg)
+            .get_program_accounts_with_config(&solana_stake_interface::program::id(), cfg)
             .map_err(|e| HeliusError::InvalidInput(e.to_string()))?;
 
         Ok(accounts)

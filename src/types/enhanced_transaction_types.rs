@@ -1,9 +1,8 @@
-use serde::{Deserialize, Serialize};
-use serde_json::{Number, Value};
-use solana_sdk::commitment_config::CommitmentLevel;
-
 use super::*;
 use crate::utils::deserialize_str_to_number;
+use serde::{Deserialize, Serialize};
+use serde_json::{Number, Value};
+use solana_commitment_config::CommitmentLevel;
 
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
