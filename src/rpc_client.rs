@@ -25,7 +25,9 @@ use crate::request_handler::RequestHandler;
 use crate::types::inner::{RpcRequest, RpcResponse};
 use crate::types::{
     Asset, AssetList, AssetProof, EditionsList, GetAsset, GetAssetBatch, GetAssetProof, GetAssetProofBatch,
-    GetAssetSignatures, GetAssetsByAuthority, GetAssetsByCreator, GetAssetsByGroup, GetAssetsByOwner, GetNftEditions,
+    GetAssetSignatures, GetAssetsByAuthority, GetAssetsByCreator, GetAssetsByGroup, GetAssetsByOwner,
+    GetCompressedAccountRequest, GetCompressedAccountResponse, GetCompressedAccountsByOwnerRequest,
+    GetCompressedAccountsResponse, GetCompressedTokenAccountsByOwnerRequest, GetNftEditions,
     GetPriorityFeeEstimateRequest, GetPriorityFeeEstimateResponse, GetProgramAccountsV2Config,
     GetProgramAccountsV2Request, GetProgramAccountsV2Response, GetTokenAccounts, GetTokenAccountsByOwnerV2Config,
     GetTokenAccountsByOwnerV2Request, GetTokenAccountsByOwnerV2Response, GetTransactionsForAddressOptions,
@@ -435,5 +437,56 @@ impl RpcClient {
     ) -> Result<GetTransactionsForAddressResponse> {
         let params: GetTransactionsForAddressRequest = (address, options);
         self.post_rpc_request("getTransactionsForAddress", params).await
+    }
+
+    /// Gets a compressed account by its address
+    ///
+    /// This method retrieves state-compressed account data from the Light Protocol / ZK Compression system.
+    ///
+    /// # Arguments
+    /// * `request` - A struct containing the address of the compressed account to fetch
+    ///
+    /// # Returns
+    /// A `Result` with an optional `GetCompressedAccountResponse` if found
+    pub async fn get_compressed_account(
+        &self,
+        request: GetCompressedAccountRequest,
+    ) -> Result<Option<GetCompressedAccountResponse>> {
+        self.post_rpc_request("getCompressedAccount", request).await
+    }
+
+    /// Gets compressed accounts owned by a specific address
+    ///
+    /// This method retrieves all state-compressed accounts owned by the specified address,
+    /// with optional filtering and pagination support.
+    ///
+    /// # Arguments
+    /// * `request` - A struct containing the owner address and optional filters, cursor, and limit
+    ///
+    /// # Returns
+    /// A `Result` containing a `GetCompressedAccountsResponse` with the list of compressed accounts
+    pub async fn get_compressed_accounts_by_owner(
+        &self,
+        request: GetCompressedAccountsByOwnerRequest,
+    ) -> Result<GetCompressedAccountsResponse> {
+        self.post_rpc_request("getCompressedAccountsByOwner", request).await
+    }
+
+    /// Gets compressed token accounts owned by a specific address
+    ///
+    /// This method retrieves state-compressed SPL token accounts owned by the specified address,
+    /// with optional filtering by mint and pagination support.
+    ///
+    /// # Arguments
+    /// * `request` - A struct containing the owner address and optional mint filter, cursor, and limit
+    ///
+    /// # Returns
+    /// A `Result` containing a `GetCompressedAccountsResponse` with the list of compressed token accounts
+    pub async fn get_compressed_token_accounts_by_owner(
+        &self,
+        request: GetCompressedTokenAccountsByOwnerRequest,
+    ) -> Result<GetCompressedAccountsResponse> {
+        self.post_rpc_request("getCompressedTokenAccountsByOwner", request)
+            .await
     }
 }
