@@ -212,7 +212,6 @@ pub struct SearchAssets {
     pub collections: Option<Vec<String>>,
     #[serde(default)]
     pub token_type: Option<TokenType>,
-    // #[serde(default)]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub created_at: Option<CreatedAtFilter>,
     #[serde(default)]
