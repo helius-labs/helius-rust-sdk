@@ -364,11 +364,9 @@ impl Helius {
             .get_program_ui_accounts_with_config(&solana_stake_interface::program::id(), cfg)
             .map_err(|e| HeliusError::InvalidInput(e.to_string()))?;
 
-        // Convert UiAccount to Account
         let accounts: Vec<(Pubkey, Account)> = ui_accounts
             .into_iter()
             .filter_map(|(pubkey, ui_account)| {
-                // Decode the account data from UiAccountData
                 let data = match ui_account.data {
                     solana_account_decoder::UiAccountData::Binary(encoded, UiAccountEncoding::Base64) => {
                         use base64::{engine::general_purpose::STANDARD, Engine};
