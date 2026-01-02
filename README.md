@@ -158,8 +158,11 @@ Note that these methods have been deprecated, and will be removed in a future re
 - [`send_smart_transaction_with_seeds_and_tip`](https://github.com/helius-labs/helius-rust-sdk/blob/8102d87c6551c7645389a813e60a832a2eaf98c7/src/jito.rs#L272-L353) - Sends a smart transaction as a Jito bundle with a tip using seed bytes to create the transaction
 - [`send_smart_transaction_with_tip`](https://github.com/helius-labs/helius-rust-sdk/blob/bd9e0b10c81ab9ea56dfcd286336b086f6737b64/src/jito.rs#L205-L270) - Sends a smart transaction as a Jito bundle with a tip
 
+### RPC Methods
+- [`get_priority_fee_estimate`](https://www.helius.dev/docs/api-reference/priority-fee/getpriorityfeeestimate#getpriorityfeeestimate) - Gets an estimate of the priority fees required for a transaction to be processed more quickly
+- [`get_transactions_for_address`](https://www.helius.dev/docs/api-reference/rpc/http/gettransactionsforaddress) - Gets transaction history for a specific address with advanced filtering, sorting, and pagination
+
 ### Helper Methods
-- [`get_priority_fee_estimate`](https://docs.helius.dev/solana-rpc-nodes/alpha-priority-fee-api) - Gets an estimate of the priority fees required for a transaction to be processed more quickly
 - [`deserialize_str_to_number`](https://github.com/helius-labs/helius-rust-sdk/blob/dev/src/utils/deserialize_str_to_number.rs) - Deserializes a `String` to a `Number`
 - [`is_valid_solana_address`](https://github.com/helius-labs/helius-rust-sdk/blob/dev/src/utils/is_valid_solana_address.rs) - Returns whether a given string slice is a valid Solana address
 - [`make_keypairs`](https://github.com/helius-labs/helius-rust-sdk/blob/dev/src/utils/make_keypairs.rs) - Generates a specified number of keypairs
