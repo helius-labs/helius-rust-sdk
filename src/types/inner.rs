@@ -1245,6 +1245,8 @@ pub struct GetTransactionsFilters {
     pub signature: Option<SignatureFilter>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub status: Option<TransactionStatusFilter>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub include_token_accounts: Option<bool>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
