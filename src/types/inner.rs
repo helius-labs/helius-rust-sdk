@@ -1245,8 +1245,6 @@ pub struct GetTransactionsFilters {
     pub signature: Option<SignatureFilter>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub status: Option<TransactionStatusFilter>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub include_token_accounts: Option<bool>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
@@ -1270,6 +1268,8 @@ pub struct GetTransactionsForAddressOptions {
     pub max_supported_transaction_version: Option<u8>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub min_context_slot: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub include_token_accounts: Option<bool>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]

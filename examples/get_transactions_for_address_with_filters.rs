@@ -96,10 +96,7 @@ async fn main() -> Result<()> {
     let options = GetTransactionsForAddressOptions {
         limit: Some(5),
         transaction_details: Some(TransactionDetails::Signatures),
-        filters: Some(GetTransactionsFilters {
-            include_token_accounts: Some(true),
-            ..Default::default()
-        }),
+        include_token_accounts: Some(true),
         ..Default::default()
     };
 
