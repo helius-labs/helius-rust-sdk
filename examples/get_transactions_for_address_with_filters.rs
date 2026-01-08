@@ -92,7 +92,31 @@ async fn main() -> Result<()> {
 
     println!();
 
-    println!("=== Example 4: Pagination ===");
+    println!("=== Example 4: Include token account transactions ===");
+    let options = GetTransactionsForAddressOptions {
+        limit: Some(5),
+        transaction_details: Some(TransactionDetails::Signatures),
+        filters: Some(GetTransactionsFilters {
+            include_token_accounts: Some(true),
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+
+    match helius
+        .rpc()
+        .get_transactions_for_address(address.to_string(), options)
+        .await
+    {
+        Ok(result) => {
+            println!("Fetched {:?} transactions (including token accounts)", result.data);
+        }
+        Err(e) => println!("Error: {:?}", e),
+    }
+
+    println!();
+
+    println!("=== Example 5: Pagination ===");
     let mut page = 1;
     let mut pagination_token: Option<String> = None;
 
