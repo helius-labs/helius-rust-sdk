@@ -5,6 +5,13 @@ use serde_json::Value;
 use std::fmt::Debug;
 use std::sync::Arc;
 
+/// The SDK version, sourced from Cargo.toml at compile time
+pub const SDK_VERSION: &str = env!("CARGO_PKG_VERSION");
+
+/// The User-Agent header value for SDK requests
+/// Format: "helius-rust-sdk/{version} (server)"
+pub const SDK_USER_AGENT: &str = concat!("helius-rust-sdk/", env!("CARGO_PKG_VERSION"), " (server)");
+
 /// Manages HTTP requests for the `Helius` client
 ///
 /// This struct is responsible for sending HTTP requests and handling responses. It encapsulates details
@@ -61,7 +68,7 @@ impl RequestHandler {
     {
         let mut request_builder: RequestBuilder = self.http_client.request(method, url);
 
-        request_builder = request_builder.header("User-Agent", "helius-rust-sdk");
+        request_builder = request_builder.header("User-Agent", SDK_USER_AGENT);
 
         if let Some(body) = body {
             request_builder = request_builder.json(body);

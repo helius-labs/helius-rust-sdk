@@ -1,5 +1,7 @@
 use helius::error::Result;
-use helius::types::inner::{GetTransactionsFilters, SlotFilter, TransactionDetails, TransactionStatusFilter};
+use helius::types::inner::{
+    GetTransactionsFilters, SlotFilter, TokenAccountsFilter, TransactionDetails, TransactionStatusFilter,
+};
 use helius::types::{Cluster, GetTransactionsForAddressOptions, SortOrder};
 use helius::Helius;
 
@@ -96,7 +98,13 @@ async fn main() -> Result<()> {
     let options = GetTransactionsForAddressOptions {
         limit: Some(5),
         transaction_details: Some(TransactionDetails::Signatures),
-        include_token_accounts: Some(true),
+        filters: Some(GetTransactionsFilters {
+            // BalanceChanged: includes transactions that modify token account balances (recommended)
+            // All: includes all transactions involving any token account owned by the address
+            // None: only transactions directly referencing the address (default)
+            token_accounts: Some(TokenAccountsFilter::BalanceChanged),
+            ..Default::default()
+        }),
         ..Default::default()
     };
 
@@ -106,7 +114,10 @@ async fn main() -> Result<()> {
         .await
     {
         Ok(result) => {
-            println!("Fetched {:?} transactions (including token accounts)", result.data);
+            println!(
+                "Fetched {} transactions (including token accounts with balance changes)",
+                result.data.len()
+            );
         }
         Err(e) => println!("Error: {:?}", e),
     }

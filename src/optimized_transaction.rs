@@ -1,4 +1,5 @@
 use crate::error::{HeliusError, Result};
+use crate::request_handler::SDK_USER_AGENT;
 use crate::types::{
     CreateSmartTransactionConfig, CreateSmartTransactionSeedConfig, GetPriorityFeeEstimateOptions,
     GetPriorityFeeEstimateRequest, GetPriorityFeeEstimateResponse, PriorityLevel, SenderSendOptions, SmartTransaction,
@@ -124,6 +125,7 @@ async fn post_to_sender(tx64: &str, opts: &SenderSendOptions) -> Result<Signatur
 
     let res = reqwest::Client::new()
         .post(&endpoint)
+        .header("User-Agent", SDK_USER_AGENT)
         .json(&body)
         .send()
         .await
@@ -958,6 +960,7 @@ impl Helius {
     pub async fn fetch_tip_floor_75th(&self) -> Result<Option<u64>> {
         let res = reqwest::Client::new()
             .get(TIP_FLOOR_URL)
+            .header("User-Agent", SDK_USER_AGENT)
             .send()
             .await
             .map_err(|e| HeliusError::InvalidInput(format!("Tip floor fetch error: {e}")))?;
@@ -1027,6 +1030,7 @@ impl Helius {
         let url = sender_ping_url(region);
         let res = reqwest::Client::new()
             .get(&url)
+            .header("User-Agent", SDK_USER_AGENT)
             .send()
             .await
             .map_err(|e| HeliusError::InvalidInput(format!("Sender ping error: {e}")))?;
