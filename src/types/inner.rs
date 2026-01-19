@@ -1234,6 +1234,18 @@ pub struct SignatureFilter {
     pub lt: Option<String>,
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default)]
+#[serde(rename_all = "camelCase")]
+pub enum TokenAccountsFilter {
+    /// Only return transactions that reference the provided address (default)
+    #[default]
+    None,
+    /// Return transactions that reference either the provided address or modify the balance of a token account owned by the provided address (recommended)
+    BalanceChanged,
+    /// Return transactions that reference either the provided address or any token account owned by the provided address
+    All,
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct GetTransactionsFilters {
@@ -1245,6 +1257,8 @@ pub struct GetTransactionsFilters {
     pub signature: Option<SignatureFilter>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub status: Option<TransactionStatusFilter>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub token_accounts: Option<TokenAccountsFilter>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
@@ -1268,8 +1282,6 @@ pub struct GetTransactionsForAddressOptions {
     pub max_supported_transaction_version: Option<u8>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub min_context_slot: Option<u64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub include_token_accounts: Option<bool>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
