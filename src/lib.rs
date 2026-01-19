@@ -15,3 +15,4 @@ pub mod websocket;
 
 pub use client::Helius;
 pub use factory::HeliusFactory;
+pub use request_handler::{SDK_USER_AGENT, SDK_VERSION};
