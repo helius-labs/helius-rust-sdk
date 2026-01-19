@@ -212,8 +212,8 @@ pub struct SearchAssets {
     pub collections: Option<Vec<String>>,
     #[serde(default)]
     pub token_type: Option<TokenType>,
-    // #[serde(default)]
-    // pub created_at: Option<CreatedAtFilter>, //TODO: Uncomment this line when the CreatedAtFilter struct is defined
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub created_at: Option<CreatedAtFilter>,
     #[serde(default)]
     pub tree: Option<String>,
     #[serde(default)]
@@ -370,7 +370,8 @@ pub struct Asset {
     pub token_info: Option<TokenInfo>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub group_definition: Option<GroupDefinition>,
-    // pub system: Option<SystemInfo>, TODO: Uncomment this line when the SystemInfo struct is defined
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub system: Option<SystemInfo>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub plugins: Option<Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -700,10 +701,23 @@ pub struct GroupDefinition {
     pub asset_id: Option<Vec<u8>>,
 }
 
-// #[derive(Debug, Serialize, Deserialize, JsonSchema)]
-// pub struct SystemInfo {
-//     pub created_at: Option<DateTime<Utc>>,
-// }
+/// System information for an asset
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct SystemInfo {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub created_at: Option<i64>,
+}
+
+/// Filter for created_at timestamps
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct CreatedAtFilter {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub after: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub before: Option<i64>,
+}
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct MplCoreInfo {
@@ -721,16 +735,6 @@ pub struct NotFilter {
     pub creators: Option<Vec<Vec<u8>>>,
     pub authorities: Option<Vec<Vec<u8>>>,
 }
-
-// #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-// #[serde(deny_unknown_fields, rename_all = "camelCase")]
-// pub struct CreatedAtFilter {
-//     #[serde(default)]
-//     pub after: Option<DateTime<Utc>>,
-//     #[serde(default)]
-//     pub before: Option<DateTime<Utc>>,
-// }
-
 #[derive(Serialize, Deserialize, Debug)]
 pub struct TokenAccount {
     pub address: String,
