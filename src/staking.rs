@@ -359,34 +359,10 @@ impl Helius {
             ..Default::default()
         };
 
-        let ui_accounts: Vec<(Pubkey, solana_account_decoder::UiAccount)> = self
+        let accounts: Vec<(Pubkey, Account)> = self
             .connection()
-            .get_program_ui_accounts_with_config(&solana_stake_interface::program::id(), cfg)
+            .get_program_accounts_with_config(&solana_stake_interface::program::id(), cfg)
             .map_err(|e| HeliusError::InvalidInput(e.to_string()))?;
-
-        let accounts: Vec<(Pubkey, Account)> = ui_accounts
-            .into_iter()
-            .filter_map(|(pubkey, ui_account)| {
-                let data = match ui_account.data {
-                    solana_account_decoder::UiAccountData::Binary(encoded, UiAccountEncoding::Base64) => {
-                        use base64::{engine::general_purpose::STANDARD, Engine};
-                        STANDARD.decode(encoded).ok()
-                    }
-                    _ => None,
-                }?;
-
-                Some((
-                    pubkey,
-                    Account {
-                        lamports: ui_account.lamports,
-                        data,
-                        owner: Pubkey::from_str(&ui_account.owner).ok()?,
-                        executable: ui_account.executable,
-                        rent_epoch: ui_account.rent_epoch,
-                    },
-                ))
-            })
-            .collect();
 
         Ok(accounts)
     }

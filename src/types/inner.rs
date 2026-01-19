@@ -1284,5 +1284,3 @@ pub struct GetTransactionsForAddressResponse {
 }
 
 pub type GetTransactionsForAddressRequest = (String, GetTransactionsForAddressOptions);
-
-

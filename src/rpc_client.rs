@@ -25,8 +25,7 @@ use crate::request_handler::RequestHandler;
 use crate::types::inner::{RpcRequest, RpcResponse};
 use crate::types::{
     Asset, AssetList, AssetProof, EditionsList, GetAsset, GetAssetBatch, GetAssetProof, GetAssetProofBatch,
-    GetAssetSignatures, GetAssetsByAuthority, GetAssetsByCreator, GetAssetsByGroup, GetAssetsByOwner,
-    GetNftEditions,
+    GetAssetSignatures, GetAssetsByAuthority, GetAssetsByCreator, GetAssetsByGroup, GetAssetsByOwner, GetNftEditions,
     GetPriorityFeeEstimateRequest, GetPriorityFeeEstimateResponse, GetProgramAccountsV2Config,
     GetProgramAccountsV2Request, GetProgramAccountsV2Response, GetTokenAccounts, GetTokenAccountsByOwnerV2Config,
     GetTokenAccountsByOwnerV2Request, GetTokenAccountsByOwnerV2Response, GetTransactionsForAddressOptions,
@@ -437,5 +436,4 @@ impl RpcClient {
         let params: GetTransactionsForAddressRequest = (address, options);
         self.post_rpc_request("getTransactionsForAddress", params).await
     }
-
 }
