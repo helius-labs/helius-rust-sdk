@@ -108,7 +108,8 @@ async fn test_get_asset_success() {
 1. Branch from `dev`
 2. Run `cargo fmt && cargo clippy && cargo test`
 3. Open PR to `dev`
-4. Include Co-Authored-By for AI: `Co-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>`
+4. Title format should be feat(domain): [Title] for features and fix(domain): [Title] for bug fixes
+5. Include Co-Authored-By for AI: `Co-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>`
 
 **Releases:**
 ```bash
