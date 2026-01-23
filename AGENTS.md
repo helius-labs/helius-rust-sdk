@@ -21,7 +21,7 @@ cargo publish                  # Publish to crates.io
 
 ## Structure
 
-**Core:**
+### Core
 - `src/client.rs` - Helius client & HeliusFactory
 - `src/rpc_client.rs` - RPC methods (DAS API, getTransactionsForAddress)
 - `src/error.rs` - HeliusError & Result<T> alias
@@ -29,29 +29,32 @@ cargo publish                  # Publish to crates.io
 - `src/optimized_transaction.rs` - Smart transactions & Helius Sender
 - `src/jito.rs` - ⚠️ DEPRECATED (use Helius Sender)
 
-**Types:**
+### Types
 - `src/types/inner.rs` - Core types (Asset, filters, request/response)
 - `src/types/enums.rs` - Cluster, TokenType, etc.
 - `src/types/options.rs` - Request options
 
-**Other:**
+### Other
 - `examples/` - Usage examples
 - `tests/rpc/` - Integration tests with mockito
 
 ## Code Style
 
-**Error Handling:** Always use `Result<T>` alias (not `std::result::Result<T, HeliusError>`)
+### Error Handling
+Always use `Result<T>` alias (not `std::result::Result<T, HeliusError>`)
 ```rust
 use helius::error::Result;
 pub async fn my_function() -> Result<Asset> { ... }
 ```
 
-**Async:** All async functions return Result or Option
+### Async
+All async functions return Result or Option
 ```rust
 pub async fn fetch_data(&self) -> Result<Data> { ... }
 ```
 
-**Serialization:** Use `#[serde(rename_all = "camelCase")]` for JSON
+### Serialization
+Use `#[serde(rename_all = "camelCase")]` for JSON
 ```rust
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -61,14 +64,15 @@ pub struct Options {
 }
 ```
 
-**Client Usage:**
+### Client Usage
 ```rust
 let helius = Helius::new("api_key", Cluster::MainnetBeta)?;
 let asset = helius.rpc().get_asset(request).await?;
 let balance = helius.connection().get_balance(&pubkey)?;  // sync
 ```
 
-**TokenAccountsFilter (getTransactionsForAddress):**
+### TokenAccountsFilter
+For `getTransactionsForAddress`:
 ```rust
 use helius::types::inner::TokenAccountsFilter;
 // Options: None, BalanceChanged (recommended), All
@@ -81,9 +85,11 @@ let options = GetTransactionsForAddressOptions {
 };
 ```
 
-**Naming:** snake_case (functions), PascalCase (types), SCREAMING_SNAKE_CASE (constants)
+### Naming
+snake_case (functions), PascalCase (types), SCREAMING_SNAKE_CASE (constants)
 
-**Docs:** Use `///` with examples for public items
+### Documentation
+Use `///` with examples for public items
 
 ## Testing
 
@@ -96,22 +102,25 @@ async fn test_get_asset_success() {
 }
 ```
 
-**Priorities:** RPC methods, type serialization (camelCase), error paths, filter combinations
+### Test Priorities
+RPC methods, type serialization (camelCase), error paths, filter combinations
 
-**CI:** GitHub Actions runs fmt, clippy, tests on all PRs
+### CI/CD
+GitHub Actions runs fmt, clippy, tests on all PRs
 
 ## Git Workflow
 
-**Branches:** `main` (stable), `dev` (target for PRs)
+### Branches
+`main` (stable), `dev` (target for PRs)
 
-**PR Process:**
+### PR Process
 1. Branch from `dev`
 2. Run `cargo fmt && cargo clippy && cargo test`
 3. Open PR to `dev`
-4. Title format should be feat(domain): [Title] for features and fix(domain): [Title] for bug fixes
+4. Title format: `feat(domain): [title]` or `fix(domain): [title]`
 5. Include Co-Authored-By for AI: `Co-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>`
 
-**Releases:**
+### Releases
 ```bash
 git tag -a v0.5.1 -m "Release v0.5.1"
 git push origin v0.5.1
@@ -120,13 +129,17 @@ cargo publish
 
 ## Boundaries
 
-**Never commit:** API keys, secrets, .env files, private keys
+### Never Commit
+API keys, secrets, .env files, private keys
 
-**Compatibility:** Match Helius API specs exactly. Sync types with API changes.
+### Compatibility
+Match Helius API specs exactly. Sync types with API changes.
 
-**Deprecation:** Jito methods deprecated - use Helius Sender. Mark with `#[deprecated]`.
+### Deprecation
+Jito methods deprecated - use Helius Sender. Mark with `#[deprecated]`.
 
-**Breaking changes:** Bump version, document in CHANGELOG, provide migration guide.
+### Breaking Changes
+Bump version, document in CHANGELOG, provide migration guide.
 
 ---
 
