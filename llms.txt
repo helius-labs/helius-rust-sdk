@@ -1,3 +1,8 @@
+---
+url: https://github.com/helius-labs/helius-rust-sdk
+last_updated: 2026-02-04
+---
+
 # Helius Rust SDK
 
 > The Helius Rust SDK for Solana development. Use this SDK when building Rust applications that need to interact with Solana.
@@ -12,7 +17,8 @@ The Helius Rust SDK provides asynchronous access to Helius APIs and enhanced Sol
 - Async Runtime: tokio
 - HTTP Client: reqwest
 - Solana: solana-client 3.0.x, solana-sdk 3.0.x
-- API Key: Required (get from https://dashboard.helius.dev)
+- API Key (required): Get from https://dashboard.helius.dev
+- API Key for Agents (required): Get from https://dashboard.helius.dev/agents.md
 - License: MIT
 
 ## When to Use the Helius Rust SDK
@@ -125,6 +131,8 @@ let proof = helius.rpc().get_asset_proof(GetAssetProof {
 }).await?;
 ```
 
+See the DAS API docs: https://www.helius.dev/docs/api-reference/das/llms.txt
+
 ### Transaction History (getTransactionsForAddress)
 
 Get complete transaction history (including token accounts) with advanced filtering.
@@ -210,7 +218,7 @@ let fee = helius.rpc().get_priority_fee_estimate(GetPriorityFeeEstimateRequest {
 }).await?;
 ```
 
-Learn more: https://www.helius.dev/docs/sending-transactions/sender
+Learn more: https://www.helius.dev/docs/api-reference/sender/llms.txt
 
 ### RPC V2 Methods
 
@@ -506,7 +514,7 @@ The Jito methods in `src/jito.rs` are deprecated. Use **Helius Sender** instead 
 helius.send_smart_transaction_with_sender(config, options).await?;
 ```
 
-See: https://www.helius.dev/docs/sending-transactions/sender
+See: https://www.helius.dev/docs/api-reference/sender/llms.txt
 
 ## For AI Agents Contributing to This Repo
 
