@@ -363,6 +363,8 @@ ws.account_subscribe(
 ).await?;
 ```
 
+See our Helius Enhanced WebSocket docs: https://www.helius.dev/docs/enhanced-websockets/llms.txt
+
 ### Embedded Solana Client
 
 Access standard Solana RPC methods directly via Solana's most performant infrastructure.
@@ -506,6 +508,7 @@ helius = { version = "0.5", default-features = false, features = ["rustls"] }
 - API Reference: https://www.helius.dev/docs/llms.txt
 - Dashboard: https://dashboard.helius.dev
 - GitHub: https://github.com/helius-labs/helius-rust-sdk
+- SDK Guide: https://www.helius.dev/docs/sdks.md
 
 ## Deprecated Methods
 
