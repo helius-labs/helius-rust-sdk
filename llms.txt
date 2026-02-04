@@ -1,0 +1,526 @@
+---
+url: https://github.com/helius-labs/helius-rust-sdk
+last_updated: 2026-02-04
+---
+
+# Helius Rust SDK
+
+> The Helius Rust SDK for Solana development. Use this SDK when building Rust applications that need to interact with Solana.
+
+## What is the Helius Rust SDK?
+
+The Helius Rust SDK provides asynchronous access to Helius APIs and enhanced Solana RPC functionality. It simplifies Solana development with high-level abstractions for assets, transactions, webhooks, staking, and ultra-low latency transaction submission via Helius Sender.
+
+- Crate: `helius` (crates.io)
+- Version: 0.5.x
+- Rust: 1.85+ (edition 2021)
+- Async Runtime: tokio
+- HTTP Client: reqwest
+- Solana: solana-client 3.0.x, solana-sdk 3.0.x
+- API Key (required): Get from https://dashboard.helius.dev
+- API Key for Agents (required): Get from https://dashboard.helius.dev/agents.md
+- License: MIT
+
+## When to Use the Helius Rust SDK
+
+Use the Helius Rust SDK when you need to:
+
+- Fetch NFTs, tokens, or compressed NFTs owned by a wallet
+- Get the entire transaction history for an address (including token accounts)
+- Send transactions with ultra-low latency via Helius Sender
+- Set up webhooks for on-chain events (sales, transfers, swaps)
+- Stream real-time blockchain data via Enhanced WebSockets
+- Make RPC calls on Solana's most performant infrastructure
+- Build high-performance Rust backends for Solana applications
+
+## Quick Start
+
+Add to your `Cargo.toml`:
+```toml
+[dependencies]
+helius = "0.5"
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+```
+
+Basic usage:
+```rust
+use helius::error::Result;
+use helius::types::{Cluster, GetAsset};
+use helius::Helius;
+
+#[tokio::main]
+async fn main() -> Result<()> {
+    let helius = Helius::new("your-api-key", Cluster::MainnetBeta)?;
+
+    // Get an NFT by its mint address
+    let request = GetAsset {
+        id: "F9Lw3ki3hJ7PF9HQXsBzoY8GyE6sPoEZZdXJBsTTD2rk".to_string(),
+        display_options: None,
+    };
+    let asset = helius.rpc().get_asset(request).await?;
+    println!("Asset: {:?}", asset);
+
+    Ok(())
+}
+```
+
+## Examples Directory
+
+The `examples/` directory contains working code samples for SDK features:
+
+```
+examples/
+├── get_asset_batch.rs                        # DAS API: batch asset fetching
+├── get_asset_proof_batch.rs                  # DAS API: Merkle proofs for cNFTs
+├── get_transactions_for_address.rs           # RPC: transaction history
+├── get_transactions_for_address_with_filters.rs  # RPC: filtered tx history
+├── get_priority_fee_estimate.rs              # RPC: priority fee estimation
+├── get_program_accounts_v2.rs                # RPC V2: paginated program accounts
+├── get_token_accounts_by_owner_v2.rs         # RPC V2: paginated token accounts
+├── get_all_program_accounts.rs               # Auto-paginating program accounts
+├── get_all_token_accounts_by_owner.rs        # Auto-paginating token accounts
+├── send_smart_transaction_with_tip.rs        # Helius Sender: transactions with tips
+├── send_smart_transaction_with_seeds.rs      # Helius Sender: thread-safe transactions
+├── create_webhook.rs                         # Webhook creation
+├── edit_webhook.rs                           # Webhook modification
+├── delete_webhook.rs                         # Webhook deletion
+├── get_all_webhooks.rs                       # List webhooks
+├── enhanced_websocket_transactions.rs        # WebSocket: transaction streaming
+├── enhanced_websocket_accounts.rs            # WebSocket: account streaming
+├── get_parse_transactions.rs                 # Enhanced: parse transactions
+└── get_parsed_transaction_history.rs         # Enhanced: parsed tx history
+```
+
+Run examples: `cargo run --example get_asset_batch`
+
+Browse examples: https://github.com/helius-labs/helius-rust-sdk/tree/dev/examples
+
+## Core Capabilities
+
+### DAS API (Digital Asset Standard)
+
+Query NFTs, tokens, and compressed NFTs on Solana.
+
+```rust
+use helius::types::{GetAsset, GetAssetsByOwner, SearchAssets};
+
+// Get a single asset by ID
+let asset = helius.rpc().get_asset(GetAsset {
+    id: "asset_mint_address".to_string(),
+    display_options: None,
+}).await?;
+
+// Get all assets owned by a wallet
+let assets = helius.rpc().get_assets_by_owner(GetAssetsByOwner {
+    owner_address: "wallet_address".to_string(),
+    page: 1,
+    limit: Some(100),
+    ..Default::default()
+}).await?;
+
+// Search with filters
+let results = helius.rpc().search_assets(SearchAssets {
+    owner_address: Some("wallet_address".to_string()),
+    token_type: Some(TokenType::Fungible),
+    ..Default::default()
+}).await?;
+
+// Get Merkle proof for compressed NFT
+let proof = helius.rpc().get_asset_proof(GetAssetProof {
+    id: "cnft_id".to_string(),
+}).await?;
+```
+
+See the DAS API docs: https://www.helius.dev/docs/api-reference/das/llms.txt
+
+### Transaction History (getTransactionsForAddress)
+
+Get complete transaction history (including token accounts) with advanced filtering.
+
+```rust
+use helius::types::{GetTransactionsForAddressOptions, SortOrder};
+use helius::types::inner::{GetTransactionsFilters, TokenAccountsFilter, TransactionDetails};
+
+// Basic: Get last 10 transactions
+let txs = helius.rpc().get_transactions_for_address(
+    "wallet_address".to_string(),
+    GetTransactionsForAddressOptions {
+        limit: Some(10),
+        transaction_details: Some(TransactionDetails::Signatures),
+        ..Default::default()
+    },
+).await?;
+
+// With filters: Include token account transactions
+let txs = helius.rpc().get_transactions_for_address(
+    "wallet_address".to_string(),
+    GetTransactionsForAddressOptions {
+        limit: Some(100),
+        transaction_details: Some(TransactionDetails::Full),
+        sort_order: Some(SortOrder::Desc),
+        filters: Some(GetTransactionsFilters {
+            // TokenAccountsFilter options:
+            // - None: Only direct address references (default)
+            // - BalanceChanged: Include token account balance changes (recommended)
+            // - All: Include all token account transactions
+            token_accounts: Some(TokenAccountsFilter::BalanceChanged),
+            status: Some(TransactionStatusFilter::Succeeded),
+            ..Default::default()
+        }),
+        ..Default::default()
+    },
+).await?;
+
+// Pagination
+let page1 = helius.rpc().get_transactions_for_address(address.clone(), options).await?;
+if let Some(token) = page1.pagination_token {
+    let page2_options = GetTransactionsForAddressOptions {
+        pagination_token: Some(token),
+        ..Default::default()
+    };
+    let page2 = helius.rpc().get_transactions_for_address(address, page2_options).await?;
+}
+```
+
+### Helius Sender
+
+Send transactions with ultra-low latency via Helius Sender. Automatically optimizes compute units and priority fees.
+
+```rust
+use helius::types::{SmartTransactionConfig, SendOptions};
+use solana_sdk::signature::Keypair;
+
+// Build transaction config
+let config = SmartTransactionConfig {
+    instructions: vec![transfer_instruction],
+    signers: vec![&payer_keypair],
+    lookup_tables: None,
+    fee_payer: None,
+};
+
+// Send via Helius Sender (recommended)
+let signature = helius.send_smart_transaction_with_sender(
+    config,
+    Some(SendOptions {
+        skip_preflight: true,
+        ..Default::default()
+    }),
+).await?;
+
+// Get a priority fee estimate if building the transaction yourself
+let fee = helius.rpc().get_priority_fee_estimate(GetPriorityFeeEstimateRequest {
+    account_keys: Some(vec!["program_id".to_string()]),
+    options: Some(GetPriorityFeeEstimateOptions {
+        priority_level: Some(PriorityLevel::High),
+        ..Default::default()
+    }),
+    ..Default::default()
+}).await?;
+```
+
+Learn more: https://www.helius.dev/docs/api-reference/sender/llms.txt
+
+### RPC V2 Methods
+
+Enhanced RPC methods with cursor-based pagination and incremental updates.
+
+#### getProgramAccountsV2
+
+Query large sets of program accounts efficiently with pagination (1-10,000 accounts per request).
+
+**Key Features:**
+- Cursor-based pagination prevents timeouts on large queries
+- `changed_since_slot` for incremental updates and real-time sync
+- Supports all standard filters (dataSize, memcmp)
+- Optimal limit: 1,000-5,000 accounts per request
+
+**Important:** Pagination ends only when NO accounts are returned. The API may return fewer accounts than your limit due to filtering - always continue until `pagination_key` is `None`.
+
+```rust
+use helius::types::{GetProgramAccountsV2Config, Encoding, GpaFilter};
+
+// Basic pagination
+let response = helius.rpc().get_program_accounts_v2(
+    "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA".to_string(),
+    GetProgramAccountsV2Config {
+        encoding: Some(Encoding::Base64),
+        limit: Some(5000),
+        filters: Some(vec![GpaFilter::DataSize { data_size: 165 }]),
+        ..Default::default()
+    },
+).await?;
+
+// Continue pagination with cursor
+let next_page = helius.rpc().get_program_accounts_v2(
+    program_id.clone(),
+    GetProgramAccountsV2Config {
+        pagination_key: response.pagination_key, // Use cursor from previous response
+        limit: Some(5000),
+        ..Default::default()
+    },
+).await?;
+
+// Incremental updates: Get only accounts modified since a specific slot
+let updates = helius.rpc().get_program_accounts_v2(
+    program_id,
+    GetProgramAccountsV2Config {
+        changed_since_slot: Some(150000000), // Only accounts modified at/after this slot
+        limit: Some(1000),
+        ..Default::default()
+    },
+).await?;
+
+// Auto-paginate through ALL accounts (handles pagination automatically)
+let all_accounts = helius.rpc().get_all_program_accounts(
+    program_id,
+    GetProgramAccountsV2Config {
+        limit: Some(5000), // Defaults to 10,000 if not specified
+        ..Default::default()
+    },
+).await?;
+```
+
+#### getTokenAccountsByOwnerV2
+
+Similar pagination support for token account queries.
+
+```rust
+use helius::types::{GetTokenAccountsByOwnerV2Config, TokenAccountsOwnerFilter};
+
+let token_accounts = helius.rpc().get_token_accounts_by_owner_v2(
+    "owner_address".to_string(),
+    TokenAccountsOwnerFilter::Mint("mint_address".to_string()),
+    GetTokenAccountsByOwnerV2Config {
+        limit: Some(1000),
+        ..Default::default()
+    },
+).await?;
+
+// Auto-paginate through all token accounts
+let all_token_accounts = helius.rpc().get_all_token_accounts_by_owner(
+    "owner_address".to_string(),
+    TokenAccountsOwnerFilter::Mint("mint_address".to_string()),
+    GetTokenAccountsByOwnerV2Config::default(),
+).await?;
+```
+
+### Enhanced Transactions
+
+Parse raw transactions into human-readable format.
+
+```rust
+// Parse transaction signatures
+let parsed = helius.parse_transactions(&["tx_signature_1", "tx_signature_2"]).await?;
+
+// Get parsed transaction history for an address
+let history = helius.parsed_transaction_history("address", None).await?;
+```
+
+### Webhooks
+
+Listen to on-chain events in real-time.
+
+```rust
+use helius::types::{CreateWebhookRequest, TransactionType, WebhookType};
+
+// Create a webhook
+let webhook = helius.create_webhook(CreateWebhookRequest {
+    webhook_url: "https://your-server.com/webhook".to_string(),
+    transaction_types: vec![TransactionType::NftSale, TransactionType::NftListing],
+    account_addresses: vec!["marketplace_address".to_string()],
+    webhook_type: WebhookType::Enhanced,
+    ..Default::default()
+}).await?;
+
+// List all webhooks
+let webhooks = helius.get_all_webhooks().await?;
+
+// Delete a webhook
+helius.delete_webhook("webhook_id").await?;
+```
+
+See our Webhooks documentation: https://www.helius.dev/docs/api-reference/webhooks/llms.txt 
+
+### Enhanced WebSockets
+
+Stream real-time blockchain data via Helius Enhanced WebSockets.
+
+```rust
+// Create client with WebSocket support
+let helius = Helius::new_with_ws("api_key", Cluster::MainnetBeta).await?;
+
+// Subscribe to transactions
+let ws = helius.ws()?;
+ws.transaction_subscribe(
+    TransactionSubscribeFilter { /* ... */ },
+    TransactionSubscribeOptions { /* ... */ },
+).await?;
+
+// Subscribe to account changes
+ws.account_subscribe(
+    "account_address",
+    Some(RpcAccountSubscribeConfig { /* ... */ }),
+).await?;
+```
+
+See our Helius Enhanced WebSocket docs: https://www.helius.dev/docs/enhanced-websockets/llms.txt
+
+### Embedded Solana Client
+
+Access standard Solana RPC methods directly via Solana's most performant infrastructure.
+
+```rust
+// Synchronous client
+let balance = helius.connection().get_balance(&pubkey)?;
+let blockhash = helius.connection().get_latest_blockhash()?;
+let slot = helius.connection().get_slot()?;
+
+// Asynchronous client (use new_with_async_solana)
+let helius = Helius::new_with_async_solana("api_key", Cluster::MainnetBeta)?;
+let balance = helius.async_connection()?.get_balance(&pubkey).await?;
+```
+
+## Key Types
+
+```rust
+// Clusters
+use helius::types::Cluster;
+let cluster = Cluster::MainnetBeta; // or Devnet
+
+// Result type alias (use this, not std::result::Result)
+use helius::error::Result;
+async fn my_function() -> Result<Asset> { ... }
+
+// Transaction details level
+use helius::types::inner::TransactionDetails;
+TransactionDetails::Signatures  // Fast, basic info
+TransactionDetails::Full        // Complete transaction data
+
+// Token accounts filter
+use helius::types::inner::TokenAccountsFilter;
+TokenAccountsFilter::None           // Direct references only (default)
+TokenAccountsFilter::BalanceChanged // Include balance changes (recommended)
+TokenAccountsFilter::All            // All token account transactions
+
+// Transaction status filter
+use helius::types::inner::TransactionStatusFilter;
+TransactionStatusFilter::Any        // All transactions (default)
+TransactionStatusFilter::Succeeded  // Only successful
+TransactionStatusFilter::Failed     // Only failed
+
+// Priority levels
+use helius::types::PriorityLevel;
+PriorityLevel::Min | Low | Medium | High | VeryHigh | UnsafeMax | Default
+```
+
+## Common Patterns
+
+### Error Handling
+
+```rust
+use helius::error::{HeliusError, Result};
+
+async fn fetch_asset(helius: &Helius, id: &str) -> Result<Option<Asset>> {
+    match helius.rpc().get_asset(GetAsset { id: id.to_string(), display_options: None }).await {
+        Ok(asset) => Ok(asset),
+        Err(HeliusError::Unauthorized(_)) => {
+            // 401: Invalid API key
+            Err(HeliusError::Unauthorized("Check your API key".into()))
+        }
+        Err(HeliusError::RateLimitExceeded(_)) => {
+            // 429: Rate limited or out of credits
+            // Implement exponential backoff
+            Err(HeliusError::RateLimitExceeded("Rate limited".into()))
+        }
+        Err(e) => Err(e),
+    }
+}
+```
+
+### Pagination
+
+```rust
+// Page-based (DAS API)
+let mut page = 1;
+let mut all_assets = Vec::new();
+loop {
+    let result = helius.rpc().get_assets_by_owner(GetAssetsByOwner {
+        owner_address: address.clone(),
+        page,
+        limit: Some(1000),
+        ..Default::default()
+    }).await?;
+    all_assets.extend(result.items);
+    if result.items.len() < 1000 { break; }
+    page += 1;
+}
+
+// Cursor-based (RPC V2) - use auto-paginating methods
+let all_accounts = helius.rpc().get_all_program_accounts(program_id, config).await?;
+```
+
+### Thread-Safe Usage
+
+```rust
+use std::sync::Arc;
+
+// Share client across threads
+let helius = Arc::new(Helius::new("api_key", Cluster::MainnetBeta)?);
+
+// Clone Arc for each thread/task
+let helius_clone = Arc::clone(&helius);
+tokio::spawn(async move {
+    let assets = helius_clone.rpc().get_assets_by_owner(request).await?;
+});
+```
+
+## TLS Options
+
+```toml
+# Default: native TLS (OpenSSL)
+[dependencies]
+helius = "0.5"
+
+# Alternative: rustls (pure Rust, no OpenSSL dependency)
+[dependencies]
+helius = { version = "0.5", default-features = false, features = ["rustls"] }
+```
+
+## Plans and Rate Limits
+
+| Feature | Free | Developer $49/mo | Business $499/mo | Professional $999/mo |
+|---------|------|------------------|------------------|----------------------|
+| Monthly Credits | 1 Million | 10 Million | 100 Million | 200 Million |
+| RPC Rate Limits | 10 req/s | 50 req/s | 200 req/s | 500 req/s |
+| DAS API and Enhanced API Rate Limits | 2 req/s | 10 req/s | 50 req/s | 100 req/s |
+| Sender Rate Limits | 15/s | 15/s | 15/s | 15/s |
+| Standard WebSockets | Yes | Yes | Yes | Yes |
+| Enhanced WebSockets | No | No | Yes | Yes |
+| Helius Sender | Yes | Yes | Yes | Yes |
+
+- When you receive a 429 error, back off and retry with exponential delay or consider upgrading plans
+- Monitor your usage at https://dashboard.helius.dev
+- Use webhooks and WebSockets for real-time data instead of polling
+
+## Documentation
+
+- Crate Docs: https://docs.rs/helius/latest/helius/
+- API Reference: https://www.helius.dev/docs/llms.txt
+- Dashboard: https://dashboard.helius.dev
+- GitHub: https://github.com/helius-labs/helius-rust-sdk
+- SDK Guide: https://www.helius.dev/docs/sdks.md
+
+## Deprecated Methods
+
+The Jito methods in `src/jito.rs` are deprecated. Use **Helius Sender** instead for ultra-low latency transaction submission:
+
+```rust
+// Use Helius Sender (recommended)
+helius.send_smart_transaction_with_sender(config, options).await?;
+```
+
+See: https://www.helius.dev/docs/api-reference/sender/llms.txt
+
+## For AI Agents Contributing to This Repo
+
+See [AGENTS.md](https://github.com/helius-labs/helius-rust-sdk/blob/dev/AGENTS.md) for contribution guidelines, code style, testing requirements, and PR process.
