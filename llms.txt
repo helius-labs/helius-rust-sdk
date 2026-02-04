@@ -339,6 +339,8 @@ let webhooks = helius.get_all_webhooks().await?;
 helius.delete_webhook("webhook_id").await?;
 ```
 
+See our Webhooks documentation: https://www.helius.dev/docs/api-reference/webhooks/llms.txt 
+
 ### Enhanced WebSockets
 
 Stream real-time blockchain data via Helius Enhanced WebSockets.
