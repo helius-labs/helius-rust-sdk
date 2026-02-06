@@ -57,7 +57,23 @@ impl Helius {
         let rent_exempt: u64 = self
             .connection()
             .get_minimum_balance_for_rent_exemption(StakeStateV2::size_of())?;
-        let lamports: u64 = ((amount_sol * LAMPORTS_PER_SOL as f64).round() as u64) + rent_exempt;
+        if !amount_sol.is_finite() || amount_sol <= 0.0 {
+            return Err(HeliusError::InvalidInput(
+                "Stake amount must be a positive finite number".into(),
+            ));
+        }
+
+        let stake_lamports_f = (amount_sol * LAMPORTS_PER_SOL as f64).round();
+
+        if stake_lamports_f < 0.0 || stake_lamports_f > u64::MAX as f64 {
+            return Err(HeliusError::InvalidInput(
+                "Stake amount is out of valid lamports range".into(),
+            ));
+        }
+
+        let lamports = (stake_lamports_f as u64)
+            .checked_add(rent_exempt)
+            .ok_or_else(|| HeliusError::InvalidInput("Lamports overflow".into()))?;
 
         let stake_account: Keypair = Keypair::new();
 
@@ -197,7 +213,23 @@ impl Helius {
             .connection()
             .get_minimum_balance_for_rent_exemption(StakeStateV2::size_of())?;
 
-        let lamports: u64 = ((amount_sol * LAMPORTS_PER_SOL as f64).round() as u64) + rent_exempt;
+        if !amount_sol.is_finite() || amount_sol <= 0.0 {
+            return Err(HeliusError::InvalidInput(
+                "Stake amount must be a positive finite number".into(),
+            ));
+        }
+
+        let stake_lamports_f = (amount_sol * LAMPORTS_PER_SOL as f64).round();
+
+        if stake_lamports_f < 0.0 || stake_lamports_f > u64::MAX as f64 {
+            return Err(HeliusError::InvalidInput(
+                "Stake amount is out of valid lamports range".into(),
+            ));
+        }
+
+        let lamports = (stake_lamports_f as u64)
+            .checked_add(rent_exempt)
+            .ok_or_else(|| HeliusError::InvalidInput("Lamports overflow".into()))?;
 
         let stake_account: Keypair = Keypair::new();
 
