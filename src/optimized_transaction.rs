@@ -87,11 +87,6 @@ const TIP_FLOOR_URL: &str = "https://bundles.jito.wtf/api/v1/bundles/tip_floor";
 /// Sender uses a pool of 10 tip accounts to:
 /// - **Load Balancing**: Distribute tips across accounts for better throughput
 /// - **Parallel Processing**: Enable concurrent transactions without account contention
-/// - **Reliability**: Redundancy ensures service availability
-/// - **Validator Relations**: Optimize relationships with multiple validators
-///
-/// When sending transactions, Helius Sender automatically selects the appropriate
-/// tip account based on current system load and routing strategy.
 ///
 /// # Requirements
 ///
@@ -100,7 +95,7 @@ const TIP_FLOOR_URL: &str = "https://bundles.jito.wtf/api/v1/bundles/tip_floor";
 /// - **Priority Fees**: Via `ComputeBudgetProgram::set_compute_unit_price`
 /// - **Skip Preflight**: `skip_preflight: true` for optimal speed
 ///
-/// Learn more: <https://docs.helius.dev/sending-transactions/sender>
+/// Learn more: <https://www.helius.dev/docs/sending-transactions/sender>
 const SENDER_TIP_ACCOUNTS: [&str; 10] = [
     "4ACfpUFoaSD9bfPdeu6DBt89gB6ENTeHBXCAi87NhDEE",
     "D2L6yPZ2FmmmTKPgzaMKdhu6EWZcTpLy1Vhx8uvZe7NZ",
@@ -119,7 +114,7 @@ const SENDER_TIP_ACCOUNTS: [&str; 10] = [
 /// # Endpoint Selection Strategy
 ///
 /// **For Frontend/Browser Applications:**
-/// - Use `https://sender.helius-rpc.com` (resolves CORS issues)
+/// - Use `https://sender.helius-rpc.com/fast` (resolves CORS issues)
 /// - Automatically routes to nearest location
 ///
 /// **For Backend/Server Applications:**
@@ -142,7 +137,7 @@ const SENDER_TIP_ACCOUNTS: [&str; 10] = [
 /// - Use connection warming via `/ping` endpoint during idle periods
 /// - Avoid regions far from validator network (e.g., LATAM, South Africa)
 ///
-/// Learn more: <https://docs.helius.dev/sending-transactions/sender>
+/// Learn more: <https://www.helius.dev/docs/sending-transactions/sender>
 pub static SENDER_ENDPOINTS: phf::Map<&'static str, &'static str> = phf_map! {
     "Default"      => "http://sender.helius-rpc.com",
     "US_SLC"       => "http://slc-sender.helius-rpc.com",

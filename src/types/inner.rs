@@ -1432,11 +1432,6 @@ pub struct SlotFilter {
 /// - `lte`: Less than or equal to timestamp (inclusive)
 /// - `lt`: Less than timestamp (exclusive)
 /// - `eq`: Equal to timestamp (exact match)
-///
-/// # Note on Block Times
-///
-/// Block timestamps are estimates and may not be perfectly accurate.
-/// For precise time-based queries, consider using slot numbers with `SlotFilter` instead.
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
 pub struct BlockTimeFilter {
     #[serde(skip_serializing_if = "Option::is_none")]

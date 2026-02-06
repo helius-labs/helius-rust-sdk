@@ -29,7 +29,7 @@ pub struct DisplayOptions {
     /// Show total number of matching assets (slower request).
     ///
     /// When enabled, the response includes the total count of all assets matching
-    /// the query criteria. **Warning:** This significantly increases response time
+    /// the query criteria. **Warning:** This increases response time
     /// for large collections as it requires counting all matching assets.
     pub show_grand_total: bool,
 
@@ -172,7 +172,7 @@ pub struct SearchAssetsOptions {
     /// Show total number of matching assets (slower request).
     ///
     /// When enabled, the response includes the total count of all assets matching
-    /// the search criteria. **Warning:** This significantly increases response time
+    /// the search criteria. **Warning:** This increases response time
     /// as it requires counting all matching assets before returning results.
     #[serde(default)]
     pub show_grand_total: bool,
