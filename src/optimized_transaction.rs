@@ -39,13 +39,63 @@ use solana_transaction_status::TransactionConfirmationStatus;
 use std::time::{Duration, Instant};
 use tokio::time::sleep;
 
+/// Default compute unit buffer multiplier for transaction simulation.
+///
+/// When simulating transactions to estimate compute units, multiply the
+/// simulated value by 1.25 (125%) to account for:
+/// - Simulation environment differences from actual execution
+/// - Edge cases and worst-case execution paths
+/// - Safety margin to prevent out-of-compute-units failures
+///
+/// This 25% buffer balances between preventing transaction failures (too little buffer)
+/// and minimizing wasted compute unit fees (too much buffer).
 const CU_BUFFER_MULTIPLIER_DEFAULT: f32 = 1.25;
 
-const MIN_TIP_LAMPORTS_DUAL: u64 = 1_000_000; // 0.001 SOL
-const MIN_TIP_LAMPORTS_SWQOS: u64 = 500_000; // 0.0005 SOL
+/// Minimum tip in lamports for Dual mode (SWQOS + Jito).
+///
+/// Dual mode sends transactions through both SWQOS and Jito for redundancy.
+/// Minimum tip: 0.0002 SOL (200,000 lamports).
+const MIN_TIP_LAMPORTS_DUAL: u64 = 200_000; // 0.0002 SOL
 
+/// Minimum tip in lamports for SWQOS-only mode.
+///
+/// SWQOS (Stake Weighted Quality of Service) mode prioritizes transactions
+/// based on the sender's stake weight and tip amount.
+/// Minimum tip: 0.000005 SOL (5,000 lamports).
+const MIN_TIP_LAMPORTS_SWQOS: u64 = 5_000; // 0.000005 SOL
+
+/// URL to fetch current Jito bundle tip floor prices.
+///
+/// This endpoint returns the minimum tip amounts required for different
+/// priority levels on Jito's block engine.
 const TIP_FLOOR_URL: &str = "https://bundles.jito.wtf/api/v1/bundles/tip_floor";
 
+/// Helius Sender tip account addresses for mainnet-beta.
+///
+/// # What is Helius Sender?
+///
+/// Helius Sender is an ultra-low latency transaction submission service that optimizes
+/// transaction landing through:
+/// - **Dual Routing**: Sends to both Solana validators and Jito simultaneously
+/// - **Global Infrastructure**: Regional endpoints for optimal performance
+/// - **Direct Validator Connections**: Minimizes network hops
+/// - **Advanced Retry Logic**: Intelligent routing and resubmission
+/// - **SWQOS Integration**: Stake Weighted Quality of Service support
+///
+/// # Why multiple tip accounts?
+///
+/// Sender uses a pool of 10 tip accounts to:
+/// - **Load Balancing**: Distribute tips across accounts for better throughput
+/// - **Parallel Processing**: Enable concurrent transactions without account contention
+///
+/// # Requirements
+///
+/// All transactions through Sender must include:
+/// - **Tips**: Minimum 0.0002 SOL for Dual mode (or 0.000005 SOL for SWQOS-only mode)
+/// - **Priority Fees**: Via `ComputeBudgetProgram::set_compute_unit_price`
+/// - **Skip Preflight**: `skip_preflight: true` for optimal speed
+///
+/// Learn more: <https://www.helius.dev/docs/sending-transactions/sender>
 const SENDER_TIP_ACCOUNTS: [&str; 10] = [
     "4ACfpUFoaSD9bfPdeu6DBt89gB6ENTeHBXCAi87NhDEE",
     "D2L6yPZ2FmmmTKPgzaMKdhu6EWZcTpLy1Vhx8uvZe7NZ",
@@ -59,6 +109,35 @@ const SENDER_TIP_ACCOUNTS: [&str; 10] = [
     "4TQLFNWK8AovT1gFvda5jfw2oJeRMKEmw7aH6MGBJ3or",
 ];
 
+/// Helius Sender regional endpoints for ultra-low latency transaction submission.
+///
+/// # Endpoint Selection Strategy
+///
+/// **For Frontend/Browser Applications:**
+/// - Use `https://sender.helius-rpc.com/fast` (resolves CORS issues)
+/// - Automatically routes to nearest location
+///
+/// **For Backend/Server Applications:**
+/// - Choose regional HTTP endpoint closest to your infrastructure
+/// - Minimizes network latency for server-to-server communication
+///
+/// # Regional Endpoints
+///
+/// - **US_SLC**: Salt Lake City, Utah (closest to core Solana validators)
+/// - **US_EAST**: Newark, New Jersey (East Coast US)
+/// - **EU_WEST**: London, UK (Western Europe)
+/// - **EU_CENTRAL**: Frankfurt, Germany (Central Europe)
+/// - **EU_NORTH**: Amsterdam, Netherlands (Northern Europe)
+/// - **AP_SINGAPORE**: Singapore (Southeast Asia)
+/// - **AP_TOKYO**: Tokyo, Japan (East Asia)
+///
+/// # Performance Tips
+///
+/// - Co-locate your infrastructure in FRA or EWR for optimal Helius routing
+/// - Use connection warming via `/ping` endpoint during idle periods
+/// - Avoid regions far from validator network (e.g., LATAM, South Africa)
+///
+/// Learn more: <https://www.helius.dev/docs/sending-transactions/sender>
 pub static SENDER_ENDPOINTS: phf::Map<&'static str, &'static str> = phf_map! {
     "Default"      => "http://sender.helius-rpc.com",
     "US_SLC"       => "http://slc-sender.helius-rpc.com",
