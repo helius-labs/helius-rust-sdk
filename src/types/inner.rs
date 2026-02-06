@@ -273,6 +273,27 @@ pub struct ApiResponse<T> {
     pub id: String,
 }
 
+/// Native SOL balance information for a Solana wallet.
+///
+/// Included in API responses when `show_native_balance: true` is set in display options
+/// for methods like `getAssetsByOwner` or `searchAssets`.
+///
+/// # Fields
+///
+/// - `lamports`: The wallet's SOL balance in lamports (1 SOL = 1,000,000,000 lamports)
+/// - `price_per_sol`: Current market price of 1 SOL in USD
+/// - `total_price`: Total USD value of the wallet's SOL balance (lamports × price_per_sol / 1e9)
+///
+/// # Example
+///
+/// ```json
+/// {
+///   "lamports": 5000000000,
+///   "price_per_sol": 100.50,
+///   "total_price": 502.50
+/// }
+/// ```
+/// This represents 5 SOL worth $502.50 USD at $100.50 per SOL.
 #[derive(Serialize, Deserialize, Debug, Default)]
 pub struct NativeBalance {
     pub lamports: u64,
@@ -280,6 +301,40 @@ pub struct NativeBalance {
     pub total_price: f64,
 }
 
+/// Paginated list of Solana digital assets.
+///
+/// Returned by DAS API methods including:
+/// - `getAssetsByOwner` - All assets owned by a wallet
+/// - `getAssetsByCreator` - All assets created by an address
+/// - `getAssetsByGroup` - All assets in a collection/group
+/// - `getAssetsByAuthority` - All assets with a specific authority
+///
+/// # Pagination
+///
+/// Supports two pagination strategies:
+///
+/// **Page-based** (traditional numbered pages):
+/// ```ignore
+/// let options = GetAssetsByOwner {
+///     page: Some(2),
+///     limit: Some(50),
+///     ..Default::default()
+/// };
+/// ```
+///
+/// **Cursor-based** (faster for infinite scrolling):
+/// ```ignore
+/// let options = GetAssetsByOwner {
+///     after: Some(previous_response.cursor.unwrap()),
+///     ..Default::default()
+/// };
+/// ```
+///
+/// # Performance
+///
+/// - `grand_total` is only populated when `show_grand_total: true` is set in display options
+/// - Computing `grand_total` significantly increases response time for large collections
+/// - For large result sets, prefer cursor-based pagination over page-based
 #[derive(Serialize, Deserialize, Debug, Default)]
 pub struct AssetList {
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -301,6 +356,42 @@ pub struct AssetList {
     pub errors: Option<Vec<AssetError>>,
 }
 
+/// Paginated list of transaction signatures for a Solana digital asset.
+///
+/// Returned by `getSignaturesForAsset`, which provides a complete chronological
+/// history of all transactions involving a specific compressed NFT (cNFT).
+///
+/// **Note:** This method is specifically designed for compressed NFTs. For regular NFTs,
+/// use `getSignaturesForAddress` instead, as the standard method doesn't work with
+/// compressed assets.
+///
+/// # Item Format
+///
+/// Each item in the `items` array is a tuple of `(signature, operation_type)`:
+/// - **signature**: Base58-encoded transaction signature
+/// - **operation_type**: The type of operation performed (e.g., "Transfer", "MintToCollectionV1", "Burn")
+///
+/// # Example Response
+///
+/// ```json
+/// {
+///   "total": 3,
+///   "limit": 1000,
+///   "items": [
+///     ["5nLi8m72bU6PBcz4Xrk23P6KTGy9ufF92kZiQXjTv9EL...", "MintToCollectionV1"],
+///     ["323Ag4J69gagBt3neUvajNauMydiXZTmXYSfdK5swWcK...", "Transfer"],
+///     ["3TbybyYRtNjVMhhahTNbd4bbpiEacZn2qkwtH7ByL7tC...", "Transfer"]
+///   ]
+/// }
+/// ```
+///
+/// # Common Operation Types
+///
+/// - `Transfer` - Asset ownership transferred
+/// - `MintToCollectionV1` - Asset minted into a collection
+/// - `Burn` - Asset permanently destroyed
+/// - `Redeem` - Compressed asset redeemed
+/// - `Decompress` - Compressed asset decompressed to regular NFT
 #[derive(Serialize, Deserialize, Debug, Default)]
 #[serde(default)]
 pub struct TransactionSignatureList {
@@ -315,6 +406,34 @@ pub struct TransactionSignatureList {
     pub items: Vec<(String, String)>,
 }
 
+/// Paginated list of SPL token accounts.
+///
+/// Returned by `getTokenAccounts`, which retrieves all token accounts for a given
+/// mint address and/or owner address. Useful for finding all holders of a specific
+/// token or all tokens held by a specific wallet.
+///
+/// # Pagination
+///
+/// Supports both page-based and cursor-based pagination via `page`, `cursor`,
+/// `before`, and `after` fields.
+///
+/// # Example Response
+///
+/// ```json
+/// {
+///   "total": 150,
+///   "limit": 100,
+///   "page": 1,
+///   "token_accounts": [
+///     {
+///       "address": "H8sMJSCQxfKiFTCfDR3DUMLPwcRbM61LGFJ8N4dK3WjS",
+///       "mint": "So11111111111111111111111111111111111111112",
+///       "owner": "86xCnPeV69n6t3DnyGvkKobf9FdN2H9oiVDdaMpo2MMY",
+///       "amount": 1000000000
+///     }
+///   ]
+/// }
+/// ```
 #[derive(Serialize, Deserialize, Debug, Default)]
 #[serde(default)]
 pub struct TokenAccountsList {
@@ -331,6 +450,38 @@ pub struct TokenAccountsList {
     pub token_accounts: Vec<TokenAccount>,
 }
 
+/// Paginated list of NFT editions for a master edition.
+///
+/// Returned by `getNftEditions`, which retrieves all printed editions of a
+/// Metaplex master edition NFT. Master editions can have multiple prints,
+/// each with a unique edition number.
+///
+/// # Fields
+///
+/// - `total`: Total number of editions returned in this response
+/// - `limit`: Maximum number of editions requested per page
+/// - `page`: Current page number (optional, for page-based pagination)
+/// - `master_edition_address`: The mint address of the master edition NFT
+/// - `supply`: Current number of editions that have been printed
+/// - `max_supply`: Maximum number of editions that can be printed (None = unlimited)
+/// - `editions`: Array of printed edition details
+///
+/// # Example Response
+///
+/// ```json
+/// {
+///   "total": 50,
+///   "limit": 100,
+///   "page": 1,
+///   "master_edition_address": "5wF2w...",
+///   "supply": 50,
+///   "max_supply": 100,
+///   "editions": [
+///     { "edition": 1, "address": "...", "owner": "..." },
+///     { "edition": 2, "address": "...", "owner": "..." }
+///   ]
+/// }
+/// ```
 #[derive(Serialize, Deserialize, Debug, Default)]
 pub struct EditionsList {
     pub total: u32,
@@ -1200,6 +1351,37 @@ pub enum TransactionStatusFilter {
     Failed,
 }
 
+/// Filter transactions by slot number range.
+///
+/// Used with `getTransactionsForAddress` to retrieve transactions from specific
+/// slots. Slots are the basic unit of time in Solana (~400ms per slot).
+///
+/// All fields are optional and can be combined to create range queries.
+/// Queries are inclusive for `gte`/`lte` and exclusive for `gt`/`lt`.
+///
+/// # Examples
+///
+/// ```ignore
+/// // Get transactions from slot 150000000 onwards
+/// let filter = SlotFilter {
+///     gte: Some(150000000),
+///     ..Default::default()
+/// };
+///
+/// // Get transactions in a specific slot range
+/// let filter = SlotFilter {
+///     gte: Some(150000000),
+///     lt: Some(150010000),
+///     ..Default::default()
+/// };
+/// ```
+///
+/// # Fields
+///
+/// - `gte`: Greater than or equal to slot number (inclusive)
+/// - `gt`: Greater than slot number (exclusive)
+/// - `lte`: Less than or equal to slot number (inclusive)
+/// - `lt`: Less than slot number (exclusive)
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
 pub struct SlotFilter {
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -1212,6 +1394,49 @@ pub struct SlotFilter {
     pub lt: Option<u64>,
 }
 
+/// Filter transactions by block timestamp (Unix time).
+///
+/// Used with `getTransactionsForAddress` to retrieve transactions from specific
+/// time periods. Block timestamps are Unix timestamps (seconds since epoch).
+///
+/// All fields are optional and can be combined to create range queries.
+/// Queries are inclusive for `gte`/`lte` and exclusive for `gt`/`lt`.
+///
+/// # Examples
+///
+/// ```ignore
+/// // Get transactions from January 1, 2024 onwards
+/// let filter = BlockTimeFilter {
+///     gte: Some(1704067200),  // Unix timestamp for Jan 1, 2024
+///     ..Default::default()
+/// };
+///
+/// // Get transactions from a specific time range
+/// let filter = BlockTimeFilter {
+///     gte: Some(1704067200),  // Jan 1, 2024
+///     lt: Some(1706745600),   // Feb 1, 2024
+///     ..Default::default()
+/// };
+///
+/// // Get transactions at an exact timestamp
+/// let filter = BlockTimeFilter {
+///     eq: Some(1704067200),
+///     ..Default::default()
+/// };
+/// ```
+///
+/// # Fields
+///
+/// - `gte`: Greater than or equal to timestamp (inclusive)
+/// - `gt`: Greater than timestamp (exclusive)
+/// - `lte`: Less than or equal to timestamp (inclusive)
+/// - `lt`: Less than timestamp (exclusive)
+/// - `eq`: Equal to timestamp (exact match)
+///
+/// # Note on Block Times
+///
+/// Block timestamps are estimates and may not be perfectly accurate.
+/// For precise time-based queries, consider using slot numbers with `SlotFilter` instead.
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
 pub struct BlockTimeFilter {
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -1226,6 +1451,43 @@ pub struct BlockTimeFilter {
     pub eq: Option<i64>,
 }
 
+/// Filter transactions by signature range.
+///
+/// Used with `getTransactionsForAddress` to retrieve transactions before or after
+/// a specific transaction signature. Signatures are compared lexicographically
+/// (alphabetically as base58 strings).
+///
+/// Useful for implementing cursor-based pagination when combined with `paginationToken`,
+/// or for fetching transactions relative to a known transaction.
+///
+/// # Examples
+///
+/// ```ignore
+/// // Get transactions after a specific signature
+/// let filter = SignatureFilter {
+///     gt: Some("5h6xBEauJ3PK6SWCZ1PGjBvj8vDdWG3KpwATGy1ARAXF...".to_string()),
+///     ..Default::default()
+/// };
+///
+/// // Get transactions in a signature range
+/// let filter = SignatureFilter {
+///     gte: Some("3jweEauJ3PK6SWCZ1PGjBvj8vDdWG3KpwATGy1ARAXF...".to_string()),
+///     lt: Some("6k7xBEauJ3PK6SWCZ1PGjBvj8vDdWG3KpwATGy1ARAXF...".to_string()),
+///     ..Default::default()
+/// };
+/// ```
+///
+/// # Fields
+///
+/// - `gte`: Greater than or equal to signature (inclusive, lexicographic order)
+/// - `gt`: Greater than signature (exclusive, lexicographic order)
+/// - `lte`: Less than or equal to signature (inclusive, lexicographic order)
+/// - `lt`: Less than signature (exclusive, lexicographic order)
+///
+/// # Note
+///
+/// Signatures are base58-encoded strings and are compared lexicographically.
+/// This means "3..." comes before "5..." which comes before "6...".
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
 pub struct SignatureFilter {
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -1250,6 +1512,69 @@ pub enum TokenAccountsFilter {
     All,
 }
 
+/// Combined filters for `getTransactionsForAddress`.
+///
+/// Allows filtering transaction history by multiple criteria simultaneously.
+/// All filters are optional and work together with AND logic (a transaction
+/// must match all specified filters to be included).
+///
+/// # Filter Combination
+///
+/// Filters are combined with AND logic:
+/// - A transaction must match ALL specified filters to be returned
+/// - Omitted filters are ignored (no filtering on that criteria)
+/// - Multiple filters can narrow results significantly
+///
+/// # Examples
+///
+/// ```ignore
+/// // Get only successful transactions from a specific time range
+/// let filters = GetTransactionsFilters {
+///     block_time: Some(BlockTimeFilter {
+///         gte: Some(1704067200),  // Jan 1, 2024
+///         lt: Some(1706745600),   // Feb 1, 2024
+///         ..Default::default()
+///     }),
+///     status: Some(TransactionStatusFilter::Succeeded),
+///     ..Default::default()
+/// };
+///
+/// // Get transactions in a slot range that modified token balances
+/// let filters = GetTransactionsFilters {
+///     slot: Some(SlotFilter {
+///         gte: Some(150000000),
+///         lt: Some(150010000),
+///         ..Default::default()
+///     }),
+///     token_accounts: Some(TokenAccountsFilter::BalanceChanged),
+///     ..Default::default()
+/// };
+///
+/// // Get failed transactions after a specific signature
+/// let filters = GetTransactionsFilters {
+///     signature: Some(SignatureFilter {
+///         gt: Some("5h6xBEau...".to_string()),
+///         ..Default::default()
+///     }),
+///     status: Some(TransactionStatusFilter::Failed),
+///     ..Default::default()
+/// };
+/// ```
+///
+/// # Performance Tips
+///
+/// - Slot-based filtering is fastest (slots are indexed efficiently)
+/// - Time-based filtering is slower but more intuitive for users
+/// - Combining multiple filters can significantly reduce result sets
+/// - Use `token_accounts: BalanceChanged` to focus on economically significant transactions
+///
+/// # Fields
+///
+/// - `slot`: Filter by slot number range
+/// - `block_time`: Filter by block timestamp (Unix time)
+/// - `signature`: Filter by transaction signature range
+/// - `status`: Filter by transaction success/failure status
+/// - `token_accounts`: Include transactions from associated token accounts
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct GetTransactionsFilters {
