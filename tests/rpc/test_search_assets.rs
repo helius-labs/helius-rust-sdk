@@ -129,6 +129,7 @@ async fn test_search_assets_success() {
                 mint_extensions: None,
                 token_info: None,
                 group_definition: None,
+                system: None,
                 plugins: None,
                 unknown_plugins: None,
                 mpl_core_info: None,
