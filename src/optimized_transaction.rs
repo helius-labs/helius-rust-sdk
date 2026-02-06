@@ -54,15 +54,15 @@ const CU_BUFFER_MULTIPLIER_DEFAULT: f32 = 1.25;
 /// Minimum tip in lamports for Dual mode (SWQOS + Jito).
 ///
 /// Dual mode sends transactions through both SWQOS and Jito for redundancy.
-/// Minimum tip: 0.001 SOL (1,000,000 lamports).
-const MIN_TIP_LAMPORTS_DUAL: u64 = 1_000_000; // 0.001 SOL
+/// Minimum tip: 0.0002 SOL (200,000 lamports).
+const MIN_TIP_LAMPORTS_DUAL: u64 = 200_000; // 0.0002 SOL
 
 /// Minimum tip in lamports for SWQOS-only mode.
 ///
 /// SWQOS (Stake Weighted Quality of Service) mode prioritizes transactions
 /// based on the sender's stake weight and tip amount.
-/// Minimum tip: 0.0005 SOL (500,000 lamports).
-const MIN_TIP_LAMPORTS_SWQOS: u64 = 500_000; // 0.0005 SOL
+/// Minimum tip: 0.000005 SOL (5,000 lamports).
+const MIN_TIP_LAMPORTS_SWQOS: u64 = 5_000; // 0.000005 SOL
 
 /// URL to fetch current Jito bundle tip floor prices.
 ///
@@ -91,7 +91,7 @@ const TIP_FLOOR_URL: &str = "https://bundles.jito.wtf/api/v1/bundles/tip_floor";
 /// # Requirements
 ///
 /// All transactions through Sender must include:
-/// - **Tips**: Minimum 0.0002 SOL (or 0.000005 SOL for SWQOS-only mode)
+/// - **Tips**: Minimum 0.0002 SOL for Dual mode (or 0.000005 SOL for SWQOS-only mode)
 /// - **Priority Fees**: Via `ComputeBudgetProgram::set_compute_unit_price`
 /// - **Skip Preflight**: `skip_preflight: true` for optimal speed
 ///
