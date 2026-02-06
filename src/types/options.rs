@@ -13,7 +13,7 @@ use serde::{Deserialize, Serialize};
 /// let options = DisplayOptions {
 ///     show_collection_metadata: true,
 ///     show_grand_total: true,
-///     show_native_balance: true,
+///     show_unverified_collections: true,
 ///     ..Default::default()
 /// };
 /// ```
