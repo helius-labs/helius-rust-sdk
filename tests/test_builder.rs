@@ -107,11 +107,7 @@ async fn test_builder_basic_with_api_key_and_cluster() {
 
 #[tokio::test]
 async fn test_builder_fails_without_cluster_or_url() {
-    let result = HeliusBuilder::new()
-        .with_api_key("test-key")
-        .unwrap()
-        .build()
-        .await;
+    let result = HeliusBuilder::new().with_api_key("test-key").unwrap().build().await;
 
     assert!(result.is_err());
     if let Err(HeliusError::InvalidInput(msg)) = result {
@@ -162,22 +158,19 @@ async fn test_builder_custom_url_with_api_key() {
 
 #[test]
 fn test_builder_custom_url_rejects_invalid() {
-    let result = HeliusBuilder::new()
-        .with_custom_url("not-a-url");
+    let result = HeliusBuilder::new().with_custom_url("not-a-url");
     assert!(result.is_err());
 }
 
 #[test]
 fn test_builder_custom_url_rejects_ftp() {
-    let result = HeliusBuilder::new()
-        .with_custom_url("ftp://files.example.com");
+    let result = HeliusBuilder::new().with_custom_url("ftp://files.example.com");
     assert!(result.is_err());
 }
 
 #[test]
 fn test_builder_custom_url_rejects_credentials() {
-    let result = HeliusBuilder::new()
-        .with_custom_url("https://user:pass@rpc.example.com");
+    let result = HeliusBuilder::new().with_custom_url("https://user:pass@rpc.example.com");
     assert!(result.is_err());
 }
 
@@ -267,10 +260,7 @@ async fn test_builder_with_async_and_commitment() {
 
 #[tokio::test]
 async fn test_builder_with_custom_http_client() {
-    let custom_client = reqwest::Client::builder()
-        .user_agent("helius-test")
-        .build()
-        .unwrap();
+    let custom_client = reqwest::Client::builder().user_agent("helius-test").build().unwrap();
 
     let result = HeliusBuilder::new()
         .with_api_key("test-key")
@@ -303,15 +293,13 @@ async fn test_builder_websocket_requires_api_key() {
 
 #[test]
 fn test_builder_custom_ws_url_valid() {
-    let builder = HeliusBuilder::new()
-        .with_custom_ws_url("wss://ws.example.com/");
+    let builder = HeliusBuilder::new().with_custom_ws_url("wss://ws.example.com/");
     assert!(builder.is_ok());
 }
 
 #[test]
 fn test_builder_custom_ws_url_rejects_http() {
-    let result = HeliusBuilder::new()
-        .with_custom_ws_url("http://ws.example.com/");
+    let result = HeliusBuilder::new().with_custom_ws_url("http://ws.example.com/");
     assert!(result.is_err());
 }
 

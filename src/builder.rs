@@ -238,11 +238,7 @@ impl HeliusBuilder {
     /// // Custom timeouts
     /// builder.with_websocket(Some(5), Some(15));
     /// ```
-    pub fn with_websocket(
-        mut self,
-        ping_interval_secs: Option<u64>,
-        pong_timeout_secs: Option<u64>
-    ) -> Self {
+    pub fn with_websocket(mut self, ping_interval_secs: Option<u64>, pong_timeout_secs: Option<u64>) -> Self {
         self.ws_config = Some((ping_interval_secs, pong_timeout_secs));
         self
     }
@@ -298,8 +294,7 @@ impl HeliusBuilder {
         let commitment = self.commitment;
         let enable_async = self.enable_async;
         let http_client = self.http_client;
-        let client = http_client
-            .unwrap_or_else(|| Client::builder().build().expect("Failed to build HTTP client"));
+        let client = http_client.unwrap_or_else(|| Client::builder().build().expect("Failed to build HTTP client"));
 
         // Build RPC client
         let rpc_client = if let Some(commitment) = commitment {
@@ -339,7 +334,7 @@ impl HeliusBuilder {
             };
 
             Some(Arc::new(
-                EnhancedWebsocket::new(&ws_url, ping_interval, pong_timeout).await?
+                EnhancedWebsocket::new(&ws_url, ping_interval, pong_timeout).await?,
             ))
         } else {
             None
@@ -362,7 +357,8 @@ impl HeliusBuilder {
                 api_key: self.api_key.clone(),
                 cluster: self.cluster.clone().unwrap_or(Cluster::Devnet), // Default for custom URLs
                 endpoints: HeliusEndpoints {
-                    api: self.custom_api_url
+                    api: self
+                        .custom_api_url
                         .as_ref()
                         .map(|u| u.to_string())
                         .unwrap_or_else(|| rpc_url.to_string()),
@@ -376,7 +372,8 @@ impl HeliusBuilder {
         let cluster = self.cluster.clone().ok_or_else(|| {
             HeliusError::InvalidInput(
                 "Either cluster or custom URL must be specified. \
-                 Use .with_cluster(Cluster::MainnetBeta) or .with_custom_url(\"...\")".to_string()
+                 Use .with_cluster(Cluster::MainnetBeta) or .with_custom_url(\"...\")"
+                    .to_string(),
             )
         })?;
 

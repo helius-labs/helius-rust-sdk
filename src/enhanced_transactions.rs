@@ -17,7 +17,8 @@ impl Helius {
         let api_key = self.config.require_api_key("enhanced transaction parsing")?;
         let url: String = format!(
             "{}v0/transactions?api-key={}",
-            self.config.endpoints.api, api_key.as_str()
+            self.config.endpoints.api,
+            api_key.as_str()
         );
         let parsed_url: Url = Url::parse(&url).expect("Failed to parse URL");
 
@@ -43,7 +44,9 @@ impl Helius {
         let api_key = self.config.require_api_key("enhanced transaction history")?;
         let mut url: String = format!(
             "{}v0/addresses/{}/transactions?api-key={}",
-            self.config.endpoints.api, request.address, api_key.as_str()
+            self.config.endpoints.api,
+            request.address,
+            api_key.as_str()
         );
 
         if let Some(before) = request.before {

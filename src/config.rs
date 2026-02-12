@@ -96,8 +96,7 @@ impl Config {
 
     /// Internal: Builds a URL with optional API key parameter.
     fn build_url(&self, base: &str) -> String {
-        let mut url = Url::parse(base)
-            .expect("Config endpoints should always be valid URLs");
+        let mut url = Url::parse(base).expect("Config endpoints should always be valid URLs");
 
         if let Some(ref key) = self.api_key {
             url.query_pairs_mut().append_pair("api-key", key.as_str());

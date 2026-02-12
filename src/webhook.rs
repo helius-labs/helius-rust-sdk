@@ -14,10 +14,7 @@ impl Helius {
     /// A `Result` wrapping a `Webhook` if the webhook is successfully created, or a `HeliusError` if creation fails
     pub async fn create_webhook(&self, request: CreateWebhookRequest) -> Result<Webhook> {
         let api_key = self.config.require_api_key("webhook operations")?;
-        let url: String = format!(
-            "{}v0/webhooks?api-key={}",
-            self.config.endpoints.api, api_key.as_str()
-        );
+        let url: String = format!("{}v0/webhooks?api-key={}", self.config.endpoints.api, api_key.as_str());
         let parsed_url: Url = Url::parse(&url).expect("Failed to parse URL");
 
         self.rpc_client
@@ -37,7 +34,9 @@ impl Helius {
         let api_key = self.config.require_api_key("webhook operations")?;
         let url: String = format!(
             "{}v0/webhooks/{}?api-key={}",
-            self.config.endpoints.api, request.webhook_id, api_key.as_str()
+            self.config.endpoints.api,
+            request.webhook_id,
+            api_key.as_str()
         );
         let parsed_url: Url = Url::parse(&url).expect("Failed to parse URL");
 
@@ -115,7 +114,9 @@ impl Helius {
         let api_key = self.config.require_api_key("webhook operations")?;
         let url: String = format!(
             "{}v0/webhooks/{}?api-key={}",
-            self.config.endpoints.api, webhook_id, api_key.as_str()
+            self.config.endpoints.api,
+            webhook_id,
+            api_key.as_str()
         );
         let parsed_url: Url = Url::parse(&url).expect("Failed to parse URL");
 
@@ -130,10 +131,7 @@ impl Helius {
     /// A `Result` containing a vector of `Webhook` representing all configured webhooks for a given account
     pub async fn get_all_webhooks(&self) -> Result<Vec<Webhook>> {
         let api_key = self.config.require_api_key("webhook operations")?;
-        let url: String = format!(
-            "{}v0/webhooks?api-key={}",
-            self.config.endpoints.api, api_key.as_str()
-        );
+        let url: String = format!("{}v0/webhooks?api-key={}", self.config.endpoints.api, api_key.as_str());
         let parsed_url: Url = Url::parse(&url).expect("Failed to parse URL");
 
         self.rpc_client.handler.send(Method::GET, parsed_url, None::<&()>).await
@@ -150,7 +148,9 @@ impl Helius {
         let api_key = self.config.require_api_key("webhook operations")?;
         let url: String = format!(
             "{}v0/webhooks/{}?api-key={}",
-            self.config.endpoints.api, webhook_id, api_key.as_str()
+            self.config.endpoints.api,
+            webhook_id,
+            api_key.as_str()
         );
         let parsed_url: Url = Url::parse(&url).expect("Failed to parse URL");
 

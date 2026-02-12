@@ -55,9 +55,7 @@ impl ApiKey {
         let trimmed = key.trim();
 
         if trimmed.is_empty() {
-            return Err(HeliusError::InvalidInput(
-                "API key cannot be empty".to_string()
-            ));
+            return Err(HeliusError::InvalidInput("API key cannot be empty".to_string()));
         }
 
         Ok(ApiKey(key))
@@ -99,25 +97,23 @@ impl From<ApiKey> for String {
 /// ```
 pub fn validate_rpc_url(url: &str) -> Result<Url> {
     let parsed = Url::parse(url)
-        .map_err(|e| HeliusError::InvalidInput(
-            format!("Invalid URL format: {}. Expected: https://example.com/", e)
-        ))?;
+        .map_err(|e| HeliusError::InvalidInput(format!("Invalid URL format: {}. Expected: https://example.com/", e)))?;
 
     // Only allow http/https schemes
     match parsed.scheme() {
-        "http" | "https" => {},
-        scheme => return Err(HeliusError::InvalidInput(
-            format!(
+        "http" | "https" => {}
+        scheme => {
+            return Err(HeliusError::InvalidInput(format!(
                 "Invalid URL scheme '{}'. Only 'http' and 'https' are allowed for RPC endpoints.",
                 scheme
-            )
-        )),
+            )))
+        }
     }
 
     // Reject credentials in URL (security risk - logged by proxies)
     if !parsed.username().is_empty() || parsed.password().is_some() {
         return Err(HeliusError::InvalidInput(
-            "URL contains embedded credentials. Remove them and use .with_api_key() instead.".to_string()
+            "URL contains embedded credentials. Remove them and use .with_api_key() instead.".to_string(),
         ));
     }
 
@@ -147,24 +143,21 @@ pub fn validate_rpc_url(url: &str) -> Result<Url> {
 /// assert!(validate_ws_url("wss://user:pass@example.com").is_err());
 /// ```
 pub fn validate_ws_url(url: &str) -> Result<Url> {
-    let parsed = Url::parse(url)
-        .map_err(|e| HeliusError::InvalidInput(
-            format!("Invalid WebSocket URL: {}", e)
-        ))?;
+    let parsed = Url::parse(url).map_err(|e| HeliusError::InvalidInput(format!("Invalid WebSocket URL: {}", e)))?;
 
     match parsed.scheme() {
-        "ws" | "wss" => {},
-        scheme => return Err(HeliusError::InvalidInput(
-            format!(
+        "ws" | "wss" => {}
+        scheme => {
+            return Err(HeliusError::InvalidInput(format!(
                 "Invalid WebSocket scheme '{}'. Only 'ws' and 'wss' are allowed.",
                 scheme
-            )
-        )),
+            )))
+        }
     }
 
     if !parsed.username().is_empty() || parsed.password().is_some() {
         return Err(HeliusError::InvalidInput(
-            "WebSocket URL contains embedded credentials.".to_string()
+            "WebSocket URL contains embedded credentials.".to_string(),
         ));
     }
 
