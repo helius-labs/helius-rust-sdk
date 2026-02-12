@@ -32,20 +32,30 @@ helius = { version = "x.y.z", default-features = false, features = ["rustls"] }
 Using `rustls` may be preferred in environments where OpenSSL is not available or when a pure Rust TLS implementation is desired. However, it may not support all the same features as the native TLS implementation
 
 ## Usage
-### `Helius`
-The SDK provides a [`Helius`](https://github.com/helius-labs/helius-rust-sdk/blob/dev/src/client.rs) instance that can be configured with an API key and a given Solana cluster. Developers can generate a new API key on the [Helius Developer Dashboard](https://dev.helius.xyz/dashboard/app). This instance acts as the main entry point for interacting with the SDK by providing methods to access different Solana and RPC client functionalities. The following code is an example of how to use the SDK to fetch info on [Mad Lad #8420](https://explorer.solana.com/address/F9Lw3ki3hJ7PF9HQXsBzoY8GyE6sPoEZZdXJBsTTD2rk?network=mainnet):
+### Quick Start
+The SDK provides a [`Helius`](https://github.com/helius-labs/helius-rust-sdk/blob/dev/src/client.rs) instance that can be configured with an API key and a given Solana cluster. Developers can generate a new API key on the [Helius Developer Dashboard](https://dev.helius.xyz/dashboard/app). This instance acts as the main entry point for interacting with the SDK by providing methods to access different Solana and RPC client functionalities.
+
+There are three simple constructors and a builder for advanced configuration:
+
+| Constructor | Use Case |
+|---|---|
+| `Helius::new(api_key, cluster)` | Basic RPC operations with Helius endpoints |
+| `Helius::new_async(api_key, cluster)` | Full-featured: async Solana client + WebSocket + confirmed commitment |
+| `Helius::new_with_url(url)` | Custom RPC endpoint (no API key required) |
+| `HeliusBuilder::new()` | Advanced configuration (custom timeouts, TLS, etc.) |
+
+### `Helius::new()` — Basic Client
+The simplest way to get started. Creates a client for standard Helius RPC operations. This constructor is **synchronous**:
 ```rust
+use helius::Helius;
 use helius::error::Result;
-use helius::types::{Cluster, DisplayOptions, GetAssetRequest, GetAssetResponseForAsset};
+use helius::types::{Cluster, GetAssetRequest, GetAssetResponseForAsset};
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let api_key: &str = "YOUR_API_KEY";
-    let cluster: Cluster = Cluster::MainnetBeta;
+    let helius = Helius::new("YOUR_API_KEY", Cluster::MainnetBeta)?;
 
-    let helius: Helius = Helius::new(api_key, cluster).unwrap();
-
-    let request: GetAssetRequest = GetAssetRequest {
+    let request = GetAssetRequest {
         id: "F9Lw3ki3hJ7PF9HQXsBzoY8GyE6sPoEZZdXJBsTTD2rk".to_string(),
         display_options: None,
     };
@@ -53,9 +63,7 @@ async fn main() -> Result<()> {
     let response: Result<Option<GetAssetResponseForAsset>> = helius.rpc().get_asset(request).await;
 
     match response {
-        Ok(Some(asset)) => {
-            println!("Asset: {:?}", asset);
-        },
+        Ok(Some(asset)) => println!("Asset: {:?}", asset),
         Ok(None) => println!("No asset found."),
         Err(e) => println!("Error retrieving asset: {:?}", e),
     }
@@ -63,6 +71,89 @@ async fn main() -> Result<()> {
     Ok(())
 }
 ```
+
+### `Helius::new_async()` — Full-Featured Client
+The recommended constructor for production applications. Includes async Solana RPC, WebSocket streaming, and confirmed commitment level:
+```rust
+use helius::Helius;
+use helius::types::Cluster;
+
+#[tokio::main]
+async fn main() {
+    let helius = Helius::new_async("YOUR_API_KEY", Cluster::MainnetBeta)
+        .await
+        .expect("Failed to create client");
+
+    // Async Solana RPC
+    let async_client = helius.async_connection().expect("Async client available");
+
+    // Enhanced WebSocket streaming
+    let ws = helius.ws().expect("WebSocket available");
+}
+```
+
+### `Helius::new_with_url()` — Custom RPC Endpoint
+Use your own RPC node, a third-party provider, or localhost for development. No API key required. This constructor is **synchronous**:
+```rust
+use helius::Helius;
+
+fn main() {
+    // Custom RPC provider
+    let helius = Helius::new_with_url("https://my-rpc-provider.com/")
+        .expect("Failed to create client");
+
+    // Local development
+    let local = Helius::new_with_url("http://localhost:8899")
+        .expect("Failed to create client");
+}
+```
+
+### `HeliusBuilder` — Advanced Configuration
+For fine-grained control over the client configuration, use the builder pattern:
+```rust
+use helius::HeliusBuilder;
+use helius::types::Cluster;
+use solana_commitment_config::CommitmentConfig;
+use std::time::Duration;
+
+#[tokio::main]
+async fn main() {
+    // Custom RPC with API key and specific commitment
+    let helius = HeliusBuilder::new()
+        .with_api_key("YOUR_API_KEY").unwrap()
+        .with_cluster(Cluster::MainnetBeta)
+        .with_async_solana()
+        .with_commitment(CommitmentConfig::confirmed())
+        .build()
+        .await
+        .expect("Failed to build client");
+
+    // Custom URL with separate API and RPC endpoints
+    let helius = HeliusBuilder::new()
+        .with_custom_url("https://rpc.example.com/").unwrap()
+        .with_custom_api_url("https://api.example.com/").unwrap()
+        .with_api_key("optional-key").unwrap()
+        .build()
+        .await
+        .expect("Failed to build client");
+
+    // Custom HTTP client with timeouts
+    let http_client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(30))
+        .build()
+        .unwrap();
+
+    let helius = HeliusBuilder::new()
+        .with_api_key("YOUR_API_KEY").unwrap()
+        .with_cluster(Cluster::MainnetBeta)
+        .with_http_client(http_client)
+        .with_websocket(Some(5), Some(15)) // custom ping/pong timeouts
+        .build()
+        .await
+        .expect("Failed to build client");
+}
+```
+
 ### `HeliusFactory`
 The SDK also comes equipped with `HeliusFactory`, a factory for creating instances of `Helius`. This factory allows for a centralized configuration and creation of `Helius` clients so work can be done across multiple clusters at the same time. Using a factory simplifies client code and enhances maintainability by ensuring that all `Helius` clients are configured consistently. It has the following functionality:
 - A [`new` method](https://github.com/helius-labs/helius-rust-sdk/blob/a79a751e1a064125010bdb359068a366d635d005/src/factory.rs#L21-L36) used to create a new `HeliusFactory` capable of producing `Helius` clients. Note this method does not create a `reqwest` client
@@ -72,10 +163,10 @@ The SDK also comes equipped with `HeliusFactory`, a factory for creating instanc
 ### Embedded Solana Client
 The `Helius` client has an embedded [Solana client](https://docs.rs/solana-client/latest/solana_client/rpc_client/struct.RpcClient.html) that can be accessed via `helius.connection().request_name()` where `request_name()` is a given [RPC method](https://docs.rs/solana-client/latest/solana_client/rpc_client/struct.RpcClient.html#implementations). A full list of all Solana RPC HTTP methods can be found [here](https://solana.com/docs/rpc/http).
 
-Note that this Solana client is synchronous by default. An asynchronous client can be created using the `new_with_async_solana` method in place of the `new` method. The asynchronous client can be accessed via `helius.async_connection()?.some_async_method().await?` where `some_async_method()` is a given async RPC method.
+For asynchronous operations, use `Helius::new_async()` or `HeliusBuilder` with `.with_async_solana()`. The async client can be accessed via `helius.async_connection()?.some_async_method().await?` where `some_async_method()` is a given async RPC method.
 
 ### Enhanced WebSockets
-The `Helius` client can also be created with the `new_with_ws()` method in place of the `new` method. This will create a WebSocket client, adding support for the [Geyser Enhanced WebSocket methods](https://docs.helius.dev/webhooks-and-websockets/websockets#helius-geyser-enhanced-websockets-beta) [`transactionSubscribe`](https://docs.helius.dev/webhooks-and-websockets/websockets#transaction-subscribe) and [`accountSubscribe`](https://docs.helius.dev/webhooks-and-websockets/websockets#account-subscribe)
+Use `Helius::new_async()` or `HeliusBuilder` with `.with_websocket(None, None)` to create a client with WebSocket support. This enables the [Geyser Enhanced WebSocket methods](https://docs.helius.dev/webhooks-and-websockets/websockets#helius-geyser-enhanced-websockets-beta) [`transactionSubscribe`](https://docs.helius.dev/webhooks-and-websockets/websockets#transaction-subscribe) and [`accountSubscribe`](https://docs.helius.dev/webhooks-and-websockets/websockets#account-subscribe)
 
 ### Examples
 More examples of how to use the SDK can be found in the [`examples`](https://github.com/helius-labs/helius-rust-sdk/tree/dev/examples) directory.
@@ -166,3 +257,6 @@ Note that these methods have been deprecated, and will be removed in a future re
 - [`deserialize_str_to_number`](https://github.com/helius-labs/helius-rust-sdk/blob/dev/src/utils/deserialize_str_to_number.rs) - Deserializes a `String` to a `Number`
 - [`is_valid_solana_address`](https://github.com/helius-labs/helius-rust-sdk/blob/dev/src/utils/is_valid_solana_address.rs) - Returns whether a given string slice is a valid Solana address
 - [`make_keypairs`](https://github.com/helius-labs/helius-rust-sdk/blob/dev/src/utils/make_keypairs.rs) - Generates a specified number of keypairs
+
+## Migrating from 0.x
+If you're upgrading from 0.x, see the [Migration Guide](MIGRATION.md) for details on breaking changes and how to update your code.
