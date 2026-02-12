@@ -59,7 +59,7 @@ impl RpcClient {
     /// Returns `HeliusError` if the URL isn't formatted correctly or the `RequestHandler` fails to initialize
     pub fn new(client: Arc<Client>, config: Arc<Config>) -> Result<Self> {
         let handler: RequestHandler = RequestHandler::new(client)?;
-        let url: String = format!("{}/?api-key={}", config.endpoints.rpc, config.api_key);
+        let url: String = config.build_rpc_url();
         let solana_client: Arc<SolanaRpcClient> = Arc::new(SolanaRpcClient::new(url));
 
         Ok(RpcClient {
@@ -83,7 +83,7 @@ impl RpcClient {
     /// Returns `HeliusError` if the URL isn't formatted correctly or the `RequestHandler` fails to initialize
     pub fn new_with_commitment(client: Arc<Client>, config: Arc<Config>, commitment: CommitmentConfig) -> Result<Self> {
         let handler: RequestHandler = RequestHandler::new(client)?;
-        let url: String = format!("{}/?api-key={}", config.endpoints.rpc, config.api_key);
+        let url: String = config.build_rpc_url();
         let solana_client: Arc<SolanaRpcClient> = Arc::new(SolanaRpcClient::new_with_commitment(url, commitment));
 
         Ok(RpcClient {
@@ -109,7 +109,7 @@ impl RpcClient {
         R: Debug + Serialize + Send + Sync,
         T: Debug + DeserializeOwned + Default,
     {
-        let base_url: String = format!("{}/?api-key={}", self.config.endpoints.rpc, self.config.api_key);
+        let base_url: String = self.config.build_rpc_url();
         let url: Url = Url::parse(&base_url).expect("Failed to parse URL");
 
         let rpc_request: RpcRequest<R> = RpcRequest::new(method.to_string(), request);

@@ -1,25 +1,28 @@
 use crate::error::{HeliusError, Result};
 use crate::rpc_client::RpcClient;
-use crate::types::{Cluster, HeliusEndpoints, MintApiAuthority};
+use crate::types::{ApiKey, Cluster, HeliusEndpoints, MintApiAuthority};
 use crate::websocket::EnhancedWebsocket;
 use crate::Helius;
 use reqwest::Client;
 use solana_client::nonblocking::rpc_client::RpcClient as AsyncSolanaRpcClient;
 use std::sync::Arc;
-use url::{ParseError, Url};
+use url::Url;
 
 /// Configuration settings for the Helius client
 ///
 /// `Config` contains all the necessary parameters needed to configure and authenticate the `Helius` client to interact with a specific Solana cluster
 #[derive(Clone)]
 pub struct Config {
-    /// The API key used for authenticating requests
-    pub api_key: String,
+    /// Optional API key for authentication.
+    /// Required for webhooks, enhanced transactions, and Helius-hosted endpoints.
+    pub api_key: Option<ApiKey>,
     /// The target Solana cluster the client will interact with
     pub cluster: Cluster,
     /// The endpoints associated with the specified `cluster`. Note these endpoints are automatically determined based on the cluster to ensure requests
     /// are made to the correct cluster
     pub endpoints: HeliusEndpoints,
+    /// Custom RPC URL if provided (for debugging/logging)
+    pub custom_url: Option<String>,
 }
 
 impl Config {
@@ -34,18 +37,73 @@ impl Config {
     ///
     /// # Errors
     /// Returns `HeliusError::InvalidInput` if the `api_key` is empty
+    ///
+    /// # Deprecated
+    /// Use `HeliusBuilder` for more flexible configuration:
+    /// ```ignore
+    /// use helius::HeliusBuilder;
+    /// use helius::types::Cluster;
+    ///
+    /// let helius = HeliusBuilder::new()
+    ///     .with_api_key("key")?
+    ///     .with_cluster(Cluster::MainnetBeta)
+    ///     .build()
+    ///     .await?;
+    /// ```
     pub fn new(api_key: &str, cluster: Cluster) -> Result<Self> {
-        if api_key.is_empty() {
-            return Err(HeliusError::InvalidInput("API key cannot be empty".to_string()));
-        }
-
         let endpoints: HeliusEndpoints = HeliusEndpoints::for_cluster(&cluster);
 
         Ok(Config {
-            api_key: api_key.to_string(),
+            api_key: Some(ApiKey::new(api_key)?),
             cluster,
             endpoints,
+            custom_url: None,
         })
+    }
+
+    /// Checks if an API key is available.
+    pub fn has_api_key(&self) -> bool {
+        self.api_key.is_some()
+    }
+
+    /// Gets the API key or returns an error with helpful guidance.
+    ///
+    /// Use this in methods that require authentication.
+    ///
+    /// # Errors
+    /// Returns `HeliusError::InvalidInput` if no API key is configured.
+    pub fn require_api_key(&self, feature: &str) -> Result<&ApiKey> {
+        self.api_key.as_ref().ok_or_else(|| {
+            HeliusError::InvalidInput(format!(
+                "API key is required for {}. \
+                 Initialize with HeliusBuilder::new().with_api_key(\"your-key\")",
+                feature
+            ))
+        })
+    }
+
+    /// Builds an RPC URL with authentication.
+    ///
+    /// Appends api-key query parameter only if key is present.
+    pub fn build_rpc_url(&self) -> String {
+        self.build_url(&self.endpoints.rpc)
+    }
+
+    /// Builds an API URL with authentication.
+    pub fn build_api_url(&self) -> String {
+        self.build_url(&self.endpoints.api)
+    }
+
+    /// Internal: Builds a URL with optional API key parameter.
+    fn build_url(&self, base: &str) -> String {
+        let mut url = Url::parse(base)
+            .expect("Config endpoints should always be valid URLs");
+
+        if let Some(ref key) = self.api_key {
+            url.query_pairs_mut().append_pair("api-key", key.as_str());
+        }
+
+        url.to_string()
     }
 
     pub fn rpc_client_with_reqwest_client(&self, client: Client) -> Result<RpcClient> {
@@ -75,12 +133,9 @@ impl Config {
     /// A `Result` containing a Helius client with both RPC and async Solana capabilities
     pub fn create_client_with_async(self) -> Result<Helius> {
         let client: Client = Client::builder().build().map_err(HeliusError::ReqwestError)?;
-        let mut rpc_url: Url = Url::parse(&self.endpoints.rpc)
-            .map_err(|e: ParseError| HeliusError::InvalidInput(format!("Invalid RPC URL: {}", e)))?;
+        let rpc_url = self.build_rpc_url();
 
-        rpc_url.query_pairs_mut().append_pair("api-key", &self.api_key);
-
-        let async_solana_client: Arc<AsyncSolanaRpcClient> = Arc::new(AsyncSolanaRpcClient::new(rpc_url.to_string()));
+        let async_solana_client: Arc<AsyncSolanaRpcClient> = Arc::new(AsyncSolanaRpcClient::new(rpc_url));
         let rpc_client: Arc<RpcClient> = Arc::new(self.rpc_client_with_reqwest_client(client.clone())?);
 
         Ok(Helius {
@@ -108,7 +163,8 @@ impl Config {
         let client: Client = Client::builder().build().map_err(HeliusError::ReqwestError)?;
         let rpc_client: Arc<RpcClient> = Arc::new(self.rpc_client_with_reqwest_client(client.clone())?);
 
-        let wss: String = EnhancedWebsocket::get_url(&self.cluster, &self.api_key)?;
+        let api_key = self.require_api_key("WebSocket connections")?;
+        let wss: String = EnhancedWebsocket::get_url(&self.cluster, api_key.as_str())?;
         let ws_client: Arc<EnhancedWebsocket> =
             Arc::new(EnhancedWebsocket::new(&wss, ping_interval_secs, pong_timeout_secs).await?);
 
@@ -138,13 +194,12 @@ impl Config {
         let rpc_client: Arc<RpcClient> = Arc::new(self.rpc_client_with_reqwest_client(client.clone())?);
 
         // Setup async client
-        let mut rpc_url: Url = Url::parse(&self.endpoints.rpc)
-            .map_err(|e: ParseError| HeliusError::InvalidInput(format!("Invalid RPC URL: {}", e)))?;
-        rpc_url.query_pairs_mut().append_pair("api-key", &self.api_key);
-        let async_solana_client = Arc::new(AsyncSolanaRpcClient::new(rpc_url.to_string()));
+        let rpc_url = self.build_rpc_url();
+        let async_solana_client = Arc::new(AsyncSolanaRpcClient::new(rpc_url));
 
         // Setup websocket
-        let wss: String = EnhancedWebsocket::get_url(&self.cluster, &self.api_key)?;
+        let api_key = self.require_api_key("WebSocket connections")?;
+        let wss: String = EnhancedWebsocket::get_url(&self.cluster, api_key.as_str())?;
         let ws_client: Arc<EnhancedWebsocket> =
             Arc::new(EnhancedWebsocket::new(&wss, ping_interval_secs, pong_timeout_secs).await?);
 

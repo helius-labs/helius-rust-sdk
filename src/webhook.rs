@@ -13,9 +13,10 @@ impl Helius {
     /// # Returns
     /// A `Result` wrapping a `Webhook` if the webhook is successfully created, or a `HeliusError` if creation fails
     pub async fn create_webhook(&self, request: CreateWebhookRequest) -> Result<Webhook> {
+        let api_key = self.config.require_api_key("webhook operations")?;
         let url: String = format!(
             "{}v0/webhooks?api-key={}",
-            self.config.endpoints.api, self.config.api_key
+            self.config.endpoints.api, api_key.as_str()
         );
         let parsed_url: Url = Url::parse(&url).expect("Failed to parse URL");
 
@@ -33,9 +34,10 @@ impl Helius {
     /// # Returns
     /// A `Result` wrapping the updated `Webhook`, or a `HeliusError` if the edit request fails
     pub async fn edit_webhook(&self, request: EditWebhookRequest) -> Result<Webhook> {
+        let api_key = self.config.require_api_key("webhook operations")?;
         let url: String = format!(
             "{}v0/webhooks/{}?api-key={}",
-            self.config.endpoints.api, request.webhook_id, self.config.api_key
+            self.config.endpoints.api, request.webhook_id, api_key.as_str()
         );
         let parsed_url: Url = Url::parse(&url).expect("Failed to parse URL");
 
@@ -110,9 +112,10 @@ impl Helius {
     /// # Returns
     /// A `Result` wrapping the `Webhook` queried, if it exists
     pub async fn get_webhook_by_id(&self, webhook_id: &str) -> Result<Webhook> {
+        let api_key = self.config.require_api_key("webhook operations")?;
         let url: String = format!(
             "{}v0/webhooks/{}?api-key={}",
-            self.config.endpoints.api, webhook_id, self.config.api_key
+            self.config.endpoints.api, webhook_id, api_key.as_str()
         );
         let parsed_url: Url = Url::parse(&url).expect("Failed to parse URL");
 
@@ -126,9 +129,10 @@ impl Helius {
     /// # Returns
     /// A `Result` containing a vector of `Webhook` representing all configured webhooks for a given account
     pub async fn get_all_webhooks(&self) -> Result<Vec<Webhook>> {
+        let api_key = self.config.require_api_key("webhook operations")?;
         let url: String = format!(
             "{}v0/webhooks?api-key={}",
-            self.config.endpoints.api, self.config.api_key
+            self.config.endpoints.api, api_key.as_str()
         );
         let parsed_url: Url = Url::parse(&url).expect("Failed to parse URL");
 
@@ -143,9 +147,10 @@ impl Helius {
     /// # Returns
     /// A unit since there isn't any response
     pub async fn delete_webhook(&self, webhook_id: &str) -> Result<()> {
+        let api_key = self.config.require_api_key("webhook operations")?;
         let url: String = format!(
             "{}v0/webhooks/{}?api-key={}",
-            self.config.endpoints.api, webhook_id, self.config.api_key
+            self.config.endpoints.api, webhook_id, api_key.as_str()
         );
         let parsed_url: Url = Url::parse(&url).expect("Failed to parse URL");
 
