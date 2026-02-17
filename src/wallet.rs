@@ -344,7 +344,12 @@ impl Helius {
     ) -> Result<TransfersResponse> {
         let api_key = self.config.require_api_key("wallet transfers")?;
         let base_url = self.get_wallet_api_base_url();
-        let mut url: String = format!("{}v1/wallet/{}/transfers?api-key={}", base_url, wallet, api_key.as_str());
+        let mut url: String = format!(
+            "{}v1/wallet/{}/transfers?api-key={}",
+            base_url,
+            wallet,
+            api_key.as_str()
+        );
 
         if let Some(limit) = limit {
             url = format!("{}&limit={}", url, limit);
@@ -401,7 +406,12 @@ impl Helius {
     pub async fn get_wallet_funding_source(&self, wallet: &str) -> Result<FundingSource> {
         let api_key = self.config.require_api_key("wallet funding source")?;
         let base_url = self.get_wallet_api_base_url();
-        let url: String = format!("{}v1/wallet/{}/funded-by?api-key={}", base_url, wallet, api_key.as_str());
+        let url: String = format!(
+            "{}v1/wallet/{}/funded-by?api-key={}",
+            base_url,
+            wallet,
+            api_key.as_str()
+        );
         let parsed_url: Url = Url::parse(&url).expect("Failed to parse URL");
 
         self.rpc_client.handler.send(Method::GET, parsed_url, None::<&()>).await

@@ -155,7 +155,7 @@ async fn test_get_wallet_balances_with_pagination() {
         .await;
 
     assert!(response.is_ok());
-    
+
     let balances: BalancesResponse = response.unwrap();
     assert_eq!(balances.pagination.page, 2);
     assert_eq!(balances.pagination.has_more, true);

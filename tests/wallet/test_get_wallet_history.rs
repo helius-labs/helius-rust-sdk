@@ -144,7 +144,7 @@ async fn test_get_wallet_history_with_pagination() {
         .await;
 
     assert!(response.is_ok());
-    
+
     let history: HistoryResponse = response.unwrap();
     assert_eq!(history.pagination.has_more, false);
 }

@@ -110,7 +110,7 @@ async fn test_get_batch_wallet_identity_empty_array() {
     let response: Result<Vec<Identity>> = helius.get_batch_wallet_identity(&addresses).await;
 
     assert!(response.is_ok());
-    
+
     let identities: Vec<Identity> = response.unwrap();
     assert_eq!(identities.len(), 0);
 }

@@ -78,7 +78,7 @@ async fn test_get_wallet_transfers_success() {
         .await;
 
     assert!(response.is_ok(), "The API call failed: {:?}", response.err());
-    
+
     let transfers: TransfersResponse = response.unwrap();
     assert_eq!(transfers.data.len(), 2);
     assert_eq!(transfers.data[0].direction, TransferDirection::In);
@@ -138,7 +138,7 @@ async fn test_get_wallet_transfers_with_cursor() {
         .await;
 
     assert!(response.is_ok());
-    
+
     let transfers: TransfersResponse = response.unwrap();
     assert_eq!(transfers.pagination.has_more, false);
 }

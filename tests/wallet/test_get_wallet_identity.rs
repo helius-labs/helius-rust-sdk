@@ -55,7 +55,7 @@ async fn test_get_wallet_identity_success() {
         .await;
 
     assert!(response.is_ok(), "The API call failed: {:?}", response.err());
-    
+
     let identity: Identity = response.unwrap();
     assert_eq!(identity.address, "HXsKP7wrBWaQ8T2Vtjry3Nj3oUgwYcqq9vrHDM12G664");
     assert_eq!(identity.name, "Binance 1");
