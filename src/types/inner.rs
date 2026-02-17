@@ -1616,3 +1616,240 @@ pub struct GetTransactionsForAddressResponse {
 }
 
 pub type GetTransactionsForAddressRequest = (String, GetTransactionsForAddressOptions);
+
+/// Identity information for a known wallet address (exchanges, protocols, etc.)
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+pub struct Identity {
+    /// Solana wallet address
+    pub address: String,
+    /// Type of entity (e.g., "exchange", "protocol")
+    #[serde(rename = "type")]
+    pub entity_type: String,
+    /// Display name (e.g., "Binance 1")
+    pub name: String,
+    /// Category classification (e.g., "Centralized Exchange")
+    pub category: String,
+    /// Additional classification tags
+    pub tags: Vec<String>,
+}
+
+/// Request body for batch identity lookup
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct BatchIdentityRequest {
+    /// Array of Solana wallet addresses to lookup (1-100 addresses)
+    pub addresses: Vec<String>,
+}
+
+/// Token balance information
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct TokenBalance {
+    /// Token mint address
+    pub mint: String,
+    /// Token symbol (e.g., "SOL")
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub symbol: Option<String>,
+    /// Token name (e.g., "Solana")
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    /// Token balance (adjusted for decimals)
+    pub balance: f64,
+    /// Number of decimal places
+    pub decimals: u8,
+    /// Price per token in USD
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub price_per_token: Option<f64>,
+    /// Total USD value of holdings
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub usd_value: Option<f64>,
+    /// URL to token logo image
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub logo_uri: Option<String>,
+    /// Token program type (spl-token or token-2022)
+    pub token_program: String,
+}
+
+/// NFT information
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct Nft {
+    /// NFT mint address
+    pub mint: String,
+    /// NFT name
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    /// NFT image URI
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub image_uri: Option<String>,
+    /// Collection name
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub collection_name: Option<String>,
+    /// Collection address
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub collection_address: Option<String>,
+    /// Whether this is a compressed NFT
+    pub compressed: bool,
+}
+
+/// Pagination metadata for balances
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct BalancesPagination {
+    /// Current page number
+    pub page: u32,
+    /// Number of items per page
+    pub limit: u32,
+    /// True if more results are available
+    pub has_more: bool,
+}
+
+/// Response from get balances endpoint
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct BalancesResponse {
+    /// Array of token balances for the current page
+    pub balances: Vec<TokenBalance>,
+    /// Array of NFT holdings (only if showNfts=true)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub nfts: Option<Vec<Nft>>,
+    /// Total USD value of balances on this page
+    pub total_usd_value: f64,
+    /// Pagination metadata
+    pub pagination: BalancesPagination,
+}
+
+/// Balance change in a transaction
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct BalanceChange {
+    /// Token mint address (or 'SOL' for native)
+    pub mint: String,
+    /// Change amount (positive for increase, negative for decrease)
+    pub amount: f64,
+    /// Token decimals
+    pub decimals: u8,
+}
+
+/// Transaction with balance changes from history endpoint
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct HistoryTransaction {
+    /// Transaction signature
+    pub signature: String,
+    /// Unix timestamp in seconds
+    pub timestamp: Option<i64>,
+    /// Slot number
+    pub slot: u64,
+    /// Transaction fee in SOL
+    pub fee: f64,
+    /// Address that paid the transaction fee
+    pub fee_payer: String,
+    /// Error message if transaction failed
+    pub error: Option<String>,
+    /// All balance changes in this transaction
+    pub balance_changes: Vec<BalanceChange>,
+}
+
+/// Pagination metadata for history and transfers
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct Pagination {
+    /// Whether more results are available
+    pub has_more: bool,
+    /// Cursor to fetch the next page of results
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub next_cursor: Option<String>,
+}
+
+/// Response from get history endpoint
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+pub struct HistoryResponse {
+    /// Array of transactions with balance changes
+    pub data: Vec<HistoryTransaction>,
+    /// Pagination information
+    pub pagination: Pagination,
+}
+
+/// Transfer direction relative to the wallet
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[serde(rename_all = "lowercase")]
+pub enum TransferDirection {
+    In,
+    Out,
+}
+
+/// Token transfer information
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct Transfer {
+    /// Transaction signature
+    pub signature: String,
+    /// Unix timestamp in seconds
+    pub timestamp: i64,
+    /// Transfer direction relative to the wallet
+    pub direction: TransferDirection,
+    /// The other party in the transfer (sender if 'in', recipient if 'out')
+    pub counterparty: String,
+    /// Token mint address
+    pub mint: String,
+    /// Token symbol if known
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub symbol: Option<String>,
+    /// Transfer amount (human-readable, divided by decimals)
+    pub amount: f64,
+    /// Raw transfer amount in smallest unit
+    pub amount_raw: String,
+    /// Token decimals
+    pub decimals: u8,
+}
+
+/// Response from get transfers endpoint
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+pub struct TransfersResponse {
+    /// Array of transfers
+    pub data: Vec<Transfer>,
+    /// Pagination information
+    pub pagination: Pagination,
+}
+
+/// Wallet funding source information
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct FundingSource {
+    /// Address that originally funded this wallet
+    pub funder: String,
+    /// Name of the funder if it's a known entity
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub funder_name: Option<String>,
+    /// Type of the funder entity
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub funder_type: Option<String>,
+    /// Token mint address
+    pub mint: String,
+    /// Token symbol
+    pub symbol: String,
+    /// Initial funding amount (human-readable, in SOL)
+    pub amount: f64,
+    /// Raw funding amount in smallest unit (lamports for SOL)
+    pub amount_raw: String,
+    /// Token decimals
+    pub decimals: u8,
+    /// Transaction signature of the funding transfer
+    pub signature: String,
+    /// Unix timestamp in seconds
+    pub timestamp: i64,
+    /// Human-readable UTC date in ISO 8601 format
+    pub date: String,
+    /// Slot number
+    pub slot: u64,
+    /// Orb URL for the transaction
+    pub explorer_url: String,
+}
+
+/// Options for token accounts filter in history endpoint
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub enum TokenAccountsOption {
+    None,
+    BalanceChanged,
+    All,
+}

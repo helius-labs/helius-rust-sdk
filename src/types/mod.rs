@@ -13,6 +13,13 @@ pub use self::enums::*;
 pub use self::inner::*;
 pub use self::options::*;
 
+// Re-export wallet types
+pub use self::inner::{
+    BalanceChange, BalancesPagination, BalancesResponse, BatchIdentityRequest, FundingSource, HistoryResponse,
+    HistoryTransaction, Identity, Nft, Pagination, TokenAccountsOption, TokenBalance, Transfer, TransferDirection,
+    TransfersResponse,
+};
+
 use crate::error::{HeliusError, Result};
 use url::Url;
 
