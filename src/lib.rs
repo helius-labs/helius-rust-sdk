@@ -1,3 +1,4 @@
+pub mod builder;
 pub mod client;
 pub mod config;
 pub mod enhanced_transactions;
@@ -13,6 +14,7 @@ pub mod utils;
 pub mod webhook;
 pub mod websocket;
 
+pub use builder::HeliusBuilder;
 pub use client::Helius;
 pub use factory::HeliusFactory;
 pub use request_handler::{SDK_USER_AGENT, SDK_VERSION};

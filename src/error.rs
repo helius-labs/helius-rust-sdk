@@ -26,7 +26,7 @@ pub enum HeliusError {
 
     /// Indicates if a client is not already initialized
     ///
-    /// Useful for the new_with_async_solana method on the `Helius` client
+    /// Returned when accessing `async_connection()` without enabling async via `HeliusBuilder` or `new_async()`
     #[error("Client not initialized: {text}")]
     ClientNotInitialized { text: String },
 

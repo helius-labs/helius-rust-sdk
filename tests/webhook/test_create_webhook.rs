@@ -1,7 +1,7 @@
 use helius::config::Config;
 use helius::error::Result;
 use helius::rpc_client::RpcClient;
-use helius::types::{Cluster, CreateWebhookRequest, HeliusEndpoints, TransactionType, Webhook, WebhookType};
+use helius::types::{ApiKey, Cluster, CreateWebhookRequest, HeliusEndpoints, TransactionType, Webhook, WebhookType};
 use helius::Helius;
 use mockito::Server;
 use reqwest::Client;
@@ -32,12 +32,13 @@ async fn test_create_webhook_success() {
         .create();
 
     let config: Arc<Config> = Arc::new(Config {
-        api_key: "fake_api_key".to_string(),
+        api_key: Some(ApiKey::new("fake_api_key").unwrap()),
         cluster: Cluster::Devnet,
         endpoints: HeliusEndpoints {
             api: url.to_string(),
             rpc: url.to_string(),
         },
+        custom_url: None,
     });
 
     let client: Client = Client::new();
@@ -82,12 +83,13 @@ async fn test_create_webhook_failure() {
         .with_body(r#"{"error":"Internal Server Error"}"#)
         .create();
     let config: Arc<Config> = Arc::new(Config {
-        api_key: "fake_api_key".to_string(),
+        api_key: Some(ApiKey::new("fake_api_key").unwrap()),
         cluster: Cluster::Devnet,
         endpoints: HeliusEndpoints {
             api: url.to_string(),
             rpc: url.to_string(),
         },
+        custom_url: None,
     });
     let request: CreateWebhookRequest = CreateWebhookRequest {
         webhook_url: "https://webhook.site/0e8250a1-ceec-4757-ad69-cc6473085bfc".to_string(),

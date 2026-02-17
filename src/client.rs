@@ -3,7 +3,7 @@ use std::{ops::Deref, sync::Arc};
 use crate::config::Config;
 use crate::error::{HeliusError, Result};
 use crate::rpc_client::RpcClient;
-use crate::types::Cluster;
+use crate::types::{validate_rpc_url, ApiKey, Cluster, HeliusEndpoints};
 use crate::websocket::EnhancedWebsocket;
 
 use reqwest::Client;
@@ -29,26 +29,39 @@ pub struct Helius {
 }
 
 impl Helius {
-    /// Creates a new instance of `Helius` configured with a specific API key and a target cluster
+    /// Creates a basic Helius client for standard RPC operations
+    ///
+    /// This is the simplest way to create a Helius client. It is **synchronous** and does not
+    /// require `.await`. For async Solana operations or WebSocket support, use `new_async()`
+    /// or `HeliusBuilder`.
     ///
     /// # Arguments
     /// * `api_key` - The API key required for authenticating the requests made
     /// * `cluster` - The Solana cluster (Devnet or MainnetBeta) that defines the given network environment
     ///
     /// # Returns
-    /// An instance of `Helius` if successful. A `HeliusError` is returned if an error occurs during configuration or initialization of the HTTP or RPC client
+    /// An instance of `Helius` if successful. A `HeliusError` is returned if an error occurs during configuration or initialization
     ///
     /// # Example
     /// ```rust
-    /// use helius::client::Helius;
+    /// use helius::Helius;
     /// use helius::types::Cluster;
     ///
-    /// let helius = Helius::new("your_api_key", Cluster::Devnet).expect("Failed to create a Helius client");
+    /// let helius = Helius::new("your_api_key", Cluster::Devnet)
+    ///     .expect("Failed to create a Helius client");
     /// ```
     pub fn new(api_key: &str, cluster: Cluster) -> Result<Self> {
-        let config: Arc<Config> = Arc::new(Config::new(api_key, cluster)?);
-        let client: Client = Client::builder().build().map_err(HeliusError::ReqwestError)?;
-        let rpc_client: Arc<RpcClient> = Arc::new(RpcClient::new(Arc::new(client.clone()), config.clone())?);
+        let api_key = ApiKey::new(api_key)?;
+        let endpoints = HeliusEndpoints::for_cluster(&cluster);
+        let config = Arc::new(Config {
+            api_key: Some(api_key),
+            cluster,
+            endpoints,
+            custom_url: None,
+        });
+
+        let client = Client::builder().build().map_err(HeliusError::ReqwestError)?;
+        let rpc_client = Arc::new(RpcClient::new(Arc::new(client.clone()), config.clone())?);
 
         Ok(Helius {
             config,
@@ -59,163 +72,105 @@ impl Helius {
         })
     }
 
-    /// Creates a new instance of `Helius` configured with a specific API key, target cluster, and a commitment config
+    /// Creates a full-featured async Helius client with WebSocket support
+    ///
+    /// This is the recommended constructor for production applications that need:
+    /// - Async Solana RPC operations
+    /// - Enhanced WebSocket transaction streaming
+    /// - Confirmed commitment level
+    ///
+    /// This constructor is **async** because it establishes a WebSocket connection.
+    /// For basic sync operations, use `new()`. For custom configuration, use `HeliusBuilder`.
     ///
     /// # Arguments
     /// * `api_key` - The API key required for authenticating the requests made
     /// * `cluster` - The Solana cluster (Devnet or MainnetBeta) that defines the given network environment
-    /// * `commitment` - The commitment level to use for the Solana client
     ///
     /// # Returns
-    /// An instance of `Helius` if successful. A `HeliusError` is returned if an error occurs during configuration or initialization of the HTTP or RPC client
+    /// An instance of `Helius` if successful. A `HeliusError` is returned if an error occurs during configuration or initialization
     ///
     /// # Example
-    /// ```rust
-    /// use helius::client::Helius;
+    /// ```ignore
+    /// use helius::Helius;
     /// use helius::types::Cluster;
-    /// use solana_commitment_config::CommitmentConfig;
     ///
-    /// let helius = Helius::new_with_commitment("your_api_key", Cluster::Devnet, CommitmentConfig::confirmed()).expect("Failed to create a Helius client");
+    /// #[tokio::main]
+    /// async fn main() {
+    ///     let helius = Helius::new_async("your_api_key", Cluster::MainnetBeta)
+    ///         .await
+    ///         .expect("Failed to create a Helius client");
+    ///
+    ///     // Access async client
+    ///     let async_client = helius.async_connection().expect("Async client available");
+    ///
+    ///     // Access WebSocket
+    ///     let ws = helius.ws().expect("WebSocket available");
+    /// }
     /// ```
-    pub fn new_with_commitment(api_key: &str, cluster: Cluster, commitment: CommitmentConfig) -> Result<Self> {
-        let config: Arc<Config> = Arc::new(Config::new(api_key, cluster)?);
-        let client: Client = Client::builder().build().map_err(HeliusError::ReqwestError)?;
-        let rpc_client: Arc<RpcClient> = Arc::new(RpcClient::new_with_commitment(
-            Arc::new(client.clone()),
-            config.clone(),
-            commitment,
-        )?);
-
-        Ok(Helius {
-            config,
-            client,
-            rpc_client,
-            async_rpc_client: None,
-            ws_client: None,
-        })
+    pub async fn new_async(api_key: &str, cluster: Cluster) -> Result<Self> {
+        crate::HeliusBuilder::new()
+            .with_api_key(api_key)?
+            .with_cluster(cluster)
+            .with_async_solana()
+            .with_websocket(None, None)
+            .with_commitment(CommitmentConfig::confirmed())
+            .build()
+            .await
     }
 
-    /// Creates a new instance of `Helius` with an asynchronous Solana client
+    /// Creates a Helius client with a custom RPC URL
+    ///
+    /// Use this when you want to:
+    /// - Connect to your own RPC node
+    /// - Use a third-party RPC provider
+    /// - Point to localhost for development
+    /// - Route through a proxy
+    ///
+    /// This constructor is **synchronous** and does not require `.await`.
+    /// API key is optional when using custom URLs. You can add one via `HeliusBuilder`
+    /// if your custom endpoint requires authentication.
     ///
     /// # Arguments
-    /// * `api_key` - The API key required for authenticating the requests made
-    /// * `cluster` - The Solana cluster (Devnet or MainnetBeta) that defines the given network environment
+    /// * `url` - The custom RPC endpoint URL (http:// or https://)
     ///
     /// # Returns
-    /// An instance of `Helius` if successful. A `HeliusError` is returned if an error occurs during configuration or initialization of the HTTP or RPC client
+    /// An instance of `Helius` if successful. A `HeliusError` is returned if the URL is invalid
     ///
     /// # Example
     /// ```rust
     /// use helius::Helius;
-    /// use helius::types::Cluster;
     ///
-    /// let helius = Helius::new_with_async_solana("your_api_key", Cluster::Devnet).expect("Failed to create a Helius client");
+    /// // Production custom RPC
+    /// let helius = Helius::new_with_url("https://my-rpc-provider.com/")
+    ///     .expect("Failed to create client");
+    ///
+    /// // Local development
+    /// let local_helius = Helius::new_with_url("http://localhost:8899")
+    ///     .expect("Failed to create client");
     /// ```
-    pub fn new_with_async_solana(api_key: &str, cluster: Cluster) -> Result<Self> {
-        let config: Arc<Config> = Arc::new(Config::new(api_key, cluster)?);
-        let client: Client = Client::builder().build().map_err(HeliusError::ReqwestError)?;
-        let url: String = format!("{}/?api-key={}", config.endpoints.rpc, config.api_key);
-        let async_solana_client: Arc<AsyncSolanaRpcClient> = Arc::new(AsyncSolanaRpcClient::new(url));
+    pub fn new_with_url(url: &str) -> Result<Self> {
+        let validated = validate_rpc_url(url)?;
+        let url_string = validated.to_string();
+        let config = Arc::new(Config {
+            api_key: None,
+            cluster: Cluster::Devnet, // Default for custom URLs
+            endpoints: HeliusEndpoints {
+                api: url_string.clone(),
+                rpc: url_string.clone(),
+            },
+            custom_url: Some(url_string),
+        });
 
-        Ok(Helius {
-            config: config.clone(),
-            client: client.clone(),
-            rpc_client: Arc::new(RpcClient::new(Arc::new(client), config.clone())?),
-            async_rpc_client: Some(async_solana_client),
-            ws_client: None,
-        })
-    }
-
-    /// Creates a new instance of `Helius` with an asynchronous Solana client
-    /// and a commitment config
-    ///
-    /// # Arguments
-    /// * `api_key` - The API key required for authenticating the requests made
-    /// * `cluster` - The Solana cluster (Devnet or MainnetBeta) that defines the given network environment
-    /// * `commitment` - The commitment level to use for the asynchronous Solana client
-    ///
-    /// # Returns
-    /// An instance of `Helius` if successful. A `HeliusError` is returned if an error occurs during configuration or initialization of the HTTP or RPC client
-    ///
-    /// # Example
-    /// ```rust
-    /// use helius::Helius;
-    /// use helius::types::Cluster;
-    /// use solana_commitment_config::CommitmentConfig;
-    ///
-    /// let helius = Helius::new_with_async_solana_and_commitment("your_api_key", Cluster::Devnet, CommitmentConfig::confirmed()).expect("Failed to create a Helius client");
-    /// ```
-    ///
-    pub fn new_with_async_solana_and_commitment(
-        api_key: &str,
-        cluster: Cluster,
-        commitment: CommitmentConfig,
-    ) -> Result<Self> {
-        let config: Arc<Config> = Arc::new(Config::new(api_key, cluster)?);
-        let client: Client = Client::builder().build().map_err(HeliusError::ReqwestError)?;
-        let url: String = format!("{}/?api-key={}", config.endpoints.rpc, config.api_key);
-        let async_solana_client: Arc<AsyncSolanaRpcClient> =
-            Arc::new(AsyncSolanaRpcClient::new_with_commitment(url, commitment));
-
-        Ok(Helius {
-            config: config.clone(),
-            client: client.clone(),
-            rpc_client: Arc::new(RpcClient::new_with_commitment(
-                Arc::new(client),
-                config.clone(),
-                commitment,
-            )?),
-            async_rpc_client: Some(async_solana_client),
-            ws_client: None,
-        })
-    }
-
-    /// The enhanced websocket is optional, and this method is used to create a new instance of `Helius` with an enhanced websocket client.
-    /// Upon calling this method, the websocket will connect hence the asynchronous function definition omission from the default `new` method.
-    ///
-    /// # Arguments
-    /// * `api_key` - The API key required for authenticating requests made
-    /// * `cluster` - The Solana cluster (Devnet or MainnetBeta) that defines the given network environment
-    /// * `ping_interval_secs` - Optional duration in seconds between ping messages (defaults to 10 seconds if None)
-    /// * `pong_timeout_secs` - Optional duration in seconds to wait for a pong response before considering the connection dead
-    ///
-    /// # Returns
-    /// An instance of `Helius` if successful. A `HeliusError` is returned if an error occurs during configuration or initialization of the HTTP, RPC, or WS client
-    pub async fn new_with_ws_with_timeouts(
-        api_key: &str,
-        cluster: Cluster,
-        ping_interval_secs: Option<u64>,
-        pong_timeout_secs: Option<u64>,
-    ) -> Result<Self> {
-        let config: Arc<Config> = Arc::new(Config::new(api_key, cluster.clone())?);
-        let client: Client = Client::builder().build().map_err(HeliusError::ReqwestError)?;
-        let rpc_client: Arc<RpcClient> = Arc::new(RpcClient::new(Arc::new(client.clone()), config.clone())?);
-
-        let wss: String = EnhancedWebsocket::get_url(&cluster, api_key)?;
-        let ws_client: Arc<EnhancedWebsocket> =
-            Arc::new(EnhancedWebsocket::new(&wss, ping_interval_secs, pong_timeout_secs).await?);
+        let client = Client::builder().build().map_err(HeliusError::ReqwestError)?;
+        let rpc_client = Arc::new(RpcClient::new(Arc::new(client.clone()), config.clone())?);
 
         Ok(Helius {
             config,
             client,
             rpc_client,
             async_rpc_client: None,
-            ws_client: Some(ws_client),
+            ws_client: None,
         })
-    }
-
-    /// Creates a new instance of `Helius` with an enhanced websocket client using default timeout settings.
-    /// This is a convenience method that uses default values of 10 seconds for ping interval and 3 failed pings
-    /// before considering the connection dead.
-    ///
-    /// # Arguments
-    /// * `api_key` - The API key required for authenticating requests made
-    /// * `cluster` - The Solana cluster (Devnet or MainnetBeta) that defines the given network environment
-    ///
-    /// # Returns
-    /// An instance of `Helius` if successful. A `HeliusError` is returned if an error occurs during configuration or initialization of the HTTP, RPC, or WS client
-    pub async fn new_with_ws(api_key: &str, cluster: Cluster) -> Result<Self> {
-        Self::new_with_ws_with_timeouts(api_key, cluster, None, None).await
     }
 
     /// Provides a thread-safe way to access RPC functionalities

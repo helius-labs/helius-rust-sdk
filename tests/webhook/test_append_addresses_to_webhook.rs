@@ -1,7 +1,7 @@
 use helius::config::Config;
 use helius::error::Result;
 use helius::rpc_client::RpcClient;
-use helius::types::{Cluster, HeliusEndpoints, TransactionType, Webhook, WebhookType};
+use helius::types::{ApiKey, Cluster, HeliusEndpoints, TransactionType, Webhook, WebhookType};
 use helius::Helius;
 use mockito::Server;
 use reqwest::Client;
@@ -49,12 +49,13 @@ async fn test_append_addresses_to_webhook_success() {
         .create();
 
     let config: Arc<Config> = Arc::new(Config {
-        api_key: "fake_api_key".to_string(),
+        api_key: Some(ApiKey::new("fake_api_key").unwrap()),
         cluster: Cluster::Devnet,
         endpoints: HeliusEndpoints {
             api: url.to_string(),
             rpc: url.to_string(),
         },
+        custom_url: None,
     });
 
     let client: Client = Client::new();
@@ -118,12 +119,13 @@ async fn test_append_addresses_to_webhook_failure() {
         .create();
 
     let config: Arc<Config> = Arc::new(Config {
-        api_key: "fake_api_key".to_string(),
+        api_key: Some(ApiKey::new("fake_api_key").unwrap()),
         cluster: Cluster::Devnet,
         endpoints: HeliusEndpoints {
             api: url.to_string(),
             rpc: url.to_string(),
         },
+        custom_url: None,
     });
 
     let client: Client = Client::new();

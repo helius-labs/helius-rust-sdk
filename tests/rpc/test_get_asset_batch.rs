@@ -5,8 +5,8 @@ use helius::config::Config;
 use helius::error::Result;
 use helius::rpc_client::RpcClient;
 use helius::types::{
-    ApiResponse, Asset, Attribute, Attributes, Authorities, Cluster, CollectionMetadata, Compression, Content, Creator,
-    File, GetAssetBatch, GetAssetOptions, Group, HeliusEndpoints, Interface, Links, Metadata, Ownership,
+    ApiKey, ApiResponse, Asset, Attribute, Attributes, Authorities, Cluster, CollectionMetadata, Compression, Content,
+    Creator, File, GetAssetBatch, GetAssetOptions, Group, HeliusEndpoints, Interface, Links, Metadata, Ownership,
     OwnershipModel, Royalty, RoyaltyModel, Scope, Supply,
 };
 
@@ -254,12 +254,13 @@ async fn test_get_asset_batch_success() {
         .create();
 
     let config: Arc<Config> = Arc::new(Config {
-        api_key: "fake_api_key".to_string(),
+        api_key: Some(ApiKey::new("fake_api_key").unwrap()),
         cluster: Cluster::Devnet,
         endpoints: HeliusEndpoints {
             api: url.to_string(),
             rpc: url.to_string(),
         },
+        custom_url: None,
     });
 
     let client: Client = Client::new();
@@ -303,12 +304,13 @@ async fn test_get_asset_batch_failure() {
         .create();
 
     let config: Arc<Config> = Arc::new(Config {
-        api_key: "fake_api_key".to_string(),
+        api_key: Some(ApiKey::new("fake_api_key").unwrap()),
         cluster: Cluster::Devnet,
         endpoints: HeliusEndpoints {
             api: url.to_string(),
             rpc: url.to_string(),
         },
+        custom_url: None,
     });
 
     let client: Client = Client::new();

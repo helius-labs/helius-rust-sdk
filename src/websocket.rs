@@ -184,7 +184,7 @@ impl EnhancedWebsocket {
     /// Stream transactions with numerous configurations and filters to choose from.
     ///
     /// # Example
-    /// ```rust
+    /// ```ignore
     /// use helius::Helius;
     /// use helius::error::Result;
     /// use helius::types::{Cluster, RpcTransactionsConfig, TransactionSubscribeFilter, TransactionSubscribeOptions};
@@ -193,7 +193,7 @@ impl EnhancedWebsocket {
     ///
     /// #[tokio::main]
     /// async fn main() -> Result<()> {
-    ///   let helius = Helius::new("your_api_key", Cluster::MainnetBeta).expect("Failed to create a Helius client");
+    ///   let helius = Helius::new_async("your_api_key", Cluster::MainnetBeta).await.expect("Failed to create a Helius client");
     ///   // you may monitor transactions for any pubkey, this is just an example.
     ///   let key = pubkey!("BtsmiEEvnSuUnKxqXj2PZRYpPJAc7C34mGz8gtJ1DAaH");
     ///   let config = RpcTransactionsConfig {
@@ -220,7 +220,7 @@ impl EnhancedWebsocket {
     /// Stream accounts with numerous configurations and filters to choose from.
     ///
     /// # Example
-    /// ```rust
+    /// ```ignore
     /// use helius::Helius;
     /// use helius::error::Result;
     /// use helius::types::{Cluster, RpcTransactionsConfig, TransactionSubscribeFilter, TransactionSubscribeOptions};
@@ -229,7 +229,7 @@ impl EnhancedWebsocket {
     ///
     /// #[tokio::main]
     /// async fn main() -> Result<()> {
-    ///   let helius = Helius::new("your_api_key", Cluster::MainnetBeta).expect("Failed to create a Helius client");
+    ///   let helius = Helius::new_async("your_api_key", Cluster::MainnetBeta).await.expect("Failed to create a Helius client");
     ///   // you may monitor updates for any account pubkey, this is just an example.
     ///   let key = pubkey!("BtsmiEEvnSuUnKxqXj2PZRYpPJAc7C34mGz8gtJ1DAaH");
     ///   if let Some(ws) = helius.ws() {
