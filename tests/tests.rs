@@ -20,6 +20,14 @@ mod rpc {
     mod test_get_transactions_for_address;
     mod test_search_assets;
 }
+mod wallet {
+    mod test_get_batch_wallet_identity;
+    mod test_get_wallet_balances;
+    mod test_get_wallet_funding_source;
+    mod test_get_wallet_history;
+    mod test_get_wallet_identity;
+    mod test_get_wallet_transfers;
+}
 mod webhook {
     mod test_create_webhook;
     mod test_edit_webhook;
