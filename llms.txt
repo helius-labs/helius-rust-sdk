@@ -79,7 +79,6 @@ examples/
 ├── get_token_accounts_by_owner_v2.rs         # RPC V2: paginated token accounts
 ├── get_all_program_accounts.rs               # Auto-paginating program accounts
 ├── get_all_token_accounts_by_owner.rs        # Auto-paginating token accounts
-├── send_smart_transaction_with_tip.rs        # Helius Sender: transactions with tips
 ├── send_smart_transaction_with_seeds.rs      # Helius Sender: thread-safe transactions
 ├── create_webhook.rs                         # Webhook creation
 ├── edit_webhook.rs                           # Webhook modification
@@ -509,17 +508,6 @@ helius = { version = "0.5", default-features = false, features = ["rustls"] }
 - Dashboard: https://dashboard.helius.dev
 - GitHub: https://github.com/helius-labs/helius-rust-sdk
 - SDK Guide: https://www.helius.dev/docs/sdks.md
-
-## Deprecated Methods
-
-The Jito methods in `src/jito.rs` are deprecated. Use **Helius Sender** instead for ultra-low latency transaction submission:
-
-```rust
-// Use Helius Sender (recommended)
-helius.send_smart_transaction_with_sender(config, options).await?;
-```
-
-See: https://www.helius.dev/docs/api-reference/sender/llms.txt
 
 ## For AI Agents Contributing to This Repo
 
