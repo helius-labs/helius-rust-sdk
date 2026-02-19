@@ -113,12 +113,24 @@ GitHub Actions runs `cargo fmt`, `cargo clippy`, and `cargo test` on all PRs.
 4. Title format: `feat(domain): [title]` or `fix(domain): [title]`
 5. Include Co-Authored-By for AI: `Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>`
 
+### Changelog
+`CHANGELOG.md` follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) format. Before cutting a release:
+1. Move all entries from `## [Unreleased]` into a new versioned section (e.g. `## [1.0.0] - YYYY-MM-DD`)
+2. Update the comparison links at the bottom of `CHANGELOG.md`
+3. Update the version in `Cargo.toml` and `llms.txt`
+
 ### Releases
+Releases use a two-stage pipeline:
+
+**Stage 1 — Tag the release:**
 ```bash
 git tag -a v1.0.0 -m "Release v1.0.0"
 git push origin v1.0.0
-cargo publish
 ```
+This triggers `.github/workflows/release.yml`, which extracts the matching section from `CHANGELOG.md` and opens a **draft** GitHub Release for review.
+
+**Stage 2 — Publish:**
+Once the draft release is reviewed and published on GitHub, `.github/workflows/publish_crate.yml` triggers automatically and publishes the crate to crates.io.
 
 ## Boundaries
 
