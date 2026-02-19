@@ -238,17 +238,6 @@ Our SDK is designed to provide a seamless developer experience when building on 
 - [`send_and_confirm_transaction`](https://github.com/helius-labs/helius-rust-sdk/blob/bd9e0b10c81ab9ea56dfcd286336b086f6737b64/src/optimized_transaction.rs#L366-L412) - Sends a transaction and handles its confirmation status with retry logic
 - [`send_smart_transaction_with_seeds`](https://github.com/helius-labs/helius-rust-sdk/blob/bd9e0b10c81ab9ea56dfcd286336b086f6737b64/src/optimized_transaction.rs#L414-L487) - Sends a smart transaction using seed bytes. This function is thread-safe
 
-### Jito Smart Transactions and Helper Methods (Deprecated)
-
-Note that these methods have been deprecated, and will be removed in a future release. Instead, please use [Helius Sender](https://www.helius.dev/docs/sending-transactions/sender) for ultra-low latency transaction submission
-
-- [`add_tip_instruction`](https://github.com/helius-labs/helius-rust-sdk/blob/02b351a5ee3fe16a36078b40f92dc72d0ad077ed/src/jito.rs#L66-L83) - Adds a tip instruction to the instructions provided
-- [`create_smart_transaction_with_tip`](https://github.com/helius-labs/helius-rust-sdk/blob/bd9e0b10c81ab9ea56dfcd286336b086f6737b64/src/jito.rs#L85-L125) - Creates a smart transaction with a Jito tip
-- [`get_bundle_statuses`](https://github.com/helius-labs/helius-rust-sdk/blob/bd9e0b10c81ab9ea56dfcd286336b086f6737b64/src/jito.rs#L170-L203) - Get the status of Jito bundles
-- [`send_jito_bundle`](https://github.com/helius-labs/helius-rust-sdk/blob/bd9e0b10c81ab9ea56dfcd286336b086f6737b64/src/jito.rs#L127-L168) - Sends a bundle of transactions to the Jito Block Engine
-- [`send_smart_transaction_with_seeds_and_tip`](https://github.com/helius-labs/helius-rust-sdk/blob/8102d87c6551c7645389a813e60a832a2eaf98c7/src/jito.rs#L272-L353) - Sends a smart transaction as a Jito bundle with a tip using seed bytes to create the transaction
-- [`send_smart_transaction_with_tip`](https://github.com/helius-labs/helius-rust-sdk/blob/bd9e0b10c81ab9ea56dfcd286336b086f6737b64/src/jito.rs#L205-L270) - Sends a smart transaction as a Jito bundle with a tip
-
 ### RPC Methods
 - [`get_priority_fee_estimate`](https://www.helius.dev/docs/api-reference/priority-fee/getpriorityfeeestimate#getpriorityfeeestimate) - Gets an estimate of the priority fees required for a transaction to be processed more quickly
 - [`get_transactions_for_address`](https://www.helius.dev/docs/api-reference/rpc/http/gettransactionsforaddress) - Gets transaction history for a specific address with advanced filtering, sorting, and pagination. Optionally include transactions from associated token accounts
