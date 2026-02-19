@@ -8,7 +8,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ### Added
 - `HeliusBuilder` for flexible client configuration (custom timeouts, TLS, connection settings)
-- ZK compression RPC methods
 - `llms.txt` for improved AI discoverability
 - `AGENTS.md` and `CLAUDE.md` contributing guides for AI agents
 - GitHub issue templates for bug reports and feature requests
@@ -132,14 +131,44 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [0.1.3] - 2024-05-20
 
 ### Added
+- Transaction history pagination support
+- Option to supply a custom `reqwest::Client` to `HeliusFactory`
+
+### Fixed
+- Priority fee estimate levels (`Min`, `Recommended`)
+- Various bug fixes and stability improvements
+
+## [0.1.2] - 2024-05-10
+
+### Added
+- `remove_addresses_from_webhook` for bulk address removal
+- Documentation updates
+
+## [0.1.1] - 2024-05-08
+
+### Added
+- Webhook CRUD: create, edit, get, delete, and list webhooks
+- `CONTRIBUTIONS.md` contributing guide
+- Formatting check in CI workflow
+- `get_latest_blockhash` example
+
+### Changed
+- Crate renamed to `helius` on crates.io
+
+## [0.1.0] - 2024-04-17
+
+### Added
 - Initial release of the Helius Rust SDK
-- DAS API methods: `get_asset`, `get_asset_batch`, `get_asset_proof`, `get_asset_proof_batch`, `get_assets_by_authority`, `get_assets_by_owner`, `get_assets_by_creator`, `get_assets_by_group`
+- `Helius` client with `Config`, `HeliusFactory`, and embedded Solana RPC client
+- `HeliusError` enum with typed error variants and `Result<T>` type alias
+- DAS API methods: `get_asset`, `get_asset_batch`, `get_asset_proof`, `get_asset_proof_batch`, `get_assets_by_authority`, `get_assets_by_owner`, `get_assets_by_creator`, `get_assets_by_group`, `search_assets`, `get_token_accounts`, `get_signatures_for_asset`, `get_nft_editions`
+- `get_rwa_asset` RPC method
 - Enhanced transaction parsing: `parse_transactions`, `parsed_transaction_history`
-- Webhook CRUD and address management
-- `HeliusFactory` for creating clients across multiple clusters
-- `HeliusError` enum with typed error variants and `Result<T>` alias
-- Smart transaction creation with priority fee estimation via `send_smart_transaction`
+- Priority fee estimation via `get_priority_fee_estimate`
+- Mint API: minting compressed NFTs
+- Utility functions (`make_keypairs`, `deserialize_str_to_number`)
 - Integration test suite using `mockito`
+- GitHub Actions CI workflow
 
 [Unreleased]: https://github.com/helius-labs/helius-rust-sdk/compare/v0.5.1...HEAD
 [0.5.1]: https://github.com/helius-labs/helius-rust-sdk/compare/v0.5.0...v0.5.1
@@ -154,4 +183,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 [0.2.0]: https://github.com/helius-labs/helius-rust-sdk/compare/v0.1.5...v0.2.0
 [0.1.5]: https://github.com/helius-labs/helius-rust-sdk/compare/v0.1.4...v0.1.5
 [0.1.4]: https://github.com/helius-labs/helius-rust-sdk/compare/v0.1.3...v0.1.4
-[0.1.3]: https://github.com/helius-labs/helius-rust-sdk/releases/tag/v0.1.3
+[0.1.3]: https://github.com/helius-labs/helius-rust-sdk/compare/v0.1.2...v0.1.3
+[0.1.2]: https://github.com/helius-labs/helius-rust-sdk/compare/v0.1.1...v0.1.2
+[0.1.1]: https://github.com/helius-labs/helius-rust-sdk/compare/v0.1.0...v0.1.1
+[0.1.0]: https://github.com/helius-labs/helius-rust-sdk/releases/tag/v0.1.0
