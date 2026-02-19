@@ -11,6 +11,7 @@ pub mod rpc_client;
 pub mod staking;
 pub mod types;
 pub mod utils;
+pub mod wallet;
 pub mod webhook;
 pub mod websocket;
 
