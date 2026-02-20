@@ -54,3 +54,131 @@ rustls = [
     "reqwest/rustls-tls",
     "tokio-tungstenite/rustls-tls-webpki-roots"
 ]
+
+# DAS API examples
+[[example]]
+name = "get_all_program_accounts"
+path = "examples/das/get_all_program_accounts.rs"
+
+[[example]]
+name = "get_all_token_accounts_by_owner"
+path = "examples/das/get_all_token_accounts_by_owner.rs"
+
+[[example]]
+name = "get_asset_batch"
+path = "examples/das/get_asset_batch.rs"
+
+[[example]]
+name = "get_asset_proof_batch"
+path = "examples/das/get_asset_proof_batch.rs"
+
+[[example]]
+name = "get_priority_fee_estimate"
+path = "examples/das/get_priority_fee_estimate.rs"
+
+# Enhanced transaction examples
+[[example]]
+name = "get_parse_transactions"
+path = "examples/enhanced/get_parse_transactions.rs"
+
+[[example]]
+name = "get_parsed_transaction_history"
+path = "examples/enhanced/get_parsed_transaction_history.rs"
+
+[[example]]
+name = "get_transactions_for_address"
+path = "examples/enhanced/get_transactions_for_address.rs"
+
+[[example]]
+name = "get_transactions_for_address_with_filters"
+path = "examples/enhanced/get_transactions_for_address_with_filters.rs"
+
+# Core Helius client examples
+[[example]]
+name = "async_config_based_creation"
+path = "examples/helius/async_config_based_creation.rs"
+
+[[example]]
+name = "get_program_accounts_v2"
+path = "examples/helius/get_program_accounts_v2.rs"
+
+[[example]]
+name = "get_token_accounts_by_owner_v2"
+path = "examples/helius/get_token_accounts_by_owner_v2.rs"
+
+# Solana RPC examples
+[[example]]
+name = "get_latest_blockhash"
+path = "examples/solana/get_latest_blockhash.rs"
+
+[[example]]
+name = "get_latest_blockhash_async"
+path = "examples/solana/get_latest_blockhash_async.rs"
+
+# Smart transaction examples
+[[example]]
+name = "send_smart_transaction_with_seeds"
+path = "examples/transactions/send_smart_transaction_with_seeds.rs"
+
+# Wallet API examples
+[[example]]
+name = "get_batch_wallet_identity"
+path = "examples/wallet/get_batch_wallet_identity.rs"
+
+[[example]]
+name = "get_wallet_balances"
+path = "examples/wallet/get_wallet_balances.rs"
+
+[[example]]
+name = "get_wallet_funding_source"
+path = "examples/wallet/get_wallet_funding_source.rs"
+
+[[example]]
+name = "get_wallet_history"
+path = "examples/wallet/get_wallet_history.rs"
+
+[[example]]
+name = "get_wallet_identity"
+path = "examples/wallet/get_wallet_identity.rs"
+
+[[example]]
+name = "get_wallet_transfers"
+path = "examples/wallet/get_wallet_transfers.rs"
+
+# Webhook examples
+[[example]]
+name = "append_address_to_webhook"
+path = "examples/webhooks/append_address_to_webhook.rs"
+
+[[example]]
+name = "create_webhook"
+path = "examples/webhooks/create_webhook.rs"
+
+[[example]]
+name = "delete_webhook"
+path = "examples/webhooks/delete_webhook.rs"
+
+[[example]]
+name = "edit_webhook"
+path = "examples/webhooks/edit_webhook.rs"
+
+[[example]]
+name = "get_all_webhooks"
+path = "examples/webhooks/get_all_webhooks.rs"
+
+[[example]]
+name = "get_webhook_by_id"
+path = "examples/webhooks/get_webhook_by_id.rs"
+
+[[example]]
+name = "remove_address_from_webhook"
+path = "examples/webhooks/remove_address_from_webhook.rs"
+
+# WebSocket examples
+[[example]]
+name = "enhanced_websocket_accounts"
+path = "examples/websockets/enhanced_websocket_accounts.rs"
+
+[[example]]
+name = "enhanced_websocket_transactions"
+path = "examples/websockets/enhanced_websocket_transactions.rs"
