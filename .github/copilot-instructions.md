@@ -6,10 +6,14 @@ Rust SDK for Helius APIs and Solana development. Built on `solana-client` and `t
 
 ## Critical: Use the Custom `Result<T>` Type
 
-All fallible functions must use the SDK's `Result<T>` alias — never write `std::result::Result<T, HeliusError>` directly. Import and use the alias everywhere:
+All fallible functions must use the SDK's `Result<T>` alias — never write `std::result::Result<T, HeliusError>` directly:
 
 ```rust
+// In SDK source code (src/)
 use crate::error::Result;
+
+// In examples and tests
+use helius::error::Result;
 
 pub async fn my_function(&self) -> Result<Asset> { ... }
 ```
