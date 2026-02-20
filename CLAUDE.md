@@ -60,7 +60,12 @@ cargo publish                  # Publish to crates.io
 ### Error Handling
 Always use the `Result<T>` alias (not `std::result::Result<T, HeliusError>`):
 ```rust
+// In SDK source code (src/)
+use crate::error::Result;
+
+// In examples and tests
 use helius::error::Result;
+
 pub async fn my_function() -> Result<Asset> { ... }
 ```
 
