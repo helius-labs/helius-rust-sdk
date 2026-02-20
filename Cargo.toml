@@ -72,10 +72,6 @@ path = "examples/das/get_asset_batch.rs"
 name = "get_asset_proof_batch"
 path = "examples/das/get_asset_proof_batch.rs"
 
-[[example]]
-name = "get_priority_fee_estimate"
-path = "examples/das/get_priority_fee_estimate.rs"
-
 # Enhanced transaction examples
 [[example]]
 name = "get_parse_transactions"
@@ -101,6 +97,10 @@ path = "examples/helius/async_config_based_creation.rs"
 [[example]]
 name = "get_program_accounts_v2"
 path = "examples/helius/get_program_accounts_v2.rs"
+
+[[example]]
+name = "get_priority_fee_estimate"
+path = "examples/helius/get_priority_fee_estimate.rs"
 
 [[example]]
 name = "get_token_accounts_by_owner_v2"
