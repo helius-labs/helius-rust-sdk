@@ -39,8 +39,17 @@ cargo publish                  # Publish to crates.io
 - `src/types/enhanced_websocket.rs` — WebSocket subscription types
 - `src/types/enhanced_transaction_types.rs` — Enhanced transaction types
 
-### Other
-- `examples/` — Usage examples (~30 files)
+### Examples (`examples/`)
+- `das/` — DAS API examples (get_asset_batch, get_asset_proof_batch, get_all_*)
+- `enhanced/` — Enhanced transaction parsing examples
+- `helius/` — Helius-specific examples (config, RPC V2 methods, priority fees)
+- `solana/` — Standard Solana RPC examples (get_latest_blockhash)
+- `transactions/` — Smart transaction and Helius Sender examples
+- `wallet/` — Wallet API examples (identity, balances, transfers, history)
+- `webhooks/` — Webhook CRUD examples
+- `websockets/` — Enhanced WebSocket streaming examples
+
+### Tests
 - `tests/rpc/` — RPC integration tests with mockito
 - `tests/webhook/` — Webhook tests
 - `tests/wallet/` — Wallet API tests
