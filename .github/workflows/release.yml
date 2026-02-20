@@ -1,0 +1,41 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Extract version from tag
+        id: version
+        run: echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+
+      - name: Extract changelog section
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          # Extract content between this version header and the next one
+          awk "/^## \[$VERSION\]/{found=1; next} found && /^## \[/{exit} found{print}" CHANGELOG.md > release_notes.md
+          # Verify we found something
+          if [ ! -s release_notes.md ]; then
+            echo "Warning: No changelog entry found for v$VERSION"
+            echo "No changelog entry for this release." > release_notes.md
+          fi
+
+      - name: Create draft GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          draft: true
+          name: "v${{ steps.version.outputs.version }}"
+          body_path: release_notes.md
+          tag_name: ${{ github.ref_name }}
