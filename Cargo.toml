@@ -182,3 +182,16 @@ path = "examples/websockets/enhanced_websocket_accounts.rs"
 [[example]]
 name = "enhanced_websocket_transactions"
 path = "examples/websockets/enhanced_websocket_transactions.rs"
+
+# ZK Compression examples
+[[example]]
+name = "get_compressed_account"
+path = "examples/zk_compression/get_compressed_account.rs"
+
+[[example]]
+name = "get_compressed_token_balances"
+path = "examples/zk_compression/get_compressed_token_balances.rs"
+
+[[example]]
+name = "get_validity_proof"
+path = "examples/zk_compression/get_validity_proof.rs"
