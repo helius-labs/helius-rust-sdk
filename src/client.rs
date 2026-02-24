@@ -13,7 +13,7 @@ use solana_commitment_config::CommitmentConfig;
 
 /// The `Helius` struct is the main entry point to interacting with the SDK
 ///
-/// This client is responsible for setting up the network and configuration settins used to interact with the various provided methods.
+/// This client is responsible for setting up the network and configuration settings used to interact with the various provided methods.
 /// It also provides methods to access RPC client functionalities. The client ensures thread-safe access to the underlying RPC client
 pub struct Helius {
     /// The configuration which specifies an `api_key`, `cluster`, and the requisite `endpoints`
@@ -203,10 +203,21 @@ impl Helius {
         self.rpc_client.solana_client.clone()
     }
 
+    /// Returns the enhanced (Geyser) WebSocket client, if one was initialized.
+    ///
+    /// The WebSocket client is only available when the `Helius` instance was created with
+    /// `new_async()` or via `HeliusBuilder::with_websocket()`.
+    ///
+    /// # Returns
+    /// `Some(Arc<EnhancedWebsocket>)` if a WebSocket client is available, `None` otherwise
     pub fn ws(&self) -> Option<Arc<EnhancedWebsocket>> {
         self.ws_client.clone()
     }
 
+    /// Returns the client configuration.
+    ///
+    /// # Returns
+    /// A cloned `Arc<Config>` containing the API key, cluster, and endpoint settings
     pub fn config(&self) -> Arc<Config> {
         self.config.clone()
     }
