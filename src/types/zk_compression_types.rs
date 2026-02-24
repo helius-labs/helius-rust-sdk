@@ -94,7 +94,7 @@ pub struct FilterSelector {
 ///
 /// Contains the list of matching accounts and an optional cursor for fetching
 /// the next page of results.
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
 pub struct PaginatedAccountList {
     /// The compressed accounts in this page.
     pub items: Vec<CompressedAccount>,
@@ -139,7 +139,7 @@ pub struct GetCompressedAccountRequest {
 ///
 /// Contains slot context and an optional compressed account value. The value is `None`
 /// if no account matches the provided address or hash.
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
 pub struct GetCompressedAccountResponse {
     /// The slot context for this response.
     pub context: ZkCompressedContext,
@@ -151,7 +151,7 @@ pub struct GetCompressedAccountResponse {
 ///
 /// Contains the full proof path from the leaf (the compressed account) to the root
 /// of the Merkle tree, along with tree metadata needed for on-chain verification.
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct MerkleProofWithContext {
     /// The hash of the compressed account being verified.
@@ -188,7 +188,7 @@ pub struct GetCompressedAccountProofRequest {
 /// Response from [`getCompressedAccountProof`](crate::Helius::get_compressed_account_proof).
 ///
 /// Contains slot context and the Merkle proof for the requested compressed account.
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
 pub struct GetCompressedAccountProofResponse {
     /// The slot context for this response.
     pub context: ZkCompressedContext,
@@ -234,7 +234,7 @@ pub struct GetCompressedAccountsByOwnerRequest {
 ///
 /// Contains slot context and a paginated list of compressed accounts owned by the
 /// requested address.
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
 pub struct GetCompressedAccountsByOwnerResponse {
     /// The slot context for this response.
     pub context: ZkCompressedContext,
@@ -269,7 +269,7 @@ pub struct OwnerBalance {
 }
 
 /// A paginated list of token holders and their balances.
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
 pub struct OwnerBalanceList {
     /// The token holder balances in this page.
     pub items: Vec<OwnerBalance>,
@@ -305,24 +305,12 @@ pub struct GetCompressedMintTokenHoldersRequest {
 /// Response from [`getCompressedMintTokenHolders`](crate::Helius::get_compressed_mint_token_holders).
 ///
 /// Contains slot context and a paginated list of token holders with their balances.
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
 pub struct GetCompressedMintTokenHoldersResponse {
     /// The slot context for this response.
     pub context: ZkCompressedContext,
     /// The paginated list of token holders and their balances.
     pub value: OwnerBalanceList,
-}
-
-impl Default for GetCompressedMintTokenHoldersResponse {
-    fn default() -> Self {
-        Self {
-            context: ZkCompressedContext::default(),
-            value: OwnerBalanceList {
-                items: Vec::new(),
-                cursor: None,
-            },
-        }
-    }
 }
 
 /// The state of a compressed token account.
@@ -373,7 +361,7 @@ pub struct CompressedTokenAccount {
 }
 
 /// A paginated list of compressed token accounts.
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
 pub struct TokenAccountList {
     /// The compressed token accounts in this page.
     pub items: Vec<CompressedTokenAccount>,
@@ -417,7 +405,7 @@ pub struct GetCompressedTokenAccountsByDelegateRequest {
 ///
 /// Contains slot context and a paginated list of compressed token accounts
 /// delegated to the requested address.
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
 pub struct GetCompressedTokenAccountsByDelegateResponse {
     /// The slot context for this response.
     pub context: ZkCompressedContext,
@@ -460,7 +448,7 @@ pub struct GetCompressedTokenAccountsByOwnerRequest {
 ///
 /// Contains slot context and a paginated list of compressed token accounts
 /// owned by the requested address.
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
 pub struct GetCompressedTokenAccountsByOwnerResponse {
     /// The slot context for this response.
     pub context: ZkCompressedContext,
@@ -478,7 +466,7 @@ pub struct CompressedTokenBalance {
 }
 
 /// A paginated list of token balances grouped by mint.
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
 pub struct TokenBalanceList {
     /// The token balances in this page.
     pub token_balances: Vec<CompressedTokenBalance>,
@@ -521,7 +509,7 @@ pub struct GetCompressedTokenBalancesByOwnerRequest {
 /// Response from [`getCompressedTokenBalancesByOwner`](crate::Helius::get_compressed_token_balances_by_owner).
 ///
 /// Contains slot context and a paginated list of token balances grouped by mint.
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
 pub struct GetCompressedTokenBalancesByOwnerResponse {
     /// The slot context for this response.
     pub context: ZkCompressedContext,
@@ -533,7 +521,7 @@ pub struct GetCompressedTokenBalancesByOwnerResponse {
 ///
 /// Unlike [`TokenBalanceList`] which uses `token_balances`, this V2 variant uses `items`
 /// as the field name, consistent with other paginated list types.
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
 pub struct TokenBalanceListV2 {
     /// The token balances in this page.
     pub items: Vec<CompressedTokenBalance>,
@@ -546,7 +534,7 @@ pub struct TokenBalanceListV2 {
 ///
 /// Contains slot context and a paginated list of token balances grouped by mint.
 /// This V2 response uses the `items` field name instead of `token_balances`.
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
 pub struct GetCompressedTokenBalancesByOwnerV2Response {
     /// The slot context for this response.
     pub context: ZkCompressedContext,
@@ -567,7 +555,7 @@ pub struct SignatureInfo {
 }
 
 /// A list of transaction signatures related to a compressed account.
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
 pub struct SignatureInfoList {
     /// The transaction signatures.
     pub items: Vec<SignatureInfo>,
@@ -594,7 +582,7 @@ pub struct GetCompressionSignaturesForAccountRequest {
 ///
 /// Contains slot context and a list of transaction signatures that affected the
 /// specified compressed account.
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
 pub struct GetCompressionSignaturesForAccountResponse {
     /// The slot context for this response.
     pub context: ZkCompressedContext,
@@ -603,7 +591,7 @@ pub struct GetCompressionSignaturesForAccountResponse {
 }
 
 /// A paginated list of transaction signatures related to a compressed address.
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
 pub struct PaginatedSignatureInfoList {
     /// The transaction signatures in this page.
     pub items: Vec<SignatureInfo>,
@@ -642,7 +630,7 @@ pub struct GetCompressionSignaturesForAddressRequest {
 ///
 /// Contains slot context and a paginated list of transaction signatures that affected
 /// the specified compressed address.
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
 pub struct GetCompressionSignaturesForAddressResponse {
     /// The slot context for this response.
     pub context: ZkCompressedContext,
@@ -681,7 +669,7 @@ pub struct GetCompressionSignaturesForOwnerRequest {
 ///
 /// Contains slot context and a paginated list of transaction signatures that affected
 /// compressed accounts owned by the specified address.
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
 pub struct GetCompressionSignaturesForOwnerResponse {
     /// The slot context for this response.
     pub context: ZkCompressedContext,
@@ -693,7 +681,7 @@ pub struct GetCompressionSignaturesForOwnerResponse {
 ///
 /// Contains slot context and a paginated list of transaction signatures that affected
 /// compressed token accounts owned by the specified address.
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
 pub struct GetCompressionSignaturesForTokenOwnerResponse {
     /// The slot context for this response.
     pub context: ZkCompressedContext,
@@ -729,7 +717,7 @@ pub struct GetLatestCompressionSignaturesRequest {
 ///
 /// Contains slot context and a paginated list of the most recent compression
 /// transaction signatures.
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
 pub struct GetLatestCompressionSignaturesResponse {
     /// The slot context for this response.
     pub context: ZkCompressedContext,
@@ -973,6 +961,11 @@ pub struct CompressionInfo {
 ///
 /// Contains the full Solana transaction along with compression-specific metadata
 /// about which compressed accounts were opened and closed.
+///
+/// **Note:** Unlike all other ZK Compression responses, this type does NOT use the
+/// standard `{context, value}` envelope. The `compression_info` and `transaction`
+/// fields sit directly at the JSON-RPC result level. This matches the Photon indexer
+/// implementation and the Light Protocol reference client.
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct GetTransactionWithCompressionInfoResponse {
@@ -1084,146 +1077,4 @@ pub struct GetCompressedBalanceResponse {
     pub context: ZkCompressedContext,
     /// The balance in lamports.
     pub value: u64,
-}
-
-impl Default for GetCompressedAccountsByOwnerResponse {
-    fn default() -> Self {
-        Self {
-            context: ZkCompressedContext { slot: 0 },
-            value: PaginatedAccountList {
-                items: Vec::new(),
-                cursor: None,
-            },
-        }
-    }
-}
-
-impl Default for GetCompressedAccountProofResponse {
-    fn default() -> Self {
-        Self {
-            context: ZkCompressedContext { slot: 0 },
-            value: MerkleProofWithContext {
-                hash: String::new(),
-                leaf_index: 0,
-                merkle_tree: String::new(),
-                proof: Vec::new(),
-                root: String::new(),
-                root_seq: 0,
-            },
-        }
-    }
-}
-
-impl Default for GetCompressedAccountResponse {
-    fn default() -> Self {
-        Self {
-            context: ZkCompressedContext { slot: 0 },
-            value: None,
-        }
-    }
-}
-
-impl Default for GetCompressedTokenAccountsByDelegateResponse {
-    fn default() -> Self {
-        Self {
-            context: ZkCompressedContext::default(),
-            value: TokenAccountList {
-                items: Vec::new(),
-                cursor: None,
-            },
-        }
-    }
-}
-
-impl Default for GetCompressedTokenAccountsByOwnerResponse {
-    fn default() -> Self {
-        Self {
-            context: ZkCompressedContext::default(),
-            value: TokenAccountList {
-                items: Vec::new(),
-                cursor: None,
-            },
-        }
-    }
-}
-
-impl Default for GetCompressedTokenBalancesByOwnerResponse {
-    fn default() -> Self {
-        Self {
-            context: ZkCompressedContext::default(),
-            value: TokenBalanceList {
-                token_balances: Vec::new(),
-                cursor: None,
-            },
-        }
-    }
-}
-
-impl Default for GetCompressionSignaturesForAccountResponse {
-    fn default() -> Self {
-        Self {
-            context: ZkCompressedContext::default(),
-            value: SignatureInfoList { items: Vec::new() },
-        }
-    }
-}
-
-impl Default for GetCompressedTokenBalancesByOwnerV2Response {
-    fn default() -> Self {
-        Self {
-            context: ZkCompressedContext::default(),
-            value: TokenBalanceListV2 {
-                items: Vec::new(),
-                cursor: None,
-            },
-        }
-    }
-}
-
-impl Default for GetCompressionSignaturesForAddressResponse {
-    fn default() -> Self {
-        Self {
-            context: ZkCompressedContext::default(),
-            value: PaginatedSignatureInfoList {
-                items: Vec::new(),
-                cursor: None,
-            },
-        }
-    }
-}
-
-impl Default for GetCompressionSignaturesForOwnerResponse {
-    fn default() -> Self {
-        Self {
-            context: ZkCompressedContext::default(),
-            value: PaginatedSignatureInfoList {
-                items: Vec::new(),
-                cursor: None,
-            },
-        }
-    }
-}
-
-impl Default for GetCompressionSignaturesForTokenOwnerResponse {
-    fn default() -> Self {
-        Self {
-            context: ZkCompressedContext::default(),
-            value: PaginatedSignatureInfoList {
-                items: Vec::new(),
-                cursor: None,
-            },
-        }
-    }
-}
-
-impl Default for GetLatestCompressionSignaturesResponse {
-    fn default() -> Self {
-        Self {
-            context: ZkCompressedContext::default(),
-            value: PaginatedSignatureInfoList {
-                items: Vec::new(),
-                cursor: None,
-            },
-        }
-    }
 }
