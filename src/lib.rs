@@ -13,6 +13,7 @@ pub mod utils;
 pub mod wallet;
 pub mod webhook;
 pub mod websocket;
+pub mod zk_compression;
 
 pub use builder::HeliusBuilder;
 pub use client::Helius;
