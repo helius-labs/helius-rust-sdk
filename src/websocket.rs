@@ -30,10 +30,19 @@ use tokio_tungstenite::{
     MaybeTlsStream, WebSocketStream,
 };
 
+/// Base WebSocket URL for the Helius enhanced (Geyser) endpoint on mainnet.
+/// The API key is appended as a query parameter.
 pub const ENHANCED_WEBSOCKET_URL_MAINNET: &str = "wss://atlas-mainnet.helius-rpc.com/?api-key=";
+
+/// Base WebSocket URL for the Helius enhanced (Geyser) endpoint on devnet.
+/// The API key is appended as a query parameter.
 pub const ENHANCED_WEBSOCKET_URL_DEVNET: &str = "wss://atlas-devnet.helius-rpc.com/?api-key=";
 
+/// Default interval in seconds between WebSocket ping frames sent to keep the connection alive.
 pub const DEFAULT_PING_DURATION_SECONDS: u64 = 10;
+
+/// Default maximum number of consecutive missed pong responses before the connection is
+/// considered dead and closed.
 pub const DEFAULT_MAX_FAILED_PINGS: usize = 3;
 
 // pub type Result<T = ()> = Result<T, HeliusError>;
@@ -140,11 +149,19 @@ impl EnhancedWebsocket {
         })
     }
 
+    /// Gracefully shuts down the WebSocket connection.
+    ///
+    /// Sends a shutdown signal and waits for the background WebSocket task to complete.
+    /// This consumes `self`, preventing further use of the connection.
     pub async fn shutdown(self) -> Result<()> {
         let _ = self.shutdown_sender.send(());
         self.ws.await.unwrap() // WS future should not be cancelled or panicked
     }
 
+    /// Sets the node version for compatibility-aware message handling.
+    ///
+    /// # Arguments
+    /// * `version` - The semver version of the connected Solana node
     pub async fn set_node_version(&self, version: semver::Version) -> Result<()> {
         let mut w_node_version = self.node_version.write().await;
         *w_node_version = Some(version);
