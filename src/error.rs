@@ -64,7 +64,7 @@ pub enum HeliusError {
 
     /// Indicates too many requests are sent in a given amount of time
     ///
-    /// This error includes the path to help identify a throttled request. Please visit https://www.helius.dev/docs/welcome/pricing-and-rate-limits to see all the
+    /// This error includes the path to help identify a throttled request. Please visit https://www.helius.dev/docs/billing/rate-limits to see all the
     /// current rate limits for each standard plan
     #[error("Too many requests made to {path}")]
     RateLimitExceeded { path: String },

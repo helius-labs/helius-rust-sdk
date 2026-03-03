@@ -198,14 +198,14 @@ Our SDK is designed to provide a seamless developer experience when building on 
 ### DAS API
 - [`get_asset`](https://www.helius.dev/docs/api-reference/das/getasset) - Gets an asset by its ID
 - [`get_asset_batch`](https://www.helius.dev/docs/api-reference/das/getassetbatch) - Gets multiple assets by their ID
-- [`get_asset_proof`](https://www.helius.dev/docs/compression-and-das-api/digital-asset-standard-das-api/get-asset-proof) - Gets a merkle proof for a compressed asset by its ID
-- [`get_asset_proof_batch`](https://www.helius.dev/docs/api-reference/das/getassetproof) - Gets multiple asset proofs by their IDs
+- [`get_asset_proof`](https://www.helius.dev/docs/api-reference/das/getassetproof) - Gets a merkle proof for a compressed asset by its ID
+- [`get_asset_proof_batch`](https://www.helius.dev/docs/api-reference/das/getassetproofbatch) - Gets multiple asset proofs by their IDs
 - [`get_assets_by_owner`](https://www.helius.dev/docs/api-reference/das/getassetsbyowner) - Gets a list of assets owned by a given address
 - [`get_assets_by_authority`](https://www.helius.dev/docs/api-reference/das/getassetsbyauthority) - Gets a list of assets of a given authority
 - [`get_assets_by_creator`](https://www.helius.dev/docs/api-reference/das/getassetsbycreator) - Gets a list of assets of a given creator
 - [`get_assets_by_group`](https://www.helius.dev/docs/api-reference/das/getassetsbygroup) - Gets a list of assets by a group key and value
 - [`search_assets`](https://www.helius.dev/docs/api-reference/das/searchassets) - Gets assets based on the custom search criteria passed in
-- [`get_signatures_for_asset`](https://www.helius.dev/docs/api-reference/das/getsignaturesforasset#getsignaturesforasset) - Gets transaction signatures for a given asset
+- [`get_signatures_for_asset`](https://www.helius.dev/docs/api-reference/das/getsignaturesforasset) - Gets transaction signatures for a given asset
 - [`get_token_accounts`](https://www.helius.dev/docs/api-reference/das/gettokenaccounts) - Gets information about all token accounts for a specific mint or owner
 - [`get_nft_edition`](https://www.helius.dev/docs/api-reference/das/getnfteditions) - Gets all the NFT editions  associated with a specific master NFT
 
@@ -244,8 +244,8 @@ Our SDK is designed to provide a seamless developer experience when building on 
 - [`create_webhook`](https://www.helius.dev/docs/api-reference/webhooks/create-webhook) - Creates a webhook given account addresses
 - [`delete_webhook`](https://www.helius.dev/docs/api-reference/webhooks/delete-webhook) - Deletes a given Helius webhook programmatically
 - [`edit_webhook`](https://www.helius.dev/docs/api-reference/webhooks/update-webhook) - Edits a Helius webhook programmatically
-- [`get_all_webhooks`](https://www.helius.dev/docs/webhooks-and-websockets/api-reference/get-all-webhooks) - Retrieves all Helius webhooks programmatically
-- [`get_webhook_by_id`](https://www.helius.dev/docs/api-reference/webhooks/get-all-webhooks) - Gets a webhook config given a webhook ID
+- [`get_all_webhooks`](https://www.helius.dev/docs/api-reference/webhooks/get-all-webhooks) - Retrieves all Helius webhooks programmatically
+- [`get_webhook_by_id`](https://www.helius.dev/docs/api-reference/webhooks/get-webhook) - Gets a webhook config given a webhook ID
 - [`remove_addresses_from_webhook`](https://github.com/helius-labs/helius-rust-sdk/blob/bf24259e3333ae93126bb65b342c2c63e80e07a6/src/webhook.rs#L75-L105) - Removes a list of addresses from an existing webhook by its ID
 
 ### Helius Sender
