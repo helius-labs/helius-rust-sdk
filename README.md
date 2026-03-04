@@ -169,7 +169,7 @@ The `Helius` client has an embedded [Solana client](https://docs.rs/solana-clien
 For asynchronous operations, use `Helius::new_async()` or `HeliusBuilder` with `.with_async_solana()`. The async client can be accessed via `helius.async_connection()?.some_async_method().await?` where `some_async_method()` is a given async RPC method.
 
 ### Enhanced WebSockets
-Use `Helius::new_async()` or `HeliusBuilder` with `.with_websocket(None, None)` to create a client with WebSocket support. This enables the [Geyser Enhanced WebSocket methods](https://docs.helius.dev/webhooks-and-websockets/websockets#helius-geyser-enhanced-websockets-beta) [`transactionSubscribe`](https://docs.helius.dev/webhooks-and-websockets/websockets#transaction-subscribe) and [`accountSubscribe`](https://docs.helius.dev/webhooks-and-websockets/websockets#account-subscribe)
+Use `Helius::new_async()` or `HeliusBuilder` with `.with_websocket(None, None)` to create a client with WebSocket support. This enables our [Enhanced WebSocket methods](https://www.helius.dev/docs/enhanced-websockets) [`transactionSubscribe`](https://www.helius.dev/docs/enhanced-websockets/transaction-subscribe) and [`accountSubscribe`](https://www.helius.dev/docs/enhanced-websockets/account-subscribe)
 
 ### Examples
 More examples of how to use the SDK can be found in the [`examples`](https://github.com/helius-labs/helius-rust-sdk/tree/dev/examples) directory.
@@ -186,7 +186,7 @@ You may encounter several error codes when working with the Helius Rust SDK. Bel
 
 If you encounter any of these errors:
 - Refer to [`errors.rs`](https://github.com/helius-labs/helius-rust-sdk/blob/dev/src/error.rs) for a list of all possible errors returned by the `Helius` client
-- Refer to the [Helius documentation](https://docs.helius.dev/) for further guidance
+- Refer to the [Helius documentation](https://www.helius.dev/docs/) for further guidance
 - Reach out to the Helius support team for more detailed assistance
 
 ### Result Type Alias
@@ -196,30 +196,56 @@ The SDK also has [a handy type alias for `Result`](https://github.com/helius-lab
 Our SDK is designed to provide a seamless developer experience when building on Solana. We've separated the core functionality into various segments:
 
 ### DAS API
-- [`get_asset`](https://docs.helius.dev/compression-and-das-api/digital-asset-standard-das-api/get-asset) - Gets an asset by its ID
-- [`get_asset_batch`](https://docs.helius.dev/compression-and-das-api/digital-asset-standard-das-api/get-asset/get-asset-batch) - Gets multiple assets by their ID
-- [`get_asset_proof`](https://docs.helius.dev/compression-and-das-api/digital-asset-standard-das-api/get-asset-proof) - Gets a merkle proof for a compressed asset by its ID
-- [`get_asset_proof_batch`](https://docs.helius.dev/compression-and-das-api/digital-asset-standard-das-api/get-asset-proof/get-asset-proof-batch) - Gets multiple asset proofs by their IDs
-- [`get_assets_by_owner`](https://docs.helius.dev/compression-and-das-api/digital-asset-standard-das-api/get-assets-by-owner) - Gets a list of assets owned by a given address
-- [`get_assets_by_authority`](https://docs.helius.dev/compression-and-das-api/digital-asset-standard-das-api/get-assets-by-authority) - Gets a list of assets of a given authority
-- [`get_assets_by_creator`](https://docs.helius.dev/compression-and-das-api/digital-asset-standard-das-api/get-assets-by-creator) - Gets a list of assets of a given creator
-- [`get_assets_by_group`](https://docs.helius.dev/compression-and-das-api/digital-asset-standard-das-api/get-assets-by-group) - Gets a list of assets by a group key and value
-- [`search_assets`](https://docs.helius.dev/compression-and-das-api/digital-asset-standard-das-api/search-assets) - Gets assets based on the custom search criteria passed in
-- [`get_signatures_for_asset`](https://docs.helius.dev/compression-and-das-api/digital-asset-standard-das-api/get-signatures-for-asset) - Gets transaction signatures for a given asset
-- [`get_token_accounts`](https://docs.helius.dev/compression-and-das-api/digital-asset-standard-das-api/get-token-accounts) - Gets information about all token accounts for a specific mint or owner
-- [`get_nft_edition`](https://docs.helius.dev/compression-and-das-api/digital-asset-standard-das-api/get-nft-editions) - Gets all the NFT editions  associated with a specific master NFT
+- [`get_asset`](https://www.helius.dev/docs/api-reference/das/getasset) - Gets an asset by its ID
+- [`get_asset_batch`](https://www.helius.dev/docs/api-reference/das/getassetbatch) - Gets multiple assets by their ID
+- [`get_asset_proof`](https://www.helius.dev/docs/api-reference/das/getassetproof) - Gets a merkle proof for a compressed asset by its ID
+- [`get_asset_proof_batch`](https://www.helius.dev/docs/api-reference/das/getassetproofbatch) - Gets multiple asset proofs by their IDs
+- [`get_assets_by_owner`](https://www.helius.dev/docs/api-reference/das/getassetsbyowner) - Gets a list of assets owned by a given address
+- [`get_assets_by_authority`](https://www.helius.dev/docs/api-reference/das/getassetsbyauthority) - Gets a list of assets of a given authority
+- [`get_assets_by_creator`](https://www.helius.dev/docs/api-reference/das/getassetsbycreator) - Gets a list of assets of a given creator
+- [`get_assets_by_group`](https://www.helius.dev/docs/api-reference/das/getassetsbygroup) - Gets a list of assets by a group key and value
+- [`search_assets`](https://www.helius.dev/docs/api-reference/das/searchassets) - Gets assets based on the custom search criteria passed in
+- [`get_signatures_for_asset`](https://www.helius.dev/docs/api-reference/das/getsignaturesforasset) - Gets transaction signatures for a given asset
+- [`get_token_accounts`](https://www.helius.dev/docs/api-reference/das/gettokenaccounts) - Gets information about all token accounts for a specific mint or owner
+- [`get_nft_edition`](https://www.helius.dev/docs/api-reference/das/getnfteditions) - Gets all the NFT editions  associated with a specific master NFT
+
+### ZK Compression
+- [`get_compressed_account`](https://www.helius.dev/docs/api-reference/zk-compression/getcompressedaccount) - Gets a compressed account by its address or hash
+- [`get_compressed_account_proof`](https://www.helius.dev/docs/api-reference/zk-compression/getcompressedaccountproof) - Gets a Merkle proof for a compressed account
+- [`get_compressed_accounts_by_owner`](https://www.helius.dev/docs/api-reference/zk-compression/getcompressedaccountsbyowner) - Gets all compressed accounts owned by a given address
+- [`get_compressed_balance`](https://www.helius.dev/docs/api-reference/zk-compression/getcompressedbalance) - Gets the balance of a compressed account
+- [`get_compressed_balance_by_owner`](https://www.helius.dev/docs/api-reference/zk-compression/getcompressedbalancebyowner) - Gets the total compressed SOL balance across all accounts owned by a given address
+- [`get_compressed_mint_token_holders`](https://www.helius.dev/docs/api-reference/zk-compression/getcompressedminttokenholders) - Lists all holders of a specific compressed token mint
+- [`get_compressed_token_account_balance`](https://www.helius.dev/docs/api-reference/zk-compression/getcompressedtokenaccountbalance) - Gets the token balance of a compressed token account
+- [`get_compressed_token_accounts_by_delegate`](https://www.helius.dev/docs/api-reference/zk-compression/getcompressedtokenaccountsbydelegate) - Gets all compressed token accounts delegated to a specific address
+- [`get_compressed_token_accounts_by_owner`](https://www.helius.dev/docs/api-reference/zk-compression/getcompressedtokenaccountsbyowner) - Gets all compressed token accounts owned by a specific address
+- [`get_compressed_token_balances_by_owner`](https://www.helius.dev/docs/api-reference/zk-compression/getcompressedtokenbalancesbyowner) - Gets all token balances for compressed accounts owned by an address
+- [`get_compressed_token_balances_by_owner_v2`](https://www.helius.dev/docs/api-reference/zk-compression/getcompressedtokenbalancesbyownerv2) - Enhanced version of `get_compressed_token_balances_by_owner` with additional iteration support
+- [`get_compression_signatures_for_account`](https://www.helius.dev/docs/api-reference/zk-compression/getcompressionsignaturesforaccount) - Gets transaction signatures associated with a compressed account
+- [`get_compression_signatures_for_owner`](https://www.helius.dev/docs/api-reference/zk-compression/getcompressionsignaturesforowner) - Gets transaction signatures for all compressed accounts owned by an address
+- [`get_compression_signatures_for_token_owner`](https://www.helius.dev/docs/api-reference/zk-compression/getcompressionsignaturesfortokenowner) - Gets transaction signatures for compressed token accounts owned by an address
+- [`get_indexer_health`](https://www.helius.dev/docs/api-reference/zk-compression/getindexerhealth) - Returns the health status of the compression indexer
+- [`get_indexer_slot`](https://www.helius.dev/docs/api-reference/zk-compression/getindexerslot) - Gets the latest slot processed by the compression indexer
+- [`get_latest_compression_signatures`](https://www.helius.dev/docs/api-reference/zk-compression/getlatestcompressionsignatures) - Gets the most recent compression transaction signatures across the network
+- [`get_latest_non_voting_signatures`](https://www.helius.dev/docs/api-reference/zk-compression/getlatestnonvotingsignatures) - Gets the most recent non-voting transaction signatures
+- [`get_multiple_compressed_account_proofs`](https://www.helius.dev/docs/api-reference/zk-compression/getmultiplecompressedaccountproofs) - Gets Merkle proofs for multiple compressed accounts in a single request
+- [`get_multiple_compressed_accounts`](https://www.helius.dev/docs/api-reference/zk-compression/getmultiplecompressedaccounts) - Gets multiple compressed accounts in a single request
+- [`get_multiple_new_address_proofs`](https://www.helius.dev/docs/api-reference/zk-compression/getmultiplenewaddressproofs) - Gets proofs for multiple new addresses
+- [`get_multiple_new_address_proofs_v2`](https://www.helius.dev/docs/api-reference/zk-compression/getmultiplenewaddressProofsv2) - Enhanced version of `get_multiple_new_address_proofs` with additional capabilities
+- [`get_transaction_with_compression_info`](https://www.helius.dev/docs/api-reference/zk-compression/gettransactionwithcompressioninfo) - Gets transaction details including compression-specific metadata
+- [`get_validity_proof`](https://www.helius.dev/docs/api-reference/zk-compression/getvalidityproof) - Gets a validity proof for compressed data
 
 ### Enhanced Transactions API
-- [`parse_transactions`](https://docs.helius.dev/solana-apis/enhanced-transactions-api/parse-transaction-s) - Parses transactions given an array of transaction IDs
-- [`parsed_transaction_history`](https://docs.helius.dev/solana-apis/enhanced-transactions-api/parsed-transaction-history) - Retrieves a parsed transaction history for a specific address
+- [`parse_transactions`](https://www.helius.dev/docs/api-reference/enhanced-transactions/gettransactions) - Parses transactions given an array of transaction IDs
+- [`parsed_transaction_history`](https://www.helius.dev/docs/api-reference/enhanced-transactions/gettransactionsbyaddress) - Retrieves a parsed transaction history for a specific address
 
 ### Webhooks
 - [`append_addresses_to_webhook`](https://github.com/helius-labs/helius-rust-sdk/blob/2d161e1ebf6d06df686d9e248ea80de215457b40/src/webhook.rs#L50-L73) - Appends a set of addresses to a given webhook
-- [`create_webhook`](https://docs.helius.dev/webhooks-and-websockets/api-reference/create-webhook) - Creates a webhook given account addresses
-- [`delete_webhook`](https://docs.helius.dev/webhooks-and-websockets/api-reference/delete-webhook) - Deletes a given Helius webhook programmatically
-- [`edit_webhook`](https://docs.helius.dev/webhooks-and-websockets/api-reference/edit-webhook) - Edits a Helius webhook programmatically
-- [`get_all_webhooks`](https://docs.helius.dev/webhooks-and-websockets/api-reference/get-all-webhooks) - Retrieves all Helius webhooks programmatically
-- [`get_webhook_by_id`](https://docs.helius.dev/webhooks-and-websockets/api-reference/get-webhook) - Gets a webhook config given a webhook ID
+- [`create_webhook`](https://www.helius.dev/docs/api-reference/webhooks/create-webhook) - Creates a webhook given account addresses
+- [`delete_webhook`](https://www.helius.dev/docs/api-reference/webhooks/delete-webhook) - Deletes a given Helius webhook programmatically
+- [`edit_webhook`](https://www.helius.dev/docs/api-reference/webhooks/update-webhook) - Edits a Helius webhook programmatically
+- [`get_all_webhooks`](https://www.helius.dev/docs/api-reference/webhooks/get-all-webhooks) - Retrieves all Helius webhooks programmatically
+- [`get_webhook_by_id`](https://www.helius.dev/docs/api-reference/webhooks/get-webhook) - Gets a webhook config given a webhook ID
 - [`remove_addresses_from_webhook`](https://github.com/helius-labs/helius-rust-sdk/blob/bf24259e3333ae93126bb65b342c2c63e80e07a6/src/webhook.rs#L75-L105) - Removes a list of addresses from an existing webhook by its ID
 
 ### Helius Sender
