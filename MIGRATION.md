@@ -10,6 +10,8 @@ This guide covers the breaking changes in the Helius Rust SDK 1.0 release and ho
 - **`Config.api_key` is now `Option<ApiKey>`**: Type-safe API key with validation
 - **`new()` is still synchronous**: No `.await` needed for basic clients
 - **`new_async()` is async**: Only the WebSocket constructor requires `.await`
+- **Jito methods removed**: Use Helius Sender instead
+- **`UiTransactionEncoding` serialization fixed**: Variants now serialize as lowercase (`"json"`, `"jsonParsed"`)
 
 ## Constructor Changes
 
@@ -109,6 +111,45 @@ let helius = HeliusBuilder::new()
     .with_api_key("optional-key")?
     .build()
     .await?;
+```
+
+## Jito Methods Removed
+
+All Jito methods (deprecated in 0.3.0) have been removed. Use Helius Sender instead:
+
+| Removed Method | Replacement |
+|---|---|
+| `add_tip_instruction(...)` | Not needed — Helius Sender handles fees automatically |
+| `send_jito_bundle(...)` | `send_smart_transaction_with_sender(config, options).await?` |
+| `get_bundle_statuses(...)` | Check transaction status via `connection().get_signature_statuses(...)` |
+| `create_smart_transaction_with_tip(...)` | `create_smart_transaction(config).await?` |
+| `send_smart_transaction_with_tip(...)` | `send_smart_transaction_with_sender(config, options).await?` |
+| `send_smart_transaction_with_seeds_and_tip(...)` | `send_smart_transaction_with_seeds_and_sender(config, options).await?` |
+
+```rust
+// Before (0.x) — Jito
+let sig = helius.send_smart_transaction_with_tip(config, None, Some(50_000)).await?;
+
+// After (1.0) — Helius Sender
+use helius::types::SendOptions;
+let sig = helius.send_smart_transaction_with_sender(config, Some(SendOptions {
+    skip_preflight: true,
+    ..Default::default()
+})).await?;
+```
+
+## UiTransactionEncoding Serialization Fix
+
+`UiTransactionEncoding` variants now serialize as lowercase camelCase to match the Solana RPC spec. If you were passing raw encoding strings to work around this bug, you can now use the enum directly:
+
+```rust
+// Before (0.x) — enum serialized incorrectly ("Json", "JsonParsed")
+// You may have used raw strings as a workaround
+
+// After (1.0) — enum serializes correctly ("json", "jsonParsed")
+use helius::types::UiTransactionEncoding;
+let encoding = UiTransactionEncoding::Json;       // serializes as "json"
+let encoding = UiTransactionEncoding::JsonParsed;  // serializes as "jsonParsed"
 ```
 
 ## Quick Find-and-Replace
