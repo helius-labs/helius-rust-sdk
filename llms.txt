@@ -1,6 +1,6 @@
 ---
 url: https://github.com/helius-labs/helius-rust-sdk
-last_updated: 2026-02-19
+last_updated: 2026-03-11
 ---
 
 # Helius Rust SDK
@@ -31,6 +31,9 @@ Use the Helius Rust SDK when you need to:
 - Send transactions with ultra-low latency via Helius Sender
 - Set up webhooks for on-chain events (sales, transfers, swaps)
 - Stream real-time blockchain data via Enhanced WebSockets
+- Look up wallet identity, balances, transfers, and funding sources
+- Work with ZK compressed accounts and tokens
+- Stake SOL, unstake, and withdraw via the Helius validator
 - Make RPC calls on Solana's most performant infrastructure
 - Build high-performance Rust backends for Solana applications
 
@@ -39,7 +42,7 @@ Use the Helius Rust SDK when you need to:
 Add to your `Cargo.toml`:
 ```toml
 [dependencies]
-helius = "0.5"
+helius = "1.0"
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 ```
 
@@ -67,33 +70,98 @@ async fn main() -> Result<()> {
 
 ## Examples Directory
 
-The `examples/` directory contains working code samples for SDK features:
+The `examples/` directory contains working code samples organized by feature:
 
 ```
 examples/
-├── get_asset_batch.rs                        # DAS API: batch asset fetching
-├── get_asset_proof_batch.rs                  # DAS API: Merkle proofs for cNFTs
-├── get_transactions_for_address.rs           # RPC: transaction history
-├── get_transactions_for_address_with_filters.rs  # RPC: filtered tx history
-├── get_priority_fee_estimate.rs              # RPC: priority fee estimation
-├── get_program_accounts_v2.rs                # RPC V2: paginated program accounts
-├── get_token_accounts_by_owner_v2.rs         # RPC V2: paginated token accounts
-├── get_all_program_accounts.rs               # Auto-paginating program accounts
-├── get_all_token_accounts_by_owner.rs        # Auto-paginating token accounts
-├── send_smart_transaction_with_seeds.rs      # Helius Sender: thread-safe transactions
-├── create_webhook.rs                         # Webhook creation
-├── edit_webhook.rs                           # Webhook modification
-├── delete_webhook.rs                         # Webhook deletion
-├── get_all_webhooks.rs                       # List webhooks
-├── enhanced_websocket_transactions.rs        # WebSocket: transaction streaming
-├── enhanced_websocket_accounts.rs            # WebSocket: account streaming
-├── get_parse_transactions.rs                 # Enhanced: parse transactions
-└── get_parsed_transaction_history.rs         # Enhanced: parsed tx history
+├── das/                                      # DAS API (Digital Asset Standard)
+│   ├── get_asset_batch.rs                    #   Batch asset fetching
+│   ├── get_asset_proof_batch.rs              #   Merkle proofs for cNFTs
+│   ├── get_all_program_accounts.rs           #   Auto-paginating program accounts
+│   └── get_all_token_accounts_by_owner.rs    #   Auto-paginating token accounts
+├── enhanced/                                 # Enhanced transaction parsing
+│   ├── get_parse_transactions.rs             #   Parse transactions by signature
+│   ├── get_parsed_transaction_history.rs     #   Parsed tx history for address
+│   ├── get_transactions_for_address.rs       #   Transaction history
+│   └── get_transactions_for_address_with_filters.rs  # Filtered tx history
+├── helius/                                   # Helius-specific RPC methods
+│   ├── async_config_based_creation.rs        #   HeliusBuilder usage
+│   ├── get_priority_fee_estimate.rs          #   Priority fee estimation
+│   ├── get_program_accounts_v2.rs            #   RPC V2: paginated program accounts
+│   └── get_token_accounts_by_owner_v2.rs     #   RPC V2: paginated token accounts
+├── solana/                                   # Standard Solana RPC
+│   ├── get_latest_blockhash.rs               #   Sync blockhash fetch
+│   └── get_latest_blockhash_async.rs         #   Async blockhash fetch
+├── transactions/                             # Smart transactions & Helius Sender
+│   └── send_smart_transaction_with_seeds.rs  #   Thread-safe transaction sending
+├── wallet/                                   # Wallet API
+│   ├── get_wallet_identity.rs                #   Wallet identity lookup
+│   ├── get_batch_wallet_identity.rs          #   Batch identity lookup
+│   ├── get_wallet_balances.rs                #   Token & NFT balances
+│   ├── get_wallet_history.rs                 #   Transaction history with deltas
+│   ├── get_wallet_transfers.rs               #   Token transfer activity
+│   └── get_wallet_funding_source.rs          #   Original funding source
+├── webhooks/                                 # Webhook CRUD
+│   ├── create_webhook.rs                     #   Create webhook
+│   ├── edit_webhook.rs                       #   Modify webhook
+│   ├── delete_webhook.rs                     #   Delete webhook
+│   ├── get_all_webhooks.rs                   #   List webhooks
+│   ├── get_webhook_by_id.rs                  #   Get webhook by ID
+│   ├── append_address_to_webhook.rs          #   Add address to webhook
+│   └── remove_address_from_webhook.rs        #   Remove address from webhook
+├── websockets/                               # Enhanced WebSocket streaming
+│   ├── enhanced_websocket_transactions.rs    #   Transaction streaming
+│   └── enhanced_websocket_accounts.rs        #   Account streaming
+└── zk_compression/                           # ZK Compression
+    ├── get_compressed_account.rs             #   Fetch compressed account
+    ├── get_compressed_token_balances.rs      #   Compressed token balances
+    └── get_validity_proof.rs                 #   Validity proof for transactions
 ```
 
 Run examples: `cargo run --example get_asset_batch`
 
 Browse examples: https://github.com/helius-labs/helius-rust-sdk/tree/dev/examples
+
+## Client Construction
+
+### Basic Constructors
+
+```rust
+// Sync client (no WebSocket, no async Solana)
+let helius = Helius::new("api-key", Cluster::MainnetBeta)?;
+
+// Async client with WebSocket + async Solana + confirmed commitment
+let helius = Helius::new_async("api-key", Cluster::MainnetBeta).await?;
+
+// Custom RPC URL, no API key required
+let helius = Helius::new_with_url("http://localhost:8899")?;
+```
+
+### HeliusBuilder
+
+Fine-grained control over client configuration:
+
+```rust
+use helius::HeliusBuilder;
+use helius::types::Cluster;
+use solana_commitment_config::CommitmentConfig;
+
+let helius = HeliusBuilder::new()
+    .with_api_key("your-key")?
+    .with_cluster(Cluster::MainnetBeta)
+    .with_async_solana()
+    .with_commitment(CommitmentConfig::confirmed())
+    .with_websocket(Some(5), Some(15))  // custom ping/pong timeouts
+    .build()
+    .await?;
+
+// Custom RPC endpoint
+let helius = HeliusBuilder::new()
+    .with_custom_url("https://my-rpc-provider.com/")?
+    .with_api_key("optional-key")?
+    .build()
+    .await?;
+```
 
 ## Core Capabilities
 
@@ -347,7 +415,7 @@ Stream real-time blockchain data via Helius Enhanced WebSockets.
 
 ```rust
 // Create client with WebSocket support
-let helius = Helius::new_with_ws("api_key", Cluster::MainnetBeta).await?;
+let helius = Helius::new_async("api_key", Cluster::MainnetBeta).await?;
 
 // Subscribe to transactions
 let ws = helius.ws()?;
@@ -375,9 +443,113 @@ let balance = helius.connection().get_balance(&pubkey)?;
 let blockhash = helius.connection().get_latest_blockhash()?;
 let slot = helius.connection().get_slot()?;
 
-// Asynchronous client (use new_with_async_solana)
-let helius = Helius::new_with_async_solana("api_key", Cluster::MainnetBeta)?;
+// Asynchronous client (use HeliusBuilder or new_async)
+let helius = Helius::new_async("api_key", Cluster::MainnetBeta).await?;
 let balance = helius.async_connection()?.get_balance(&pubkey).await?;
+```
+
+### Wallet API
+
+Look up wallet identity, balances, transfer activity, and funding sources.
+
+```rust
+// Get wallet identity (exchanges, protocols, etc.)
+let identity = helius.get_wallet_identity("wallet_address").await?;
+println!("{}: {}", identity.name, identity.category);
+
+// Batch identity lookup (up to 100 addresses)
+let identities = helius.get_batch_wallet_identity(&addresses).await?;
+
+// Get token & NFT balances sorted by USD value
+let balances = helius.get_wallet_balances(
+    "wallet_address",
+    Some(1),     // page
+    Some(100),   // limit
+    Some(false), // show_zero_balance
+    Some(true),  // show_native (SOL)
+    Some(true),  // show_nfts
+).await?;
+println!("Portfolio: ${}", balances.total_usd_value);
+
+// Transaction history with balance changes
+let history = helius.get_wallet_history(
+    "wallet_address",
+    Some(50),                          // limit
+    None,                              // before (pagination cursor)
+    None,                              // after
+    Some("SWAP".to_string()),          // transaction_type filter
+    Some("balanceChanged".to_string()),// token_accounts filter
+).await?;
+
+// Token transfer activity
+let transfers = helius.get_wallet_transfers("wallet_address", Some(50), None).await?;
+
+// Original funding source analysis
+let funding = helius.get_wallet_funding_source("wallet_address").await?;
+println!("Funded by: {} with {} SOL", funding.funder, funding.amount);
+```
+
+### ZK Compression
+
+Work with ZK compressed accounts and tokens for up to 1000x cost savings on-chain storage.
+
+```rust
+use helius::types::{GetCompressedAccountRequest, GetCompressedTokenBalancesByOwnerRequest};
+
+// Get a compressed account by hash
+let account = helius.get_compressed_account(GetCompressedAccountRequest {
+    hash: Some("account_hash".to_string()),
+    ..Default::default()
+}).await?;
+
+// Get compressed token balances for a wallet
+let balances = helius.get_compressed_token_balances_by_owner(
+    GetCompressedTokenBalancesByOwnerRequest {
+        owner: "wallet_address".to_string(),
+        ..Default::default()
+    },
+).await?;
+
+// Get a validity proof for building transactions
+let proof = helius.get_validity_proof(GetValidityProofRequest {
+    hashes: Some(vec!["hash1".to_string()]),
+    ..Default::default()
+}).await?;
+
+// Get compressed token accounts by owner or delegate
+let token_accounts = helius.get_compressed_token_accounts_by_owner(request).await?;
+let delegated = helius.get_compressed_token_accounts_by_delegate(request).await?;
+
+// Get Merkle proof for a compressed account
+let proof = helius.get_compressed_account_proof(request).await?;
+
+// Check indexer health
+let healthy = helius.get_indexer_health().await?;
+```
+
+### Staking
+
+Create, delegate, unstake, and withdraw stake accounts via the Helius validator.
+
+```rust
+use solana_sdk::pubkey::Pubkey;
+
+// Create and delegate a stake account (returns unsigned tx + stake account pubkey)
+let (unsigned_tx, stake_pubkey) = helius.create_stake_transaction(owner_pubkey, 1.0).await?;
+
+// Deactivate a stake account (returns unsigned tx; ~2 epoch cooldown)
+let unsigned_tx = helius.create_unstake_transaction(owner_pubkey, stake_pubkey).await?;
+
+// Withdraw from a fully cooled-down stake account (returns unsigned tx)
+let unsigned_tx = helius.create_withdraw_stake_transaction(
+    owner_pubkey,
+    stake_pubkey,
+    destination_pubkey,
+    lamports,
+).await?;
+
+// Get all stake accounts for a wallet
+let stake_accounts = helius.get_stake_accounts(owner_pubkey).await?;
 ```
 
 ## Key Types
@@ -479,11 +651,11 @@ tokio::spawn(async move {
 ```toml
 # Default: native TLS (OpenSSL)
 [dependencies]
-helius = "0.5"
+helius = "1.0"
 
 # Alternative: rustls (pure Rust, no OpenSSL dependency)
 [dependencies]
-helius = { version = "0.5", default-features = false, features = ["rustls"] }
+helius = { version = "1.0", default-features = false, features = ["rustls"] }
 ```
 
 ## Plans and Rate Limits
