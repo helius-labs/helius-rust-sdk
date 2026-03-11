@@ -6,20 +6,29 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-03-11
+
 ### Added
 - `HeliusBuilder` for flexible client configuration (custom timeouts, TLS, connection settings)
+- ZK Compression support: 20+ new RPC methods for compressed accounts, token accounts, balances, proofs, and signatures
+- Wallet API support: identity, balances, transfers, transaction history, and funding source endpoints
 - `llms.txt` for improved AI discoverability
 - `AGENTS.md` and `CLAUDE.md` contributing guides for AI agents
 - GitHub issue templates for bug reports and feature requests
 - Extensive doc comments and code documentation across the codebase
-- Wallet API support: identity, balances, transfers, transaction history, and funding source endpoints
+- Migration guide (`MIGRATION.md`) for upgrading from 0.x to 1.0
 
 ### Changed
 - **Breaking**: Client creation is now handled via `HeliusBuilder::new()` for advanced configuration; `Helius::new()`, `Helius::new_async()`, and `Helius::new_with_url()` remain available as convenience constructors
+- **Breaking**: `Config.api_key` changed from `String` to `Option<ApiKey>` with type-safe validation
 - Improved SOL to lamports conversion with overflow and precision validation
 
 ### Removed
-- Deprecated Jito methods that were previously marked with `#[deprecated]`
+- **Breaking**: Deprecated Jito methods removed (`add_tip_instruction`, `create_smart_transaction_with_tip`, `send_jito_bundle`, `get_bundle_statuses`, `send_smart_transaction_with_tip`, `send_smart_transaction_with_seeds_and_tip`); use Helius Sender instead
+- **Breaking**: Removed 5 legacy constructors (`new_with_commitment`, `new_with_async_solana`, `new_with_async_solana_and_commitment`, `new_with_ws`, `new_with_ws_with_timeouts`); use `HeliusBuilder` instead
+
+### Fixed
+- `UiTransactionEncoding` variants now serialize correctly as lowercase (`"json"`, `"jsonParsed"`) instead of PascalCase (`"Json"`, `"JsonParsed"`)
 
 ## [0.5.1] - 2026-01-19
 
@@ -170,7 +179,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - Integration test suite using `mockito`
 - GitHub Actions CI workflow
 
-[Unreleased]: https://github.com/helius-labs/helius-rust-sdk/compare/v0.5.1...HEAD
+[Unreleased]: https://github.com/helius-labs/helius-rust-sdk/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/helius-labs/helius-rust-sdk/compare/v0.5.1...v1.0.0
 [0.5.1]: https://github.com/helius-labs/helius-rust-sdk/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/helius-labs/helius-rust-sdk/compare/v0.4.1...v0.5.0
 [0.4.1]: https://github.com/helius-labs/helius-rust-sdk/compare/v0.3.2...v0.4.1
