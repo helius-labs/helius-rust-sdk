@@ -189,6 +189,7 @@ pub enum PriorityLevel {
 
 /// The encoding format for transaction data in RPC responses.
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq)]
+#[serde(rename_all = "camelCase")]
 pub enum UiTransactionEncoding {
     Binary,
     Base64,
