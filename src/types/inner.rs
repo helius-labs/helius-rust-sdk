@@ -1600,6 +1600,14 @@ pub struct Webhook {
     /// The encoding for raw webhook payloads (default: `JsonParsed`)
     #[serde(default)]
     pub encoding: AccountWebhookEncoding,
+    /// Whether the webhook is actively receiving deliveries. Defaults to `true`.
+    /// Webhooks may be automatically disabled if the endpoint has a high failure rate.
+    #[serde(default = "default_active")]
+    pub active: bool,
+}
+
+fn default_active() -> bool {
+    true
 }
 
 /// Request body for creating a new Helius webhook.
@@ -1690,6 +1698,21 @@ pub struct EditWebhookRequest {
     /// The encoding for raw webhook payloads
     #[serde(default)]
     pub encoding: AccountWebhookEncoding,
+}
+
+/// Request body for toggling a webhook on or off.
+///
+/// Enables or disables a webhook without deleting it. Use this to re-enable a webhook
+/// that was automatically disabled due to a high endpoint failure rate, or to temporarily
+/// pause deliveries. After re-enabling, the webhook enters a 24-hour grace period during
+/// which it will not be automatically disabled again.
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct ToggleWebhookRequest {
+    /// The ID of the webhook to toggle (not serialized — used in the URL path)
+    #[serde(skip_serializing)]
+    pub webhook_id: String,
+    /// Set to `true` to enable the webhook or `false` to disable it
+    pub active: bool,
 }
 
 /// Configuration for creating and sending a smart transaction via Helius.

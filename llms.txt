@@ -403,6 +403,13 @@ let webhook = helius.create_webhook(CreateWebhookRequest {
 // List all webhooks
 let webhooks = helius.get_all_webhooks().await?;
 
+// Toggle a webhook on or off (re-enable after auto-disable, or pause deliveries)
+use helius::types::ToggleWebhookRequest;
+let updated = helius.toggle_webhook(ToggleWebhookRequest {
+    webhook_id: "webhook_id".to_string(),
+    active: true, // or false to disable
+}).await?;
+
 // Delete a webhook
 helius.delete_webhook("webhook_id").await?;
 ```

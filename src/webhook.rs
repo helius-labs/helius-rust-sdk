@@ -1,5 +1,5 @@
 use crate::error::Result;
-use crate::types::{CreateWebhookRequest, EditWebhookRequest, Webhook};
+use crate::types::{CreateWebhookRequest, EditWebhookRequest, ToggleWebhookRequest, Webhook};
 use crate::Helius;
 
 use reqwest::{Method, Url};
@@ -135,6 +135,33 @@ impl Helius {
         let parsed_url: Url = Url::parse(&url).expect("Failed to parse URL");
 
         self.rpc_client.handler.send(Method::GET, parsed_url, None::<&()>).await
+    }
+
+    /// Toggles a webhook on or off without deleting it
+    ///
+    /// Use this to re-enable a webhook that was automatically disabled due to a high endpoint
+    /// failure rate, or to temporarily pause deliveries. After re-enabling, the webhook enters
+    /// a 24-hour grace period during which it will not be automatically disabled again.
+    ///
+    /// # Arguments
+    /// * `request` - A `ToggleWebhookRequest` containing the webhook ID and the desired `active` state
+    ///
+    /// # Returns
+    /// A `Result` wrapping the updated `Webhook`, or a `HeliusError` if the request fails
+    pub async fn toggle_webhook(&self, request: ToggleWebhookRequest) -> Result<Webhook> {
+        let api_key = self.config.require_api_key("webhook operations")?;
+        let url: String = format!(
+            "{}v0/webhooks/{}?api-key={}",
+            self.config.endpoints.api,
+            request.webhook_id,
+            api_key.as_str()
+        );
+        let parsed_url: Url = Url::parse(&url).expect("Failed to parse URL");
+
+        self.rpc_client
+            .handler
+            .send(Method::PATCH, parsed_url, Some(&request))
+            .await
     }
 
     /// Deletes a given Helius webhook programmatically

@@ -9,6 +9,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [1.0.0] - 2026-03-11
 
 ### Added
+- `toggle_webhook` method to enable or disable a webhook without deleting it (PATCH `/v0/webhooks/{webhookID}`)
+- `ToggleWebhookRequest` type for the toggle webhook endpoint
+- `active` field on the `Webhook` struct indicating whether the webhook is actively receiving deliveries
 - `HeliusBuilder` for flexible client configuration (custom timeouts, TLS, connection settings)
 - ZK Compression support: 20+ new RPC methods for compressed accounts, token accounts, balances, proofs, and signatures
 - Wallet API support: identity, balances, transfers, transaction history, and funding source endpoints
