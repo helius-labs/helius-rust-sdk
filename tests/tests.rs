@@ -37,6 +37,7 @@ mod webhook {
     mod test_delete_webhook;
     mod test_get_all_webhooks;
     mod test_remove_addresses_from_webhook;
+    mod test_toggle_webhook;
 }
 mod zk_compression {
     mod helpers;
