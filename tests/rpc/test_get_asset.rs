@@ -136,6 +136,7 @@ async fn test_get_asset_success() {
                 mint_extensions: None,
                 token_info: None,
                 group_definition: None,
+                system: None,
                 plugins: None,
                 unknown_plugins: None,
                 mpl_core_info: Some(
@@ -159,12 +160,13 @@ async fn test_get_asset_success() {
         .create();
 
     let config: Arc<Config> = Arc::new(Config {
-        api_key: "fake_api_key".to_string(),
+        api_key: Some(ApiKey::new("fake_api_key").unwrap()),
         cluster: Cluster::Devnet,
         endpoints: HeliusEndpoints {
             api: url.to_string(),
             rpc: url.to_string(),
         },
+        custom_url: None,
     });
 
     let client: Client = Client::new();
@@ -216,12 +218,13 @@ async fn test_get_asset_failure() {
         .create();
 
     let config: Arc<Config> = Arc::new(Config {
-        api_key: "fake_api_key".to_string(),
+        api_key: Some(ApiKey::new("fake_api_key").unwrap()),
         cluster: Cluster::Devnet,
         endpoints: HeliusEndpoints {
             api: url.to_string(),
             rpc: url.to_string(),
         },
+        custom_url: None,
     });
 
     let client: Client = Client::new();

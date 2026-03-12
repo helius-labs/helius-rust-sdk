@@ -14,7 +14,7 @@ pub enum HeliusError {
     /// Indicates an improperly formatted request
     ///
     /// This error occurs when the request parameters do not meet the expected format, are missing required fields,
-    /// or contains invalid data
+    /// or contain invalid data
     #[error("Bad request to {path}: {text}")]
     BadRequest { path: String, text: String },
 
@@ -24,9 +24,9 @@ pub enum HeliusError {
     #[error("Solana client error: {0}")]
     ClientError(#[from] ClientError),
 
-    /// Indicates if a client is not already initialized
+    /// Indicates that a client has not been initialized
     ///
-    /// Useful for the new_with_async_solana method on the `Helius` client
+    /// Returned when accessing `async_connection()` without enabling async via `HeliusBuilder` or `new_async()`
     #[error("Client not initialized: {text}")]
     ClientNotInitialized { text: String },
 
@@ -64,7 +64,7 @@ pub enum HeliusError {
 
     /// Indicates too many requests are sent in a given amount of time
     ///
-    /// This error includes the path to help identify a throttled request. Please visit https://docs.helius.dev/welcome/pricing-and-rate-limits to see all the
+    /// This error includes the path to help identify a throttled request. Please visit https://www.helius.dev/docs/billing/rate-limits to see all the
     /// current rate limits for each standard plan
     #[error("Too many requests made to {path}")]
     RateLimitExceeded { path: String },
@@ -112,18 +112,33 @@ pub enum HeliusError {
     #[error("Unknown error has occurred: HTTP {code} - {text}")]
     Unknown { code: StatusCode, text: String },
 
+    /// Indicates a failure in the underlying WebSocket (tungstenite) connection
+    ///
+    /// This captures connection errors, protocol violations, and other WebSocket-level failures
     #[error("Unable to connect to server: {0}")]
     Tungstenite(#[from] tokio_tungstenite::tungstenite::Error),
 
-    #[error("Websocket connection closed (({0})")]
+    /// Indicates the WebSocket connection was closed unexpectedly
+    ///
+    /// Includes a message describing the close reason or frame
+    #[error("Websocket connection closed ({0})")]
     WebsocketClosed(String),
 
+    /// Represents errors specific to the Helius enhanced (Geyser) WebSocket
+    ///
+    /// Returned for subscription failures, unsupported cluster configurations, or server-side errors
     #[error("Enhanced websocket: {message}: {reason}")]
     EnhancedWebsocket { reason: String, message: String },
 
+    /// Indicates a failure to parse a URL
+    ///
+    /// Returned when a provided RPC or WebSocket URL is malformed
     #[error("Url parse error")]
     UrlParseError(#[from] url::ParseError),
 
+    /// Indicates a TLS/SSL handshake or configuration error
+    ///
+    /// Returned when the HTTP client fails to establish a secure connection
     #[error("TLS error: {0}")]
     TlsError(String),
 }
@@ -154,12 +169,17 @@ impl From<SerdeJsonError> for HeliusError {
 }
 
 impl From<SanitizeError> for HeliusError {
+    /// Converts a Solana `SanitizeError` into [`HeliusError::InvalidInput`]
     fn from(err: SanitizeError) -> Self {
         HeliusError::InvalidInput(err.to_string())
     }
 }
 
 impl From<ReqwestError> for HeliusError {
+    /// Converts a `reqwest::Error` into the appropriate `HeliusError` variant
+    ///
+    /// Builder errors (typically TLS configuration issues) are mapped to [`HeliusError::TlsError`],
+    /// while all other request errors are mapped to [`HeliusError::ReqwestError`]
     fn from(err: reqwest::Error) -> Self {
         if err.is_builder() {
             HeliusError::TlsError(err.to_string())

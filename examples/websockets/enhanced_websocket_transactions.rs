@@ -1,6 +1,6 @@
 use helius::error::Result;
 use helius::types::{Cluster, RpcTransactionsConfig, TransactionSubscribeFilter, TransactionSubscribeOptions};
-use helius::Helius;
+use helius::{Helius, HeliusBuilder};
 use solana_sdk::pubkey;
 use tokio_stream::StreamExt;
 
@@ -10,7 +10,12 @@ async fn main() -> Result<()> {
     let cluster: Cluster = Cluster::MainnetBeta;
 
     // Uses custom ping-pong timeouts to ping every 15s and timeout after 45s of no pong
-    let helius: Helius = Helius::new_with_ws_with_timeouts(api_key, cluster, Some(15), Some(45)).await?;
+    let helius: Helius = HeliusBuilder::new()
+        .with_api_key(api_key)?
+        .with_cluster(cluster)
+        .with_websocket(Some(15), Some(45))
+        .build()
+        .await?;
 
     let key: pubkey::Pubkey = pubkey!("BtsmiEEvnSuUnKxqXj2PZRYpPJAc7C34mGz8gtJ1DAaH");
 

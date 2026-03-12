@@ -1,20 +1,20 @@
 /// # RPC Client for Helius
 ///
-/// This module provides access to the Helius API using an RPC client with an embedded Solana client
+/// This module provides access to the Helius API using an RPC client with an embedded Solana client.
 ///
 /// ## Errors
 ///
-/// Most methods in this client will return a `Result<T, HeliusError>`, where `HeliusError` can be:
+/// Most methods in this client will return a `Result<T, HeliusError>`, where common variants include:
 /// - `BadRequest`: Incorrect request format or parameters. Check the path and the text for details
 /// - `Unauthorized`: Incorrect or missing API key. Ensure you've provided the correct API key
 /// - `NotFound`: The requested resource was not found. This could mean an invalid ID or a non-existent endpoint
 /// - `RateLimitExceeded`: Too many requests have been sent in a short period. Consider implementing retries with an exponential backoff
 /// - `InternalError`: Server-side errors. These are rare and typically indicate issues on the server side. If these issues persist, please contact Helius support
-/// - `Network`: Errors during HTTP communication, typically from underlying network issues
+/// - `ReqwestError`: Errors during HTTP communication, typically from underlying network issues
 /// - `SerdeJson`: Errors during the serialization or deserialization process
 /// - `Unknown`: Catch-all for unclassified errors, with a status code and message provided for further investigation
 ///
-/// Ensure to handle these errors gracefully in your application to maintain robustness and stellar UX
+/// See [`HeliusError`](crate::error::HeliusError) for the full list of error variants.
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::sync::Arc;
@@ -39,9 +39,21 @@ use serde::Serialize;
 use solana_client::rpc_client::RpcClient as SolanaRpcClient;
 use solana_commitment_config::CommitmentConfig;
 
+/// Helius RPC client with an embedded Solana RPC client.
+///
+/// Provides methods for interacting with the Helius DAS API, priority fee estimation,
+/// and enhanced RPC V2 endpoints (`getProgramAccountsV2`, `getTokenAccountsByOwnerV2`,
+/// `getTransactionsForAddress`). The embedded Solana client handles standard Solana
+/// RPC calls.
+///
+/// Constructed internally by [`Helius`](crate::Helius) — use [`HeliusBuilder`](crate::HeliusBuilder)
+/// or [`Helius::new`](crate::Helius::new) to create a client.
 pub struct RpcClient {
+    /// HTTP request handler for Helius API calls
     pub handler: RequestHandler,
+    /// Shared SDK configuration (API key, endpoints)
     pub config: Arc<Config>,
+    /// Embedded Solana RPC client for standard RPC methods
     pub solana_client: Arc<SolanaRpcClient>,
 }
 
@@ -59,7 +71,7 @@ impl RpcClient {
     /// Returns `HeliusError` if the URL isn't formatted correctly or the `RequestHandler` fails to initialize
     pub fn new(client: Arc<Client>, config: Arc<Config>) -> Result<Self> {
         let handler: RequestHandler = RequestHandler::new(client)?;
-        let url: String = format!("{}/?api-key={}", config.endpoints.rpc, config.api_key);
+        let url: String = config.build_rpc_url();
         let solana_client: Arc<SolanaRpcClient> = Arc::new(SolanaRpcClient::new(url));
 
         Ok(RpcClient {
@@ -83,7 +95,7 @@ impl RpcClient {
     /// Returns `HeliusError` if the URL isn't formatted correctly or the `RequestHandler` fails to initialize
     pub fn new_with_commitment(client: Arc<Client>, config: Arc<Config>, commitment: CommitmentConfig) -> Result<Self> {
         let handler: RequestHandler = RequestHandler::new(client)?;
-        let url: String = format!("{}/?api-key={}", config.endpoints.rpc, config.api_key);
+        let url: String = config.build_rpc_url();
         let solana_client: Arc<SolanaRpcClient> = Arc::new(SolanaRpcClient::new_with_commitment(url, commitment));
 
         Ok(RpcClient {
@@ -109,7 +121,7 @@ impl RpcClient {
         R: Debug + Serialize + Send + Sync,
         T: Debug + DeserializeOwned + Default,
     {
-        let base_url: String = format!("{}/?api-key={}", self.config.endpoints.rpc, self.config.api_key);
+        let base_url: String = self.config.build_rpc_url();
         let url: Url = Url::parse(&base_url).expect("Failed to parse URL");
 
         let rpc_request: RpcRequest<R> = RpcRequest::new(method.to_string(), request);
@@ -289,7 +301,7 @@ impl RpcClient {
     ///
     /// # Pagination
     /// * If `pagination_key` is `Some`, pass it into the **next** request to continue
-    /// * If `pagination_key` is `None`, ypu've reached the end
+    /// * If `pagination_key` is `None`, you've reached the end
     /// * Note that if there are fewer than `limit` accounts in a given page it does not imply the end; always check the cursor
     ///
     /// # Incremental Updates
@@ -321,7 +333,7 @@ impl RpcClient {
     ///     
     /// # Pagination
     /// * If `pagination_key` is `Some`, pass it into the **next** request to continue
-    /// * If `pagination_key` is `None`, ypu've reached the end
+    /// * If `pagination_key` is `None`, you've reached the end
     /// * Note that if there are fewer than `limit` accounts in a given page it does not imply the end; always check the cursor
     ///
     /// # Incremental Updates

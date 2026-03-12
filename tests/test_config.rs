@@ -15,7 +15,8 @@ fn test_config_new_with_valid_api_key() {
     assert!(result.is_ok());
 
     let config: Config = result.unwrap();
-    assert_eq!(config.api_key, "valid-api-key");
+    assert!(config.api_key.is_some());
+    assert_eq!(config.api_key.as_ref().unwrap().as_str(), "valid-api-key");
     assert_eq!(config.endpoints.api, "https://api-devnet.helius-rpc.com/");
     assert_eq!(config.endpoints.rpc, "https://devnet.helius-rpc.com/");
 }

@@ -11,8 +11,8 @@ async fn main() -> Result<()> {
     let token_program_id: String = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA".to_string();
 
     let config: GetProgramAccountsV2Config = GetProgramAccountsV2Config {
-        encoding: Some(Encoding::JsonParsed),
-        filters: Some(vec![GpaFilter::DataSize { data_size: 82 }]), // Mint accounts
+        encoding: Some(enums::Encoding::JsonParsed),
+        filters: Some(vec![enums::GpaFilter::DataSize { data_size: 82 }]), // Mint accounts
         ..Default::default()
     };
 

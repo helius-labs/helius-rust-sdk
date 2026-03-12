@@ -6,6 +6,9 @@ use std::str::FromStr;
 
 use super::*;
 
+/// The asset interface type, representing the on-chain program standard used to create the asset.
+///
+/// Used in DAS API responses to classify assets by their underlying program standard.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default)]
 pub enum Interface {
     #[serde(rename = "V1_NFT")]
@@ -35,6 +38,7 @@ pub enum Interface {
     MplCoreCollection,
 }
 
+/// The ownership model for an asset.
 #[derive(Serialize, Deserialize, Debug, Default, Clone, PartialEq)]
 pub enum OwnershipModel {
     #[default]
@@ -44,6 +48,7 @@ pub enum OwnershipModel {
     Token,
 }
 
+/// The royalty distribution model for an asset.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub enum RoyaltyModel {
     #[serde(rename = "creators")]
@@ -54,6 +59,7 @@ pub enum RoyaltyModel {
     Single,
 }
 
+/// The use method for a Metaplex "uses" enabled asset.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub enum UseMethod {
     Burn,
@@ -61,6 +67,7 @@ pub enum UseMethod {
     Multiple,
 }
 
+/// The scope of a delegate's authority over an asset.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub enum Scope {
     #[serde(rename = "full")]
@@ -73,6 +80,7 @@ pub enum Scope {
     Extension,
 }
 
+/// The display context in which an asset's content should be rendered.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub enum Context {
     #[serde(rename = "wallet-default")]
@@ -91,6 +99,7 @@ pub enum Context {
     Vr,
 }
 
+/// The field to sort assets by in DAS API queries.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub enum AssetSortBy {
     #[serde(rename = "id")]
@@ -105,6 +114,7 @@ pub enum AssetSortBy {
     None,
 }
 
+/// The sort direction for DAS API queries.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub enum AssetSortDirection {
     #[serde(rename = "asc")]
@@ -113,6 +123,7 @@ pub enum AssetSortDirection {
     Desc,
 }
 
+/// Specifies whether all or any of the search conditions must be met.
 #[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]
 pub enum SearchConditionType {
     #[serde(rename = "all")]
@@ -121,6 +132,7 @@ pub enum SearchConditionType {
     Any,
 }
 
+/// The type of token to filter by in DAS API queries.
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(rename_all(serialize = "camelCase", deserialize = "camelCase"))]
 pub enum TokenType {
@@ -131,6 +143,7 @@ pub enum TokenType {
     All,
 }
 
+/// The Helius mint API authority public key, varying by cluster.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum MintApiAuthority {
     Mainnet(Pubkey),
@@ -159,6 +172,10 @@ impl From<MintApiAuthority> for Pubkey {
     }
 }
 
+/// The priority fee level for the `getPriorityFeeEstimate` RPC method.
+///
+/// Higher levels correspond to higher percentile estimates, resulting in faster inclusion
+/// at a greater cost.
 #[derive(Serialize, Deserialize, Debug)]
 pub enum PriorityLevel {
     Min,
@@ -170,7 +187,9 @@ pub enum PriorityLevel {
     Default,
 }
 
+/// The encoding format for transaction data in RPC responses.
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq)]
+#[serde(rename_all = "camelCase")]
 pub enum UiTransactionEncoding {
     Binary,
     Base64,
@@ -179,7 +198,16 @@ pub enum UiTransactionEncoding {
     JsonParsed,
 }
 
-/// Enhanced Transaction Types
+/// The classified type of an enhanced transaction.
+///
+/// Helius categorizes every Solana transaction into a labeled type for filtering and display.
+/// These types span NFT marketplace operations, DeFi swaps, staking, governance, and more.
+/// Use with [`ParsedTransactionHistoryRequest`](crate::types::ParsedTransactionHistoryRequest)
+/// to filter transaction history, or inspect the `transaction_type` field on
+/// [`EnhancedTransaction`](crate::types::EnhancedTransaction).
+///
+/// Serialized as `SCREAMING_SNAKE_CASE` (e.g., `NFT_SALE`, `COMPRESSED_NFT_MINT`).
+/// Unrecognized values are captured in the `Other(String)` variant.
 #[derive(Clone, Debug, PartialEq, Eq, Deserialize_enum_str, Serialize_enum_str)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum TransactionType {
@@ -526,6 +554,13 @@ impl TransactionType {
     }
 }
 
+/// The source protocol or marketplace that originated an enhanced transaction.
+///
+/// Identifies the on-chain program or platform responsible for a transaction, such as
+/// `MagicEden`, `Jupiter`, `Raydium`, or `SystemProgram`. Used for filtering transaction
+/// history and labeling swap program sources.
+///
+/// Serialized as `SCREAMING_SNAKE_CASE`. Unrecognized values are captured in `Other(String)`.
 #[derive(Clone, Debug, Eq, PartialEq, Deserialize_enum_str, Serialize_enum_str)]
 #[allow(non_camel_case_types)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
@@ -618,6 +653,10 @@ pub enum Source {
     Other(String),
 }
 
+/// The Metaplex token standard for an asset.
+///
+/// Classifies tokens by their fungibility and edition semantics. Unrecognized values
+/// are captured in `Other(String)`.
 #[derive(Clone, Debug, Eq, PartialEq, Deserialize_enum_str, Serialize_enum_str)]
 pub enum TokenStandard {
     Fungible,
@@ -630,6 +669,7 @@ pub enum TokenStandard {
     Other(String),
 }
 
+/// The context of an NFT sale event, indicating how the sale was initiated.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize_enum_str, Deserialize_enum_str)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum TransactionContext {
@@ -643,6 +683,9 @@ pub enum TransactionContext {
     Other(String),
 }
 
+/// The name of a known DEX or swap program, used to label inner swap hops.
+///
+/// Unrecognized programs are captured in `Other(String)`.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize_enum_str, Deserialize_enum_str)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum ProgramName {
@@ -697,6 +740,7 @@ pub enum ProgramName {
     Other(String),
 }
 
+/// Filter for transaction success/failure status.
 #[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum TransactionStatus {
@@ -706,6 +750,7 @@ pub enum TransactionStatus {
     Failed,
 }
 
+/// The type of webhook, determining the data format and target cluster.
 #[derive(Deserialize, Serialize, Eq, PartialEq, Clone, Debug, Default)]
 pub enum WebhookType {
     #[serde(rename = "enhanced")]
@@ -723,6 +768,7 @@ pub enum WebhookType {
     DiscordDevnet,
 }
 
+/// The encoding format for account data in webhook payloads.
 #[derive(Clone, Debug, Deserialize_enum_str, Serialize_enum_str, Default, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub enum AccountWebhookEncoding {
@@ -732,6 +778,7 @@ pub enum AccountWebhookEncoding {
     Other(String),
 }
 
+/// An identifier for an NFT collection, used to query collections by creator or verified address.
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub enum CollectionIdentifier {
     #[serde(rename = "firstVerifiedCreators")]
@@ -740,12 +787,16 @@ pub enum CollectionIdentifier {
     VerifiedCollectionAddress(Vec<String>),
 }
 
+/// A Solana transaction that can be either a legacy or versioned format.
+///
+/// Used as input to the smart transaction sending methods.
 #[derive(Serialize, Deserialize, Debug)]
 pub enum SmartTransaction {
     Legacy(Transaction),
     Versioned(VersionedTransaction),
 }
 
+/// The encoding format for account data in RPC V2 responses.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum Encoding {
     #[serde(rename = "jsonParsed")]
@@ -758,6 +809,9 @@ pub enum Encoding {
     Base64Zstd,
 }
 
+/// A filter for the `getProgramAccounts` RPC method.
+///
+/// Allows filtering accounts by data size or by matching bytes at a specific offset.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum GpaFilter {
@@ -770,6 +824,9 @@ pub enum GpaFilter {
     },
 }
 
+/// A filter for the `getTokenAccountsByOwner` RPC method.
+///
+/// Restricts results to token accounts for a specific mint or owned by a specific program.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum TokenAccountsOwnerFilter {
