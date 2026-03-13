@@ -101,6 +101,10 @@ fn collect_unique_keypair_refs<'a>(signers: &'a [Keypair], fee_payer: &'a Keypai
     all_signers
 }
 
+fn is_retryable_confirmation_error(err: &HeliusError) -> bool {
+    matches!(err, HeliusError::Timeout { .. })
+}
+
 /// URL to fetch current Jito bundle tip floor prices.
 ///
 /// This endpoint returns the minimum tip amounts required for different
@@ -611,8 +615,8 @@ impl Helius {
                     // Poll for transaction confirmation
                     match self.poll_transaction_confirmation(signature).await {
                         Ok(sig) => return Ok(sig),
-                        // Retry on polling failure
-                        Err(_) => continue,
+                        Err(err) if is_retryable_confirmation_error(&err) => continue,
+                        Err(err) => return Err(err),
                     }
                 }
                 // Retry on send failure
@@ -1150,7 +1154,8 @@ impl Helius {
 
             match self.poll_transaction_confirmation(sig).await {
                 Ok(confirmed) => return Ok(confirmed),
-                Err(_) => sleep(interval).await,
+                Err(err) if is_retryable_confirmation_error(&err) => sleep(interval).await,
+                Err(err) => return Err(err),
             }
         }
     }
@@ -1199,14 +1204,16 @@ impl Helius {
 
 #[cfg(test)]
 mod tests {
-    use super::{collect_unique_keypair_refs, collect_unique_signers};
+    use super::{collect_unique_keypair_refs, collect_unique_signers, is_retryable_confirmation_error};
+    use crate::error::HeliusError;
+    use reqwest::StatusCode;
     use solana_sdk::{
         hash::Hash,
-        instruction::{AccountMeta, Instruction},
+        instruction::{AccountMeta, Instruction, InstructionError},
         message::{v0, VersionedMessage},
         pubkey::Pubkey,
         signature::{Keypair, Signature, Signer},
-        transaction::{Transaction, VersionedTransaction},
+        transaction::{Transaction, TransactionError, VersionedTransaction},
     };
     use std::sync::Arc;
 
@@ -1381,5 +1388,20 @@ mod tests {
                 readonly_signer.sign_message(&message_bytes),
             ]
         );
+    }
+
+    #[test]
+    fn confirmation_retries_only_on_timeout() {
+        let timeout = HeliusError::Timeout {
+            code: StatusCode::REQUEST_TIMEOUT,
+            text: "pending".to_string(),
+        };
+        let tx_error =
+            HeliusError::TransactionError(TransactionError::InstructionError(0, InstructionError::Custom(1)));
+        let invalid_input = HeliusError::InvalidInput("bad config".to_string());
+
+        assert!(is_retryable_confirmation_error(&timeout));
+        assert!(!is_retryable_confirmation_error(&tx_error));
+        assert!(!is_retryable_confirmation_error(&invalid_input));
     }
 }

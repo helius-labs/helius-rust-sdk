@@ -6,6 +6,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+### Fixed
+- Smart transaction confirmation now surfaces on-chain `TransactionError`s immediately instead of retrying until timeout
+
 ## [1.0.0] - 2026-03-12
 
 ### Added
