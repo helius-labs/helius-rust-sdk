@@ -247,6 +247,15 @@ Our SDK is designed to provide a seamless developer experience when building on 
 - [`get_all_webhooks`](https://www.helius.dev/docs/api-reference/webhooks/get-all-webhooks) - Retrieves all Helius webhooks programmatically
 - [`get_webhook_by_id`](https://www.helius.dev/docs/api-reference/webhooks/get-webhook) - Gets a webhook config given a webhook ID
 - [`remove_addresses_from_webhook`](https://github.com/helius-labs/helius-rust-sdk/blob/bf24259e3333ae93126bb65b342c2c63e80e07a6/src/webhook.rs#L75-L105) - Removes a list of addresses from an existing webhook by its ID
+- [`toggle_webhook`](https://www.helius.dev/docs/api-reference/webhooks/toggle-webhook) - Toggles a webhook on or off without deleting it
+
+### Wallet API
+- [`get_wallet_identity`](https://www.helius.dev/docs/api-reference/wallet/get-wallet-identity) - Gets identity information (name, type, category) for a known wallet address
+- [`get_batch_wallet_identity`](https://www.helius.dev/docs/api-reference/wallet/get-batch-wallet-identity) - Gets identity information for multiple wallet addresses in a single request (up to 100)
+- [`get_wallet_balances`](https://www.helius.dev/docs/api-reference/wallet/get-wallet-balances) - Gets token and NFT balances for a wallet, sorted by USD value
+- [`get_wallet_history`](https://www.helius.dev/docs/api-reference/wallet/get-wallet-history) - Gets parsed transaction history with balance changes for a wallet
+- [`get_wallet_transfers`](https://www.helius.dev/docs/api-reference/wallet/get-wallet-transfers) - Gets all token transfer activity for a wallet
+- [`get_wallet_funding_source`](https://www.helius.dev/docs/api-reference/wallet/get-wallet-funding-source) - Discovers the original funding source of a wallet
 
 ### Helius Sender
 - [`create_smart_transaction_with_tip_for_sender`](https://github.com/helius-labs/helius-rust-sdk/blob/47d68afcf644938bc474f609368b214170423bba/src/optimized_transaction.rs#L978-L1007) - Creates an optimized smart transaction with an appended tip transfer instruction for Sender

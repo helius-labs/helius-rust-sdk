@@ -379,8 +379,8 @@ impl HeliusBuilder {
 
         // Warn if no API key for Helius endpoints
         if self.api_key.is_none() {
-            eprintln!(
-                "⚠️  Warning: No API key provided for Helius endpoint. \
+            log::warn!(
+                "No API key provided for Helius endpoint. \
                  Most features require authentication. Use .with_api_key(\"your-key\")"
             );
         }

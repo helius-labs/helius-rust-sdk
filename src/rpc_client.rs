@@ -379,7 +379,7 @@ impl RpcClient {
                 self.get_program_accounts_v2(program_id.clone(), config.clone()).await?;
             all_accounts.extend(response.accounts);
 
-            println!("Fetched {} accounts so far", all_accounts.len());
+            log::info!("Fetched {} accounts so far", all_accounts.len());
 
             if let Some(key) = response.pagination_key {
                 config.pagination_key = Some(key);
