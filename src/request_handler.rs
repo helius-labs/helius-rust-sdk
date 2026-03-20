@@ -104,8 +104,8 @@ impl RequestHandler {
             match serde_json::from_str::<T>(&body_text) {
                 Ok(data) => Ok(data),
                 Err(e) => {
-                    println!("Deserialization error: {}", e);
-                    println!("Raw JSON: {}", body_text);
+                    log::error!("Deserialization error: {}", e);
+                    log::debug!("Raw JSON: {}", body_text);
                     Err(HeliusError::from(e))
                 }
             }

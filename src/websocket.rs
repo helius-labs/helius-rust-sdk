@@ -185,9 +185,10 @@ impl EnhancedWebsocket {
             UnboundedReceiverStream::new(notifications)
                 .filter_map(|value| match serde_json::from_value::<T>(value.clone()) {
                     Err(e) => {
-                        eprintln!(
+                        log::warn!(
                             "Failed to parse websocket notification: {:#?} for value: {:#?}",
-                            e, value
+                            e,
+                            value
                         );
                         ready(None)
                     }
@@ -429,7 +430,7 @@ impl EnhancedWebsocket {
                       }
                     }
                   } else {
-                      eprintln!("Unknown request id: {}", id);
+                      log::warn!("Unknown request id: {}", id);
                       break;
                   }
                   continue;
