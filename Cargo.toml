@@ -1,6 +1,6 @@
 [package]
 name = "helius"
-version = "1.0.0"
+version = "1.0.1"
 rust-version = "1.85.1"
 edition = "2021"
 description = "An asynchronous Helius Rust SDK for building the future of Solana"
