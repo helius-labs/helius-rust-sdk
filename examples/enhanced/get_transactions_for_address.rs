@@ -48,6 +48,9 @@ async fn main() -> Result<()> {
                     TransactionEntry::Full(tx) => {
                         println!("Transaction #{}: {:?}", i + 1, tx);
                     }
+                    TransactionEntry::Unknown(val) => {
+                        println!("Transaction #{} (unknown format): {}", i + 1, val);
+                    }
                 }
             }
 

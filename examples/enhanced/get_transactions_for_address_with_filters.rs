@@ -41,6 +41,9 @@ async fn main() -> Result<()> {
                     TransactionEntry::Signature(sig) => {
                         println!("  {}. {}", i + 1, sig.signature);
                     }
+                    TransactionEntry::Unknown(val) => {
+                        println!("  {}. (unknown format): {}", i + 1, val);
+                    }
                 }
             }
             println!("Pagination token: {:?}", result.pagination_token);
