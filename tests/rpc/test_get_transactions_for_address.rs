@@ -102,9 +102,11 @@ async fn test_get_transactions_for_address_full_success() {
     let mut server = Server::new_with_opts_async(mockito::ServerOpts::default()).await;
     let url = server.url();
 
-    // Mock a full transaction response (matches EncodedTransactionWithStatusMeta shape)
+    // Mock a full transaction response (matches getTransactionsForAddress full mode)
     let mock_data = json!([
         {
+            "slot": 1054,
+            "transactionIndex": 42,
             "transaction": {
                 "signatures": [
                     "5h6xBEauJ3PK6SWCZ1PGjBvj8vDdWG3KpwATGy1ARAXFSDwt8GFXM7W5Ncn16wmqokgpiKRLuS83KUxyZyv2sUYv"
@@ -141,7 +143,7 @@ async fn test_get_transactions_for_address_full_success() {
                 "postTokenBalances": [],
                 "rewards": []
             },
-            "version": "legacy"
+            "blockTime": 1641038400
         }
     ]);
 
@@ -200,6 +202,9 @@ async fn test_get_transactions_for_address_full_success() {
 
     match &result.data[0] {
         TransactionEntry::Full(tx) => {
+            assert_eq!(tx.slot, 1054);
+            assert_eq!(tx.transaction_index, Some(42));
+            assert_eq!(tx.block_time, Some(1641038400));
             assert!(tx.meta.is_some());
             let meta = tx.meta.as_ref().unwrap();
             assert!(meta.err.is_none());

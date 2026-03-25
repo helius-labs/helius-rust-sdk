@@ -12,7 +12,7 @@ use std::time::Duration;
 use solana_client::rpc_config::RpcSendTransactionConfig;
 use solana_commitment_config::CommitmentLevel;
 use solana_sdk::{instruction::Instruction, message::AddressLookupTableAccount, signature::Signer};
-use solana_transaction_status::EncodedTransactionWithStatusMeta;
+use solana_transaction_status::{EncodedTransaction, UiTransactionStatusMeta};
 
 /// Defines the available clusters supported by Helius
 #[derive(Debug, Clone, PartialEq)]
@@ -2503,6 +2503,27 @@ pub struct TransactionSignatureEntry {
     pub confirmation_status: Option<String>,
 }
 
+/// A transaction entry returned in "full" mode from `getTransactionsForAddress`.
+///
+/// Contains the full transaction data along with block-level metadata like slot,
+/// transaction index, and block time.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct FullTransactionEntry {
+    /// The slot in which the transaction was processed
+    pub slot: u64,
+    /// Position of the transaction within the block
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub transaction_index: Option<u64>,
+    /// The encoded transaction object
+    pub transaction: EncodedTransaction,
+    /// Transaction status metadata (fees, balances, logs, etc.)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub meta: Option<UiTransactionStatusMeta>,
+    /// Estimated block production time as a Unix timestamp (seconds since epoch)
+    pub block_time: Option<i64>,
+}
+
 /// A single transaction entry from `getTransactionsForAddress`.
 ///
 /// The variant depends on the `transaction_details` option:
@@ -2515,8 +2536,8 @@ pub struct TransactionSignatureEntry {
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[serde(untagged)]
 pub enum TransactionEntry {
-    /// Full transaction data with instructions, metadata, and version info
-    Full(Box<EncodedTransactionWithStatusMeta>),
+    /// Full transaction data with block-level metadata
+    Full(Box<FullTransactionEntry>),
     /// Lightweight signature entry with slot, timing, and status metadata
     Signature(TransactionSignatureEntry),
     /// Fallback for unrecognized response shapes (e.g., new API modes)

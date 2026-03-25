@@ -46,7 +46,10 @@ async fn main() -> Result<()> {
                         println!("  Status: {:?}", sig.confirmation_status);
                     }
                     TransactionEntry::Full(tx) => {
-                        println!("Transaction #{}: {:?}", i + 1, tx);
+                        println!("Transaction #{}", i + 1);
+                        println!("  Slot: {}", tx.slot);
+                        println!("  Block time: {:?}", tx.block_time);
+                        println!("  Has meta: {}", tx.meta.is_some());
                     }
                     TransactionEntry::Unknown(val) => {
                         println!("Transaction #{} (unknown format): {}", i + 1, val);

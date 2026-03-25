@@ -36,7 +36,7 @@ async fn main() -> Result<()> {
             for (i, entry) in result.data.iter().enumerate() {
                 match entry {
                     TransactionEntry::Full(tx) => {
-                        println!("  {}. version={:?}, has_meta={}", i + 1, tx.version, tx.meta.is_some());
+                        println!("  {}. slot={}, has_meta={}", i + 1, tx.slot, tx.meta.is_some());
                     }
                     TransactionEntry::Signature(sig) => {
                         println!("  {}. {}", i + 1, sig.signature);
