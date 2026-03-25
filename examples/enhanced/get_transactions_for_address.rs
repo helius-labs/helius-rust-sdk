@@ -1,6 +1,6 @@
 use helius::error::Result;
-use helius::types::inner::TransactionDetails;
-use helius::types::{Cluster, GetTransactionsForAddressOptions, GetTransactionsForAddressResponse};
+use helius::types::inner::{TransactionDetails, TransactionEntry};
+use helius::types::{Cluster, GetTransactionsForAddressOptions};
 use helius::Helius;
 
 #[tokio::main]
@@ -26,7 +26,7 @@ async fn main() -> Result<()> {
     );
     println!();
 
-    let response: Result<GetTransactionsForAddressResponse> = helius
+    let response = helius
         .rpc()
         .get_transactions_for_address(address.to_string(), options)
         .await;
@@ -36,8 +36,19 @@ async fn main() -> Result<()> {
             println!("Successfully fetched {} transactions", result.data.len());
             println!();
 
-            for (i, tx) in result.data.iter().enumerate() {
-                println!("Transaction #{}: {}", i + 1, serde_json::to_string_pretty(tx).unwrap());
+            for (i, entry) in result.data.iter().enumerate() {
+                match entry {
+                    TransactionEntry::Signature(sig) => {
+                        println!("Transaction #{}", i + 1);
+                        println!("  Signature: {}", sig.signature);
+                        println!("  Slot: {}", sig.slot);
+                        println!("  Block time: {:?}", sig.block_time);
+                        println!("  Status: {:?}", sig.confirmation_status);
+                    }
+                    TransactionEntry::Full(tx) => {
+                        println!("Transaction #{}: {:?}", i + 1, tx);
+                    }
+                }
             }
 
             if let Some(token) = result.pagination_token {
