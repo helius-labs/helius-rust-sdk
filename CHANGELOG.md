@@ -10,7 +10,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ### Added
 - `TransactionSignatureEntry` struct with typed fields (`signature`, `slot`, `transaction_index`, `err`, `memo`, `block_time`, `confirmation_status`) for the `signatures` response mode of `getTransactionsForAddress`
-- `TransactionEntry` enum with `Signature` and `Full` variants; the `Full` variant reuses `EncodedTransactionWithStatusMeta` from `solana-transaction-status`
+- `FullTransactionEntry` struct with typed fields (`slot`, `transaction_index`, `transaction`, `meta`, `block_time`) for the `full` response mode, matching the Helius OpenAPI spec
+- `TransactionEntry` enum with `Signature`, `Full`, and `Unknown` variants for type-safe access with a fallback for forward compatibility
 
 ### Changed
 - **Breaking**: `GetTransactionsForAddressResponse.data` changed from `Vec<serde_json::Value>` to `Vec<TransactionEntry>`, providing typed access to transaction data instead of raw JSON
