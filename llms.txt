@@ -658,11 +658,11 @@ tokio::spawn(async move {
 ```toml
 # Default: native TLS (OpenSSL)
 [dependencies]
-helius = "1.0"
+helius = "1.1"
 
 # Alternative: rustls (pure Rust, no OpenSSL dependency)
 [dependencies]
-helius = { version = "1.0", default-features = false, features = ["rustls"] }
+helius = { version = "1.1", default-features = false, features = ["rustls"] }
 ```
 
 ## Plans and Rate Limits

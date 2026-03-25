@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-03-25
+
+### Added
+- `TransactionSignatureEntry` struct with typed fields (`signature`, `slot`, `transaction_index`, `err`, `memo`, `block_time`, `confirmation_status`) for the `signatures` response mode of `getTransactionsForAddress`
+- `TransactionEntry` enum with `Signature` and `Full` variants; the `Full` variant reuses `EncodedTransactionWithStatusMeta` from `solana-transaction-status`
+
+### Changed
+- **Breaking**: `GetTransactionsForAddressResponse.data` changed from `Vec<serde_json::Value>` to `Vec<TransactionEntry>`, providing typed access to transaction data instead of raw JSON
+
 ## [1.0.1] - 2026-03-20
 
 ### Changed
@@ -192,7 +201,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - Integration test suite using `mockito`
 - GitHub Actions CI workflow
 
-[Unreleased]: https://github.com/helius-labs/helius-rust-sdk/compare/v1.0.1...HEAD
+[Unreleased]: https://github.com/helius-labs/helius-rust-sdk/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/helius-labs/helius-rust-sdk/compare/v1.0.1...v1.1.0
 [1.0.1]: https://github.com/helius-labs/helius-rust-sdk/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/helius-labs/helius-rust-sdk/compare/v0.5.1...v1.0.0
 [0.5.1]: https://github.com/helius-labs/helius-rust-sdk/compare/v0.5.0...v0.5.1
