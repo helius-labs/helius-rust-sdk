@@ -12,6 +12,7 @@ use std::time::Duration;
 use solana_client::rpc_config::RpcSendTransactionConfig;
 use solana_commitment_config::CommitmentLevel;
 use solana_sdk::{instruction::Instruction, message::AddressLookupTableAccount, signature::Signer};
+use solana_transaction_status::{EncodedTransaction, UiTransactionStatusMeta};
 
 /// Defines the available clusters supported by Helius
 #[derive(Debug, Clone, PartialEq)]
@@ -2479,19 +2480,97 @@ pub struct GetTransactionsForAddressOptions {
     pub min_context_slot: Option<u64>,
 }
 
+/// A transaction entry returned in "signatures" mode from `getTransactionsForAddress`.
+///
+/// Contains the transaction signature along with slot, timing, and status metadata.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct TransactionSignatureEntry {
+    /// The transaction signature (base-58 encoded)
+    pub signature: String,
+    /// The slot in which the transaction was processed
+    pub slot: u64,
+    /// Position of the transaction within the block
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub transaction_index: Option<u64>,
+    /// Transaction error, if any (Solana runtime error format)
+    pub err: Option<serde_json::Value>,
+    /// Memo associated with the transaction, if any
+    pub memo: Option<String>,
+    /// Estimated block production time as a Unix timestamp (seconds since epoch)
+    pub block_time: Option<i64>,
+    /// The transaction's confirmation status
+    pub confirmation_status: Option<String>,
+}
+
+/// A transaction entry returned in "full" mode from `getTransactionsForAddress`.
+///
+/// Contains the full transaction data along with block-level metadata like slot,
+/// transaction index, and block time.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct FullTransactionEntry {
+    /// The slot in which the transaction was processed
+    pub slot: u64,
+    /// Position of the transaction within the block
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub transaction_index: Option<u64>,
+    /// The encoded transaction object
+    pub transaction: EncodedTransaction,
+    /// Transaction status metadata (fees, balances, logs, etc.)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub meta: Option<UiTransactionStatusMeta>,
+    /// Estimated block production time as a Unix timestamp (seconds since epoch)
+    pub block_time: Option<i64>,
+}
+
+/// A single transaction entry from `getTransactionsForAddress`.
+///
+/// The variant depends on the `transaction_details` option:
+/// - [`TransactionDetails::Signatures`]: deserializes as [`TransactionEntry::Signature`]
+/// - [`TransactionDetails::Full`]: deserializes as [`TransactionEntry::Full`]
+///
+/// If the API returns a shape that doesn't match either known variant,
+/// [`TransactionEntry::Unknown`] captures the raw JSON so deserialization
+/// never fails silently.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[serde(untagged)]
+pub enum TransactionEntry {
+    /// Full transaction data with block-level metadata
+    Full(Box<FullTransactionEntry>),
+    /// Lightweight signature entry with slot, timing, and status metadata
+    Signature(TransactionSignatureEntry),
+    /// Fallback for unrecognized response shapes (e.g., new API modes)
+    Unknown(serde_json::Value),
+}
+
+impl Default for TransactionEntry {
+    fn default() -> Self {
+        TransactionEntry::Signature(TransactionSignatureEntry {
+            signature: String::new(),
+            slot: 0,
+            transaction_index: None,
+            err: None,
+            memo: None,
+            block_time: None,
+            confirmation_status: None,
+        })
+    }
+}
+
 /// Response from `getTransactionsForAddress`.
 ///
 /// Contains a page of transaction data and an optional pagination cursor. The format
 /// of items in `data` depends on the `transaction_details` setting:
-/// - `Signatures`: each item is a transaction signature string
-/// - `Full`: each item is a full transaction object
+/// - `Signatures`: each item is a [`TransactionEntry::Signature`]
+/// - `Full`: each item is a [`TransactionEntry::Full`]
 ///
 /// When `pagination_token` is `None`, all results have been returned.
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct GetTransactionsForAddressResponse {
     /// Transaction data for this page (signatures or full transactions depending on options)
-    pub data: Vec<serde_json::Value>,
+    pub data: Vec<TransactionEntry>,
     /// Cursor for the next page; `None` when no more results remain
     pub pagination_token: Option<String>,
 }
