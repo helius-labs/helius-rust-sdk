@@ -1,34 +1,6 @@
 use solana_sdk::pubkey::Pubkey;
 
-use super::helpers::setup_mock;
-
-fn rent_exempt_response() -> String {
-    r#"{"jsonrpc":"2.0","result":2282880,"id":1}"#.to_string()
-}
-
-fn latest_blockhash_response() -> String {
-    r#"{"jsonrpc":"2.0","result":{"context":{"slot":1},"value":{"blockhash":"EkSnNWid2cvwEVnVx9aBqawnmiCNiDgp3gUdkDPTKN1N","lastValidBlockHeight":100}},"id":1}"#.to_string()
-}
-
-fn mock_rent_exempt(server: &mut mockito::Server) {
-    server
-        .mock("POST", mockito::Matcher::Any)
-        .match_body(mockito::Matcher::Regex("getMinimumBalanceForRentExemption".to_string()))
-        .with_status(200)
-        .with_header("Content-Type", "application/json")
-        .with_body(rent_exempt_response())
-        .create();
-}
-
-fn mock_latest_blockhash(server: &mut mockito::Server) {
-    server
-        .mock("POST", mockito::Matcher::Any)
-        .match_body(mockito::Matcher::Regex("getLatestBlockhash".to_string()))
-        .with_status(200)
-        .with_header("Content-Type", "application/json")
-        .with_body(latest_blockhash_response())
-        .create();
-}
+use super::helpers::{mock_latest_blockhash, mock_rent_exempt, setup_mock};
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_create_stake_transaction_success() {

@@ -39,3 +39,27 @@ pub async fn setup_mock() -> (Server, Helius) {
 
     (server, helius)
 }
+
+/// Mocks `getLatestBlockhash` Solana JSON-RPC call.
+pub fn mock_latest_blockhash(server: &mut Server) {
+    server
+        .mock("POST", mockito::Matcher::Any)
+        .match_body(mockito::Matcher::Regex("getLatestBlockhash".to_string()))
+        .with_status(200)
+        .with_header("Content-Type", "application/json")
+        .with_body(
+            r#"{"jsonrpc":"2.0","result":{"context":{"slot":1},"value":{"blockhash":"EkSnNWid2cvwEVnVx9aBqawnmiCNiDgp3gUdkDPTKN1N","lastValidBlockHeight":100}},"id":1}"#,
+        )
+        .create();
+}
+
+/// Mocks `getMinimumBalanceForRentExemption` Solana JSON-RPC call.
+pub fn mock_rent_exempt(server: &mut Server) {
+    server
+        .mock("POST", mockito::Matcher::Any)
+        .match_body(mockito::Matcher::Regex("getMinimumBalanceForRentExemption".to_string()))
+        .with_status(200)
+        .with_header("Content-Type", "application/json")
+        .with_body(r#"{"jsonrpc":"2.0","result":2282880,"id":1}"#)
+        .create();
+}

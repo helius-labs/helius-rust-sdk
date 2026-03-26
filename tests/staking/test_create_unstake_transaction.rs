@@ -1,18 +1,6 @@
 use solana_sdk::pubkey::Pubkey;
 
-use super::helpers::setup_mock;
-
-fn mock_latest_blockhash(server: &mut mockito::Server) {
-    server
-        .mock("POST", mockito::Matcher::Any)
-        .match_body(mockito::Matcher::Regex("getLatestBlockhash".to_string()))
-        .with_status(200)
-        .with_header("Content-Type", "application/json")
-        .with_body(
-            r#"{"jsonrpc":"2.0","result":{"context":{"slot":1},"value":{"blockhash":"EkSnNWid2cvwEVnVx9aBqawnmiCNiDgp3gUdkDPTKN1N","lastValidBlockHeight":100}},"id":1}"#,
-        )
-        .create();
-}
+use super::helpers::{mock_latest_blockhash, setup_mock};
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_create_unstake_transaction_success() {
