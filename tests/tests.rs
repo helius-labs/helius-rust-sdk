@@ -39,6 +39,10 @@ mod webhook {
     mod test_remove_addresses_from_webhook;
     mod test_toggle_webhook;
 }
+mod websocket {
+    mod test_get_url;
+    mod test_websocket_lifecycle;
+}
 mod staking {
     mod helpers;
     mod test_create_stake_transaction;
