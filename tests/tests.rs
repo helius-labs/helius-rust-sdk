@@ -39,6 +39,12 @@ mod webhook {
     mod test_remove_addresses_from_webhook;
     mod test_toggle_webhook;
 }
+mod smart_transactions {
+    mod helpers;
+    mod test_create_smart_transaction;
+    mod test_input_validation;
+    mod test_sender_urls;
+}
 mod websocket {
     mod test_get_url;
     mod test_websocket_lifecycle;
