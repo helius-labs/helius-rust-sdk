@@ -2490,9 +2490,8 @@ pub struct TransactionSignatureEntry {
     pub signature: String,
     /// The slot in which the transaction was processed
     pub slot: u64,
-    /// Position of the transaction within the block
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub transaction_index: Option<u64>,
+    /// Zero-based position of the transaction within its block
+    pub transaction_index: u64,
     /// Transaction error, if any (Solana runtime error format)
     pub err: Option<serde_json::Value>,
     /// Memo associated with the transaction, if any
@@ -2512,9 +2511,8 @@ pub struct TransactionSignatureEntry {
 pub struct FullTransactionEntry {
     /// The slot in which the transaction was processed
     pub slot: u64,
-    /// Position of the transaction within the block
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub transaction_index: Option<u64>,
+    /// Zero-based position of the transaction within its block
+    pub transaction_index: u64,
     /// The encoded transaction object
     pub transaction: EncodedTransaction,
     /// Transaction status metadata (fees, balances, logs, etc.)
@@ -2549,7 +2547,7 @@ impl Default for TransactionEntry {
         TransactionEntry::Signature(TransactionSignatureEntry {
             signature: String::new(),
             slot: 0,
-            transaction_index: None,
+            transaction_index: 0,
             err: None,
             memo: None,
             block_time: None,

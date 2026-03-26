@@ -20,6 +20,7 @@ async fn test_get_transactions_for_address_success() {
         {
             "signature": "5h6xBEauJ3PK6SWCZ1PGjBvj8vDdWG3KpwATGy1ARAXFSDwt8GFXM7W5Ncn16wmqokgpiKRLuS83KUxyZyv2sUYv",
             "slot": 1054,
+            "transactionIndex": 7,
             "err": null,
             "memo": null,
             "blockTime": 1641038400,
@@ -203,7 +204,7 @@ async fn test_get_transactions_for_address_full_success() {
     match &result.data[0] {
         TransactionEntry::Full(tx) => {
             assert_eq!(tx.slot, 1054);
-            assert_eq!(tx.transaction_index, Some(42));
+            assert_eq!(tx.transaction_index, 42);
             assert_eq!(tx.block_time, Some(1641038400));
             assert!(tx.meta.is_some());
             let meta = tx.meta.as_ref().unwrap();
