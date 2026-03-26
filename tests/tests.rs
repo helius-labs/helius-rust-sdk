@@ -39,6 +39,14 @@ mod webhook {
     mod test_remove_addresses_from_webhook;
     mod test_toggle_webhook;
 }
+mod staking {
+    mod helpers;
+    mod test_create_stake_transaction;
+    mod test_create_unstake_transaction;
+    mod test_create_withdraw_transaction;
+    mod test_get_unstake_instruction;
+    mod test_get_withdraw_instruction;
+}
 mod zk_compression {
     mod helpers;
     mod test_get_compressed_account;
