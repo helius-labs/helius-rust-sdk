@@ -1,7 +1,7 @@
+use futures_util::SinkExt;
 use helius::websocket::EnhancedWebsocket;
 use tokio::net::TcpListener;
 use tokio_tungstenite::accept_async;
-use futures_util::SinkExt;
 use tokio_tungstenite::tungstenite::Message;
 
 /// Starts a local WebSocket server that accepts one connection and echoes messages.

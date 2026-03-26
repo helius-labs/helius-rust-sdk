@@ -57,9 +57,7 @@ pub fn mock_priority_fee_estimate(server: &mut Server) {
         .match_body(mockito::Matcher::Regex("getPriorityFeeEstimate".to_string()))
         .with_status(200)
         .with_header("Content-Type", "application/json")
-        .with_body(
-            r#"{"jsonrpc":"2.0","result":{"priorityFeeEstimate":1000.0},"id":"1"}"#,
-        )
+        .with_body(r#"{"jsonrpc":"2.0","result":{"priorityFeeEstimate":1000.0},"id":"1"}"#)
         .create();
 }
 

@@ -2,15 +2,15 @@ use helius::config::Config;
 use helius::error::Result;
 use helius::rpc_client::RpcClient;
 use helius::types::{
-    AccountData, ApiKey, Cluster, EnhancedTransaction, HeliusEndpoints, InnerInstruction, Instruction,
-    NativeTransfer, ParseTransactionsRequest, ParsedTransactionHistoryRequest, Source, TokenStandard, TokenTransfer,
-    TransactionEvent, TransactionType, TransferUserAccounts,
+    AccountData, ApiKey, Cluster, EnhancedTransaction, HeliusEndpoints, InnerInstruction, Instruction, NativeTransfer,
+    ParseTransactionsRequest, ParsedTransactionHistoryRequest, Source, TokenStandard, TokenTransfer, TransactionEvent,
+    TransactionType, TransferUserAccounts,
 };
-use solana_commitment_config::CommitmentLevel;
 use helius::Helius;
 use mockito::Server;
 use reqwest::Client;
 use serde_json::Number;
+use solana_commitment_config::CommitmentLevel;
 use std::sync::Arc;
 
 fn create_test_helius(url: &str) -> Helius {
@@ -167,8 +167,16 @@ async fn test_parse_transactions_multiple_results() {
     let url: String = format!("{}/", server.url());
 
     let mock_response: Vec<EnhancedTransaction> = vec![
-        create_mock_transaction("sig1aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", TransactionType::Transfer, Source::SystemProgram),
-        create_mock_transaction("sig2aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", TransactionType::Swap, Source::Jupiter),
+        create_mock_transaction(
+            "sig1aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            TransactionType::Transfer,
+            Source::SystemProgram,
+        ),
+        create_mock_transaction(
+            "sig2aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            TransactionType::Swap,
+            Source::Jupiter,
+        ),
     ];
 
     server

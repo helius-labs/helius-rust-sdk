@@ -1,6 +1,4 @@
-use helius::optimized_transaction::{
-    sender_fast_url, sender_ping_url, SENDER_ENDPOINTS, SENDER_REGION_ALIASES,
-};
+use helius::optimized_transaction::{sender_fast_url, sender_ping_url, SENDER_ENDPOINTS, SENDER_REGION_ALIASES};
 
 #[test]
 fn test_sender_fast_url_default() {
@@ -69,11 +67,7 @@ fn test_sender_endpoints_has_all_regions() {
         "AP_TOKYO",
     ];
     for region in &expected_regions {
-        assert!(
-            SENDER_ENDPOINTS.contains_key(region),
-            "Missing region: {}",
-            region
-        );
+        assert!(SENDER_ENDPOINTS.contains_key(region), "Missing region: {}", region);
     }
 }
 
@@ -89,10 +83,6 @@ fn test_sender_region_aliases_has_all_aliases() {
         "AP-TOKYO",
     ];
     for alias in &expected_aliases {
-        assert!(
-            SENDER_REGION_ALIASES.contains_key(alias),
-            "Missing alias: {}",
-            alias
-        );
+        assert!(SENDER_REGION_ALIASES.contains_key(alias), "Missing alias: {}", alias);
     }
 }

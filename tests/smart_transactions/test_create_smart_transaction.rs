@@ -72,7 +72,11 @@ async fn test_create_smart_transaction_with_priority_fee_cap() {
     };
 
     let result = helius.create_smart_transaction(&config).await;
-    assert!(result.is_ok(), "create_smart_transaction with fee cap failed: {:?}", result.err());
+    assert!(
+        result.is_ok(),
+        "create_smart_transaction with fee cap failed: {:?}",
+        result.err()
+    );
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -100,7 +104,11 @@ async fn test_create_smart_transaction_with_custom_cu_multiplier() {
     };
 
     let result = helius.create_smart_transaction(&config).await;
-    assert!(result.is_ok(), "create_smart_transaction with custom CU multiplier failed: {:?}", result.err());
+    assert!(
+        result.is_ok(),
+        "create_smart_transaction with custom CU multiplier failed: {:?}",
+        result.err()
+    );
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -131,7 +139,11 @@ async fn test_create_smart_transaction_with_separate_fee_payer() {
     };
 
     let result = helius.create_smart_transaction(&config).await;
-    assert!(result.is_ok(), "create_smart_transaction with separate fee payer failed: {:?}", result.err());
+    assert!(
+        result.is_ok(),
+        "create_smart_transaction with separate fee payer failed: {:?}",
+        result.err()
+    );
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -161,5 +173,9 @@ async fn test_create_smart_transaction_low_compute_units_gets_minimum() {
 
     // Should succeed — compute units below 1000 get clamped to 1000
     let result = helius.create_smart_transaction(&config).await;
-    assert!(result.is_ok(), "create_smart_transaction with low CU failed: {:?}", result.err());
+    assert!(
+        result.is_ok(),
+        "create_smart_transaction with low CU failed: {:?}",
+        result.err()
+    );
 }

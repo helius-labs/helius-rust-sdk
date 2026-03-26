@@ -1,7 +1,7 @@
 use helius::types::Cluster;
 use helius::websocket::{
-    EnhancedWebsocket, ENHANCED_WEBSOCKET_URL_DEVNET, ENHANCED_WEBSOCKET_URL_MAINNET,
-    DEFAULT_MAX_FAILED_PINGS, DEFAULT_PING_DURATION_SECONDS,
+    EnhancedWebsocket, DEFAULT_MAX_FAILED_PINGS, DEFAULT_PING_DURATION_SECONDS, ENHANCED_WEBSOCKET_URL_DEVNET,
+    ENHANCED_WEBSOCKET_URL_MAINNET,
 };
 
 #[test]
@@ -19,7 +19,10 @@ fn test_get_url_devnet() {
 #[test]
 fn test_get_url_staked_mainnet_errors() {
     let result = EnhancedWebsocket::get_url(&Cluster::StakedMainnetBeta, "test_key");
-    assert!(result.is_err(), "StakedMainnetBeta should not be supported for WebSocket");
+    assert!(
+        result.is_err(),
+        "StakedMainnetBeta should not be supported for WebSocket"
+    );
 }
 
 #[test]
@@ -39,8 +42,14 @@ fn test_get_url_api_key_with_special_characters() {
 
 #[test]
 fn test_websocket_url_constants() {
-    assert_eq!(ENHANCED_WEBSOCKET_URL_MAINNET, "wss://atlas-mainnet.helius-rpc.com/?api-key=");
-    assert_eq!(ENHANCED_WEBSOCKET_URL_DEVNET, "wss://atlas-devnet.helius-rpc.com/?api-key=");
+    assert_eq!(
+        ENHANCED_WEBSOCKET_URL_MAINNET,
+        "wss://atlas-mainnet.helius-rpc.com/?api-key="
+    );
+    assert_eq!(
+        ENHANCED_WEBSOCKET_URL_DEVNET,
+        "wss://atlas-devnet.helius-rpc.com/?api-key="
+    );
 }
 
 #[test]

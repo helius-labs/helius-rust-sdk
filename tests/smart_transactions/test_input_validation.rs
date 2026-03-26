@@ -133,11 +133,7 @@ async fn test_create_smart_transaction_with_seeds_rejects_empty_seeds() {
     assert!(result.is_err());
     match result.unwrap_err() {
         HeliusError::InvalidInput(msg) => {
-            assert!(
-                msg.contains("signer seed"),
-                "Expected signer seed error, got: {}",
-                msg
-            );
+            assert!(msg.contains("signer seed"), "Expected signer seed error, got: {}", msg);
         }
         other => panic!("Expected InvalidInput, got: {:?}", other),
     }
