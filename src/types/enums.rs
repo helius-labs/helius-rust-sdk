@@ -156,9 +156,7 @@ impl MintApiAuthority {
             Cluster::MainnetBeta | Cluster::StakedMainnetBeta => {
                 MintApiAuthority::Mainnet(pubkey!("HnT5KVAywGgQDhmh6Usk4bxRg4RwKxCK4jmECyaDth5R"))
             }
-            Cluster::Devnet => {
-                MintApiAuthority::Devnet(pubkey!("2LbAtCJSaHqTnP9M5QSjvAMXk79RNLusFspFN5Ew67TC"))
-            }
+            Cluster::Devnet => MintApiAuthority::Devnet(pubkey!("2LbAtCJSaHqTnP9M5QSjvAMXk79RNLusFspFN5Ew67TC")),
         }
     }
 }
