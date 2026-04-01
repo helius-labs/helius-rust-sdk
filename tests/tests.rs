@@ -47,6 +47,7 @@ mod smart_transactions {
 }
 mod websocket {
     mod test_get_url;
+    mod test_transaction_subscribe;
     mod test_websocket_lifecycle;
 }
 mod staking {
