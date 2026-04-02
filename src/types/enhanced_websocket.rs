@@ -166,6 +166,11 @@ pub struct FullTransactionNotification {
 /// If the API returns a shape that doesn't match a known variant,
 /// [`TransactionNotification::Unknown`] captures the raw JSON so deserialization
 /// never fails silently.
+///
+/// **Variant ordering matters:** serde tries `untagged` variants top-down.
+/// `Full` must precede `Signature` because `Signature` would also match a full
+/// payload (its extra fields are simply ignored). Reordering the variants will
+/// cause full notifications to silently deserialize as `Signature`.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum TransactionNotification {
