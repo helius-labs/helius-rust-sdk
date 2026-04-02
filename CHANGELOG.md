@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+### Added
+- `FullTransactionNotification` struct for full-mode `transactionSubscribe` payloads, including `transaction`, `signature`, `slot`, and `transaction_index`
+
+### Changed
+- **Breaking**: `TransactionNotification` changed from a struct to an enum with `Full`, `Signature`, and `Unknown` variants to support all `transactionSubscribe` detail modes. Code that accessed `event.signature` or `event.transaction` directly must now match on the variant first.
+
+### Fixed
+- `transactionSubscribe` with `transactionDetails: "signatures"` no longer causes a decode error due to the missing `transaction` field
+
 ## [1.1.0] - 2026-03-25
 
 ### Added
