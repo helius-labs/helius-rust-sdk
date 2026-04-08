@@ -350,8 +350,10 @@ let updates = helius.rpc().get_program_accounts_v2(
 | RPC Rate Limit | 10 req/s | 50 req/s | 200 req/s | 500 req/s |
 | DAS & Enhanced API | 2 req/s | 10 req/s | 50 req/s | 100 req/s |
 | Helius Sender | 15/s | 15/s | 15/s | 15/s |
-| Enhanced WebSockets | No | No | Yes | Yes |
-| LaserStream gRPC | No | Devnet | Devnet | Devnet + Mainnet |
+| Enhanced WebSockets | No | Yes | Yes | Yes |
+| LaserStream gRPC | No | Devnet | Devnet + Mainnet | Devnet + Mainnet |
+
+LaserStream is billed at **2 credits per 0.1 MB** of data received.
 
 Monitor usage via the [Helius CLI](https://www.helius.dev/docs/api-reference/helius-cli) using `helius usage --json`.
 
