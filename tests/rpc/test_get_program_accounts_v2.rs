@@ -75,7 +75,10 @@ async fn test_get_program_accounts_v2_success() {
     let result: GetProgramAccountsV2Response = response.unwrap();
     assert!(result.context.is_none());
     assert_eq!(result.accounts.len(), 1);
-    assert_eq!(result.accounts[0].pubkey, "9xQeWvG816bUx9EPjHmaT23yvVM2ZWbrrpZb9PusVFin");
+    assert_eq!(
+        result.accounts[0].pubkey,
+        "9xQeWvG816bUx9EPjHmaT23yvVM2ZWbrrpZb9PusVFin"
+    );
     assert_eq!(result.accounts[0].account.lamports, 23357760);
     assert_eq!(result.pagination_key, Some("abc123".to_string()));
     assert_eq!(result.total_results, Some(42));
@@ -165,14 +168,22 @@ async fn test_get_program_accounts_v2_with_context() {
     let result: GetProgramAccountsV2Response = response.unwrap();
 
     // Verify context is present and correct
-    let context = result.context.expect("context should be present when with_context is true");
+    let context = result
+        .context
+        .expect("context should be present when with_context is true");
     assert_eq!(context.slot, 308_150_001);
     assert_eq!(context.api_version, Some("2.2.1".to_string()));
 
     // Verify accounts
     assert_eq!(result.accounts.len(), 2);
-    assert_eq!(result.accounts[0].pubkey, "9xQeWvG816bUx9EPjHmaT23yvVM2ZWbrrpZb9PusVFin");
-    assert_eq!(result.accounts[1].pubkey, "3PmRSx5oRLkPdt5P2RjFDHNExgkX1PgHSjaKyjCo8tYE");
+    assert_eq!(
+        result.accounts[0].pubkey,
+        "9xQeWvG816bUx9EPjHmaT23yvVM2ZWbrrpZb9PusVFin"
+    );
+    assert_eq!(
+        result.accounts[1].pubkey,
+        "3PmRSx5oRLkPdt5P2RjFDHNExgkX1PgHSjaKyjCo8tYE"
+    );
 
     // Verify pagination indicates no more pages
     assert!(result.pagination_key.is_none());
