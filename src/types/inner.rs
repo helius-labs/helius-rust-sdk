@@ -2023,10 +2023,15 @@ pub struct AccountInfo {
 
 /// Response from `getProgramAccountsV2`.
 ///
-/// Contains a page of accounts and an optional pagination cursor for fetching the
-/// next page. When `pagination_key` is `None`, all results have been returned.
+/// Contains a page of accounts, an optional RPC context, and pagination metadata.
+/// When `pagination_key` is `None`, all results have been returned.
+///
+/// The `context` field is populated when [`GetProgramAccountsV2Config::with_context`]
+/// is set to `true`, providing the slot at which the data was fetched.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct GetProgramAccountsV2Response {
+    /// RPC context metadata (slot, API version). Present when `with_context` is `true`
+    pub context: Option<RpcContext>,
     /// The accounts matching the query for this page
     pub accounts: Vec<GpaAccount>,
     /// Cursor for the next page; `None` when no more results remain
