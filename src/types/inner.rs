@@ -2023,14 +2023,17 @@ pub struct AccountInfo {
 
 /// Response from `getProgramAccountsV2`.
 ///
-/// Contains a page of accounts, an optional RPC context, and pagination metadata.
-/// When `pagination_key` is `None`, all results have been returned.
+/// Contains a page of accounts and an optional pagination cursor for fetching the
+/// next page. When `pagination_key` is `None`, all results have been returned.
 ///
-/// The `context` field is populated when [`GetProgramAccountsV2Config::with_context`]
-/// is set to `true`, providing the slot at which the data was fetched.
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+/// When [`GetProgramAccountsV2Config::with_context`] is set to `true`, the API wraps the
+/// response in a `{ context, value }` envelope. This struct transparently handles both
+/// shapes via a custom deserializer — the `context` field is `Some` when `with_context`
+/// is `true` and `None` otherwise.
+#[derive(Debug, Clone, Serialize, Default)]
 pub struct GetProgramAccountsV2Response {
     /// RPC context metadata (slot, API version). Present when `with_context` is `true`
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub context: Option<RpcContext>,
     /// The accounts matching the query for this page
     pub accounts: Vec<GpaAccount>,
@@ -2040,6 +2043,38 @@ pub struct GetProgramAccountsV2Response {
     /// Total number of matching accounts across all pages
     #[serde(rename = "totalResults")]
     pub total_results: Option<u64>,
+}
+
+impl<'de> serde::Deserialize<'de> for GetProgramAccountsV2Response {
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let raw = serde_json::Value::deserialize(deserializer)?;
+
+        // If `context` and `value` are present, the response is wrapped (withContext: true)
+        if raw.get("context").is_some() && raw.get("value").is_some() {
+            let context: RpcContext =
+                serde_json::from_value(raw["context"].clone()).map_err(serde::de::Error::custom)?;
+            let value = &raw["value"];
+            Ok(Self {
+                context: Some(context),
+                accounts: serde_json::from_value(value.get("accounts").cloned().unwrap_or_default())
+                    .map_err(serde::de::Error::custom)?,
+                pagination_key: value.get("paginationKey").and_then(|v| v.as_str()).map(String::from),
+                total_results: value.get("totalResults").and_then(|v| v.as_u64()),
+            })
+        } else {
+            // Direct shape (withContext: false or omitted)
+            Ok(Self {
+                context: None,
+                accounts: serde_json::from_value(raw.get("accounts").cloned().unwrap_or_default())
+                    .map_err(serde::de::Error::custom)?,
+                pagination_key: raw.get("paginationKey").and_then(|v| v.as_str()).map(String::from),
+                total_results: raw.get("totalResults").and_then(|v| v.as_u64()),
+            })
+        }
+    }
 }
 
 /// Configuration for [`getTokenAccountsByOwnerV2`](https://www.helius.dev/docs/solana-rpc-nodes/helius-exclusive-methods/get-token-accounts-by-owner-v2).

@@ -15,26 +15,28 @@ async fn test_get_program_accounts_v2_success() {
     let mut server: Server = Server::new_with_opts_async(mockito::ServerOpts::default()).await;
     let url: String = server.url();
 
-    let mock_response = RpcResponse {
-        jsonrpc: "2.0".to_string(),
-        id: "1".to_string(),
-        result: GetProgramAccountsV2Response {
-            context: None,
-            accounts: vec![GpaAccount {
-                pubkey: "9xQeWvG816bUx9EPjHmaT23yvVM2ZWbrrpZb9PusVFin".to_string(),
-                account: AccountInfo {
-                    lamports: 23357760,
-                    owner: "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA".to_string(),
-                    data: json!(["base64encodeddata", "base64"]),
-                    executable: false,
-                    rent_epoch: 361,
-                    space: Some(165),
-                },
-            }],
-            pagination_key: Some("abc123".to_string()),
-            total_results: Some(42),
-        },
-    };
+    // Without withContext — accounts, paginationKey, totalResults are directly on result
+    let mock_response = json!({
+        "jsonrpc": "2.0",
+        "id": "1",
+        "result": {
+            "accounts": [
+                {
+                    "pubkey": "9xQeWvG816bUx9EPjHmaT23yvVM2ZWbrrpZb9PusVFin",
+                    "account": {
+                        "lamports": 23357760,
+                        "owner": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+                        "data": ["base64encodeddata", "base64"],
+                        "executable": false,
+                        "rentEpoch": 361,
+                        "space": 165
+                    }
+                }
+            ],
+            "paginationKey": "abc123",
+            "totalResults": 42
+        }
+    });
 
     server
         .mock("POST", "/?api-key=fake_api_key")
@@ -89,42 +91,45 @@ async fn test_get_program_accounts_v2_with_context() {
     let mut server: Server = Server::new_with_opts_async(mockito::ServerOpts::default()).await;
     let url: String = server.url();
 
-    let mock_response = RpcResponse {
-        jsonrpc: "2.0".to_string(),
-        id: "1".to_string(),
-        result: GetProgramAccountsV2Response {
-            context: Some(RpcContext {
-                slot: 308_150_001,
-                api_version: Some("2.2.1".to_string()),
-            }),
-            accounts: vec![
-                GpaAccount {
-                    pubkey: "9xQeWvG816bUx9EPjHmaT23yvVM2ZWbrrpZb9PusVFin".to_string(),
-                    account: AccountInfo {
-                        lamports: 23357760,
-                        owner: "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA".to_string(),
-                        data: json!(["base64encodeddata", "base64"]),
-                        executable: false,
-                        rent_epoch: 361,
-                        space: Some(165),
+    // With withContext: true — result is wrapped in { context, value }
+    let mock_response = json!({
+        "jsonrpc": "2.0",
+        "id": "1",
+        "result": {
+            "context": {
+                "slot": 411895550,
+                "apiVersion": "3.1.9"
+            },
+            "value": {
+                "accounts": [
+                    {
+                        "pubkey": "9xQeWvG816bUx9EPjHmaT23yvVM2ZWbrrpZb9PusVFin",
+                        "account": {
+                            "lamports": 23357760,
+                            "owner": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+                            "data": ["base64encodeddata", "base64"],
+                            "executable": false,
+                            "rentEpoch": 361,
+                            "space": 165
+                        }
                     },
-                },
-                GpaAccount {
-                    pubkey: "3PmRSx5oRLkPdt5P2RjFDHNExgkX1PgHSjaKyjCo8tYE".to_string(),
-                    account: AccountInfo {
-                        lamports: 2039280,
-                        owner: "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA".to_string(),
-                        data: json!(["aW5pdGlhbGl6ZWQ=", "base64"]),
-                        executable: false,
-                        rent_epoch: 361,
-                        space: Some(165),
-                    },
-                },
-            ],
-            pagination_key: None,
-            total_results: Some(2),
-        },
-    };
+                    {
+                        "pubkey": "3PmRSx5oRLkPdt5P2RjFDHNExgkX1PgHSjaKyjCo8tYE",
+                        "account": {
+                            "lamports": 2039280,
+                            "owner": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+                            "data": ["aW5pdGlhbGl6ZWQ=", "base64"],
+                            "executable": false,
+                            "rentEpoch": 361,
+                            "space": 165
+                        }
+                    }
+                ],
+                "paginationKey": null,
+                "totalResults": 2
+            }
+        }
+    });
 
     server
         .mock("POST", "/?api-key=fake_api_key")
@@ -171,8 +176,8 @@ async fn test_get_program_accounts_v2_with_context() {
     let context = result
         .context
         .expect("context should be present when with_context is true");
-    assert_eq!(context.slot, 308_150_001);
-    assert_eq!(context.api_version, Some("2.2.1".to_string()));
+    assert_eq!(context.slot, 411_895_550);
+    assert_eq!(context.api_version, Some("3.1.9".to_string()));
 
     // Verify accounts
     assert_eq!(result.accounts.len(), 2);
