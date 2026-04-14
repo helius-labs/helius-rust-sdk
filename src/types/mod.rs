@@ -15,11 +15,11 @@ pub use self::inner::*;
 pub use self::options::*;
 pub use self::zk_compression_types::*;
 
-// Re-export wallet types
+// Re-export wallet and admin types
 pub use self::inner::{
-    BalanceChange, BalancesPagination, BalancesResponse, BatchIdentityRequest, FundingSource, HistoryResponse,
-    HistoryTransaction, Identity, Nft, Pagination, TokenAccountsOption, TokenBalance, Transfer, TransferDirection,
-    TransfersResponse,
+    AdminBillingCycle, AdminSubscriptionDetails, AdminUsageBreakdown, BalanceChange, BalancesPagination,
+    BalancesResponse, BatchIdentityRequest, FundingSource, HistoryResponse, HistoryTransaction, Identity, Nft,
+    Pagination, ProjectUsage, TokenAccountsOption, TokenBalance, Transfer, TransferDirection, TransfersResponse,
 };
 
 use crate::error::{HeliusError, Result};

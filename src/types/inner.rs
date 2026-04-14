@@ -2844,6 +2844,61 @@ pub struct FundingSource {
     pub explorer_url: String,
 }
 
+/// Billing cycle dates for an Admin API project usage response.
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+pub struct AdminBillingCycle {
+    /// Inclusive start date of the current billing cycle in `YYYY-MM-DD` format.
+    pub start: String,
+    /// Exclusive end date of the current billing cycle in `YYYY-MM-DD` format.
+    pub end: String,
+}
+
+/// Subscription metadata returned by the Admin API project usage endpoint.
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct AdminSubscriptionDetails {
+    /// Current billing cycle window for the project.
+    pub billing_cycle: AdminBillingCycle,
+    /// Included credit limit for the active plan.
+    pub credits_limit: u64,
+    /// Human-readable plan name.
+    pub plan: String,
+}
+
+/// Per-product credit usage returned by the Admin API project usage endpoint.
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct AdminUsageBreakdown {
+    pub api: u64,
+    pub archival: u64,
+    pub das: u64,
+    pub grpc: u64,
+    pub grpc_geyser: u64,
+    pub photon: u64,
+    pub rpc: u64,
+    pub stream: u64,
+    pub webhook: u64,
+    pub websocket: u64,
+}
+
+/// Project-level usage summary returned by the Admin API.
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct ProjectUsage {
+    /// Remaining included credits for the current billing period.
+    pub credits_remaining: u64,
+    /// Total credits consumed in the current billing period.
+    pub credits_used: u64,
+    /// Remaining prepaid credits.
+    pub prepaid_credits_remaining: u64,
+    /// Prepaid credits consumed in the current billing period.
+    pub prepaid_credits_used: u64,
+    /// Plan and billing cycle details for the project.
+    pub subscription_details: AdminSubscriptionDetails,
+    /// Per-product usage counters for the current billing period.
+    pub usage: AdminUsageBreakdown,
+}
+
 /// Options for the token accounts filter in the `get_wallet_history` endpoint.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[serde(rename_all = "camelCase")]

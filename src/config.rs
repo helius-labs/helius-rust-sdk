@@ -14,7 +14,7 @@ use url::Url;
 #[derive(Clone)]
 pub struct Config {
     /// Optional API key for authentication.
-    /// Required for webhooks, enhanced transactions, and Helius-hosted endpoints.
+    /// Required for webhooks, enhanced transactions, the Wallet API, the Admin API, and other Helius-hosted endpoints.
     pub api_key: Option<ApiKey>,
     /// The target Solana cluster the client will interact with
     pub cluster: Cluster,
