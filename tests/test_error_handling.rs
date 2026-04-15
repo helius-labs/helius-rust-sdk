@@ -224,6 +224,85 @@ async fn test_wallet_internal_error_500() {
 }
 
 // ---------------------------------------------------------------------------
+// Admin endpoint error tests (GET /v0/admin/projects/.../usage)
+// ---------------------------------------------------------------------------
+
+async fn admin_project_usage_error_test(status: u16, body: &str) -> HeliusError {
+    let mut server: Server = Server::new_with_opts_async(mockito::ServerOpts::default()).await;
+    let url: String = format!("{}/", server.url());
+
+    server
+        .mock("GET", "/v0/admin/projects/proj-123/usage?api-key=fake_api_key")
+        .with_status(status.into())
+        .with_header("Content-Type", "application/json")
+        .with_body(body)
+        .create();
+
+    let helius = create_test_helius(&url);
+    helius.get_project_usage("proj-123").await.unwrap_err()
+}
+
+#[tokio::test]
+async fn test_admin_bad_request_400() {
+    let err = admin_project_usage_error_test(400, r#"{"error":"Invalid project ID"}"#).await;
+    assert!(
+        matches!(err, HeliusError::BadRequest { ref text, .. } if text.contains("Invalid project ID")),
+        "Expected BadRequest, got: {:?}",
+        err
+    );
+}
+
+#[tokio::test]
+async fn test_admin_unauthorized_401() {
+    let err = admin_project_usage_error_test(401, r#"{"error":"Invalid API key"}"#).await;
+    assert!(
+        matches!(err, HeliusError::Unauthorized { .. }),
+        "Expected Unauthorized, got: {:?}",
+        err
+    );
+}
+
+#[tokio::test]
+async fn test_admin_forbidden_403() {
+    let err = admin_project_usage_error_test(403, r#"{"error":"Admin API not enabled"}"#).await;
+    assert!(
+        matches!(err, HeliusError::Unauthorized { .. }),
+        "Expected Unauthorized (403 maps to Unauthorized), got: {:?}",
+        err
+    );
+}
+
+#[tokio::test]
+async fn test_admin_not_found_404() {
+    let err = admin_project_usage_error_test(404, r#"{"error":"Project not found"}"#).await;
+    assert!(
+        matches!(err, HeliusError::NotFound { ref text } if text.contains("Project not found")),
+        "Expected NotFound, got: {:?}",
+        err
+    );
+}
+
+#[tokio::test]
+async fn test_admin_rate_limit_429() {
+    let err = admin_project_usage_error_test(429, r#"{"error":"Too many requests"}"#).await;
+    assert!(
+        matches!(err, HeliusError::RateLimitExceeded { .. }),
+        "Expected RateLimitExceeded, got: {:?}",
+        err
+    );
+}
+
+#[tokio::test]
+async fn test_admin_internal_error_500() {
+    let err = admin_project_usage_error_test(500, r#"{"error":"Internal Server Error"}"#).await;
+    assert!(
+        matches!(err, HeliusError::InternalError { .. }),
+        "Expected InternalError, got: {:?}",
+        err
+    );
+}
+
+// ---------------------------------------------------------------------------
 // Enhanced transactions endpoint error tests (POST /v0/transactions?...)
 // ---------------------------------------------------------------------------
 

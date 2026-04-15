@@ -29,6 +29,9 @@ mod wallet {
     mod test_get_wallet_identity;
     mod test_get_wallet_transfers;
 }
+mod admin {
+    mod test_get_project_usage;
+}
 mod webhook {
     mod test_create_webhook;
     mod test_edit_webhook;

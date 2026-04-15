@@ -8,6 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ### Added
 - `FullTransactionNotification` struct for full-mode `transactionSubscribe` payloads, including `transaction`, `signature`, `slot`, and `transaction_index`
+- Admin API support via `get_project_usage`, including typed project usage models, tests, examples, and docs
 
 ### Changed
 - **Breaking**: `TransactionNotification` changed from a struct to an enum with `Full`, `Signature`, and `Unknown` variants to support all `transactionSubscribe` detail modes. Code that accessed `event.signature` or `event.transaction` directly must now match on the variant first.
