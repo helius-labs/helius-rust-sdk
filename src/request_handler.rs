@@ -101,13 +101,23 @@ impl RequestHandler {
                 return Ok(T::default());
             }
 
-            match serde_json::from_str::<T>(&body_text) {
+            // simd-json parses faster than serde_json on large payloads (DAS, getProgramAccountsV2,
+            // parsed transaction history) but mutates its input buffer in place, so we hand it
+            // owned bytes via `String::into_bytes`. Falls through to a `serde_json` retry on
+            // error to surface the more descriptive parser diagnostics for debugging.
+            let mut body_bytes: Vec<u8> = body_text.into_bytes();
+            match simd_json::serde::from_slice::<T>(&mut body_bytes) {
                 Ok(data) => Ok(data),
-                Err(e) => {
-                    log::error!("Deserialization error: {}", e);
-                    log::debug!("Raw JSON: {}", body_text);
-                    Err(HeliusError::from(e))
-                }
+                Err(simd_err) => match serde_json::from_slice::<T>(&body_bytes) {
+                    Ok(data) => Ok(data),
+                    Err(serde_err) => {
+                        let raw: String = String::from_utf8_lossy(&body_bytes).into_owned();
+                        log::error!("Deserialization error (simd-json): {}", simd_err);
+                        log::error!("Deserialization error (serde_json): {}", serde_err);
+                        log::debug!("Raw JSON: {}", raw);
+                        Err(HeliusError::from(serde_err))
+                    }
+                },
             }
         } else {
             let body_json: serde_json::Result<Value> = serde_json::from_str(&body_text);

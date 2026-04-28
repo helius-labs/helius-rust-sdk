@@ -82,6 +82,14 @@ pub enum HeliusError {
     #[error("Serialization / Deserialization error: {0}")]
     SerdeJson(SerdeJsonError),
 
+    /// Occurs during high-performance JSON parsing via `simd-json`
+    ///
+    /// Returned when `simd-json` fails to deserialize a response body. Falls under the same
+    /// category as [`HeliusError::SerdeJson`] but is surfaced separately so the underlying
+    /// parser is identifiable in logs and panics
+    #[error("simd-json deserialization error: {0}")]
+    SimdJson(String),
+
     /// Represents errors from the Solana SDK for signing operations
     ///
     /// This captures errors from the signing operations in the Solana SDK
@@ -165,6 +173,12 @@ impl From<SerdeJsonError> for HeliusError {
     /// This allows for the seamless integration of JSON parsing errors into the broader error handling system
     fn from(err: SerdeJsonError) -> HeliusError {
         HeliusError::SerdeJson(err)
+    }
+}
+
+impl From<simd_json::Error> for HeliusError {
+    fn from(err: simd_json::Error) -> HeliusError {
+        HeliusError::SimdJson(err.to_string())
     }
 }
 
