@@ -4,6 +4,7 @@ use super::{
     TransactionStatus, TransactionType, UiTransactionEncoding, WebhookType,
 };
 use crate::types::{DisplayOptions, Encoding, GetAssetOptions, GpaFilter, TokenAccountsOwnerFilter};
+use serde::ser::SerializeTuple;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::sync::Arc;
@@ -2575,6 +2576,232 @@ pub struct GetTransactionsForAddressResponse {
 
 /// Request type for `getTransactionsForAddress`: a tuple of `(address, options)`.
 pub type GetTransactionsForAddressRequest = (String, GetTransactionsForAddressOptions);
+
+/// Direction of transfers relative to the queried address.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum GetTransfersByAddressDirection {
+    /// Incoming transfers only
+    In,
+    /// Outgoing transfers only
+    Out,
+    /// Incoming and outgoing transfers
+    #[default]
+    Any,
+}
+
+/// Native SOL grouping mode for `getTransfersByAddress`.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum GetTransfersByAddressSolMode {
+    /// Merge native SOL and WSOL transfer activity
+    #[default]
+    Merged,
+    /// Return native SOL and WSOL transfer activity separately
+    Separate,
+}
+
+/// Filter transfers by raw amount.
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+pub struct TransferAmountFilter {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub gt: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub gte: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub lt: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub lte: Option<f64>,
+}
+
+/// Filter transfers by block timestamp (Unix seconds).
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+pub struct TransferBlockTimeFilter {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub gt: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub gte: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub lt: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub lte: Option<i64>,
+}
+
+/// Filter transfers by slot range.
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+pub struct TransferSlotFilter {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub gt: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub gte: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub lt: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub lte: Option<u64>,
+}
+
+/// Filter transfers by execution status.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum TransferStatusFilter {
+    /// Successful transfers only
+    Succeeded,
+    /// Failed transfers only
+    Failed,
+    /// Successful and failed transfers
+    #[default]
+    Any,
+}
+
+/// Combined filters for `getTransfersByAddress`.
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct GetTransfersByAddressFilters {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub amount: Option<TransferAmountFilter>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub block_time: Option<TransferBlockTimeFilter>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub slot: Option<TransferSlotFilter>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub status: Option<TransferStatusFilter>,
+}
+
+/// Commitment level accepted by `getTransfersByAddress`.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum GetTransfersByAddressCommitment {
+    /// Finalized transfer data
+    #[default]
+    Finalized,
+    /// Confirmed transfer data
+    Confirmed,
+}
+
+/// Request config for the `getTransfersByAddress` RPC method.
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct GetTransfersByAddressConfig {
+    /// Counterparty address to filter by
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub with: Option<String>,
+    /// Transfer direction relative to the queried address
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub direction: Option<GetTransfersByAddressDirection>,
+    /// Token mint address to filter by
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub mint: Option<String>,
+    /// Native SOL grouping mode
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sol_mode: Option<GetTransfersByAddressSolMode>,
+    /// Combined filters for amount, block time, slot, and status
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub filters: Option<GetTransfersByAddressFilters>,
+    /// Maximum number of transfers per page. The server accepts 1-100.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub limit: Option<u32>,
+    /// Cursor from a previous response for fetching the next page
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub pagination_token: Option<String>,
+    /// Commitment level for the query
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub commitment: Option<GetTransfersByAddressCommitment>,
+    /// Sort direction
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sort_order: Option<SortOrder>,
+}
+
+/// Request parameters for `getTransfersByAddress`.
+///
+/// Serializes to `[address]` when `config` is `None`, and `[address, config]` when
+/// a config is provided.
+#[derive(Debug, Clone, Default)]
+pub struct GetTransfersByAddressRequest {
+    pub address: String,
+    pub config: Option<GetTransfersByAddressConfig>,
+}
+
+impl GetTransfersByAddressRequest {
+    pub fn new(address: String, config: Option<GetTransfersByAddressConfig>) -> Self {
+        Self { address, config }
+    }
+}
+
+impl Serialize for GetTransfersByAddressRequest {
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let len = if self.config.is_some() { 2 } else { 1 };
+        let mut tuple = serializer.serialize_tuple(len)?;
+        tuple.serialize_element(&self.address)?;
+        if let Some(config) = &self.config {
+            tuple.serialize_element(config)?;
+        }
+        tuple.end()
+    }
+}
+
+/// Transfer event type returned by `getTransfersByAddress`.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub enum GetTransfersByAddressTransferType {
+    Transfer,
+    TransferFee,
+    Mint,
+    Burn,
+    Wrap,
+    Unwrap,
+    ChangeAccountOwner,
+    WithdrawWithheldFee,
+}
+
+/// Confirmation status returned by `getTransfersByAddress`.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[serde(rename_all = "lowercase")]
+pub enum TransferConfirmationStatus {
+    Finalized,
+    Confirmed,
+}
+
+/// A transfer returned by `getTransfersByAddress`.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct GetTransfersByAddressTransfer {
+    pub signature: String,
+    pub slot: u64,
+    pub block_time: i64,
+    #[serde(rename = "type")]
+    pub transfer_type: GetTransfersByAddressTransferType,
+    pub from_user_account: Option<String>,
+    pub to_user_account: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub from_token_account: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub to_token_account: Option<String>,
+    pub mint: String,
+    pub amount: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub fee_amount: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub fee_account: Option<String>,
+    pub decimals: u8,
+    pub ui_amount: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub fee_ui_amount: Option<String>,
+    pub confirmation_status: TransferConfirmationStatus,
+    pub transaction_idx: u64,
+    pub instruction_idx: u64,
+    pub inner_instruction_idx: u64,
+}
+
+/// Response from `getTransfersByAddress`.
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct GetTransfersByAddressResponse {
+    pub data: Vec<GetTransfersByAddressTransfer>,
+    pub pagination_token: Option<String>,
+}
 
 /// Identity information for a known wallet address (exchanges, protocols, etc.)
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
