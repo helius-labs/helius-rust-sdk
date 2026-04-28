@@ -11,7 +11,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - Admin API support via `get_project_usage`, including typed project usage models, tests, examples, and docs
 - `simd-json` parser on the HTTP response hot path for ~20–25% faster deserialization on DAS-shaped payloads. Falls back to `serde_json` automatically when `simd-json` rejects a payload, so behavior is unchanged for all callers
 - `HeliusError::SimdJson` variant for `simd-json` parser failures
-- Criterion benchmark `benches/json_parsing.rs` comparing `serde_json` vs `simd-json` on representative DAS and `getProgramAccountsV2` payloads
 
 ### Changed
 - **Breaking**: `TransactionNotification` changed from a struct to an enum with `Full`, `Signature`, and `Unknown` variants to support all `transactionSubscribe` detail modes. Code that accessed `event.signature` or `event.transaction` directly must now match on the variant first.
