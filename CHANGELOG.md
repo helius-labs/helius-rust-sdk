@@ -6,27 +6,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-04-29
+
 ### Added
+- `TransactionSignatureEntry` struct with typed fields (`signature`, `slot`, `transaction_index`, `err`, `memo`, `block_time`, `confirmation_status`) for the `signatures` response mode of `getTransactionsForAddress`
+- `FullTransactionEntry` struct with typed fields (`slot`, `transaction_index`, `transaction`, `meta`, `block_time`) for the `full` response mode, matching the Helius OpenAPI spec
+- `TransactionEntry` enum with `Signature`, `Full`, and `Unknown` variants for type-safe access with a fallback for forward compatibility
 - `FullTransactionNotification` struct for full-mode `transactionSubscribe` payloads, including `transaction`, `signature`, `slot`, and `transaction_index`
 - Admin API support via `get_project_usage`, including typed project usage models, tests, examples, and docs
 - `simd-json` parser on the HTTP response hot path for ~20–25% faster deserialization on DAS-shaped payloads. Falls back to `serde_json` automatically when `simd-json` rejects a payload, so behavior is unchanged for all callers
 - `HeliusError::SimdJson` variant for `simd-json` parser failures
 
 ### Changed
+- **Breaking**: `GetTransactionsForAddressResponse.data` changed from `Vec<serde_json::Value>` to `Vec<TransactionEntry>`, providing typed access to transaction data instead of raw JSON
 - **Breaking**: `TransactionNotification` changed from a struct to an enum with `Full`, `Signature`, and `Unknown` variants to support all `transactionSubscribe` detail modes. Code that accessed `event.signature` or `event.transaction` directly must now match on the variant first.
 
 ### Fixed
 - `transactionSubscribe` with `transactionDetails: "signatures"` no longer causes a decode error due to the missing `transaction` field
-
-## [1.1.0] - 2026-03-25
-
-### Added
-- `TransactionSignatureEntry` struct with typed fields (`signature`, `slot`, `transaction_index`, `err`, `memo`, `block_time`, `confirmation_status`) for the `signatures` response mode of `getTransactionsForAddress`
-- `FullTransactionEntry` struct with typed fields (`slot`, `transaction_index`, `transaction`, `meta`, `block_time`) for the `full` response mode, matching the Helius OpenAPI spec
-- `TransactionEntry` enum with `Signature`, `Full`, and `Unknown` variants for type-safe access with a fallback for forward compatibility
-
-### Changed
-- **Breaking**: `GetTransactionsForAddressResponse.data` changed from `Vec<serde_json::Value>` to `Vec<TransactionEntry>`, providing typed access to transaction data instead of raw JSON
 
 ## [1.0.1] - 2026-03-20
 
