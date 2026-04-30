@@ -12,6 +12,7 @@ use std::time::Duration;
 use solana_client::rpc_config::RpcSendTransactionConfig;
 use solana_commitment_config::CommitmentLevel;
 use solana_sdk::{instruction::Instruction, message::AddressLookupTableAccount, signature::Signer};
+use solana_transaction_status::{EncodedTransaction, UiTransactionStatusMeta};
 
 /// Defines the available clusters supported by Helius
 #[derive(Debug, Clone, PartialEq)]
@@ -2025,8 +2026,16 @@ pub struct AccountInfo {
 ///
 /// Contains a page of accounts and an optional pagination cursor for fetching the
 /// next page. When `pagination_key` is `None`, all results have been returned.
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+///
+/// When [`GetProgramAccountsV2Config::with_context`] is set to `true`, the API wraps the
+/// response in a `{ context, value }` envelope. This struct transparently handles both
+/// shapes via a custom deserializer — the `context` field is `Some` when `with_context`
+/// is `true` and `None` otherwise.
+#[derive(Debug, Clone, Serialize, Default)]
 pub struct GetProgramAccountsV2Response {
+    /// RPC context metadata (slot, API version). Present when `with_context` is `true`
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub context: Option<RpcContext>,
     /// The accounts matching the query for this page
     pub accounts: Vec<GpaAccount>,
     /// Cursor for the next page; `None` when no more results remain
@@ -2035,6 +2044,38 @@ pub struct GetProgramAccountsV2Response {
     /// Total number of matching accounts across all pages
     #[serde(rename = "totalResults")]
     pub total_results: Option<u64>,
+}
+
+impl<'de> serde::Deserialize<'de> for GetProgramAccountsV2Response {
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let raw = serde_json::Value::deserialize(deserializer)?;
+
+        // If `context` and `value` are present, the response is wrapped (withContext: true)
+        if raw.get("context").is_some() && raw.get("value").is_some() {
+            let context: RpcContext =
+                serde_json::from_value(raw["context"].clone()).map_err(serde::de::Error::custom)?;
+            let value = &raw["value"];
+            Ok(Self {
+                context: Some(context),
+                accounts: serde_json::from_value(value.get("accounts").cloned().unwrap_or_default())
+                    .map_err(serde::de::Error::custom)?,
+                pagination_key: value.get("paginationKey").and_then(|v| v.as_str()).map(String::from),
+                total_results: value.get("totalResults").and_then(|v| v.as_u64()),
+            })
+        } else {
+            // Direct shape (withContext: false or omitted)
+            Ok(Self {
+                context: None,
+                accounts: serde_json::from_value(raw.get("accounts").cloned().unwrap_or_default())
+                    .map_err(serde::de::Error::custom)?,
+                pagination_key: raw.get("paginationKey").and_then(|v| v.as_str()).map(String::from),
+                total_results: raw.get("totalResults").and_then(|v| v.as_u64()),
+            })
+        }
+    }
 }
 
 /// Configuration for [`getTokenAccountsByOwnerV2`](https://www.helius.dev/docs/solana-rpc-nodes/helius-exclusive-methods/get-token-accounts-by-owner-v2).
@@ -2479,19 +2520,95 @@ pub struct GetTransactionsForAddressOptions {
     pub min_context_slot: Option<u64>,
 }
 
+/// A transaction entry returned in "signatures" mode from `getTransactionsForAddress`.
+///
+/// Contains the transaction signature along with slot, timing, and status metadata.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct TransactionSignatureEntry {
+    /// The transaction signature (base-58 encoded)
+    pub signature: String,
+    /// The slot in which the transaction was processed
+    pub slot: u64,
+    /// Zero-based position of the transaction within its block
+    pub transaction_index: u64,
+    /// Transaction error, if any (Solana runtime error format)
+    pub err: Option<serde_json::Value>,
+    /// Memo associated with the transaction, if any
+    pub memo: Option<String>,
+    /// Estimated block production time as a Unix timestamp (seconds since epoch)
+    pub block_time: Option<i64>,
+    /// The transaction's confirmation status
+    pub confirmation_status: Option<String>,
+}
+
+/// A transaction entry returned in "full" mode from `getTransactionsForAddress`.
+///
+/// Contains the full transaction data along with block-level metadata like slot,
+/// transaction index, and block time.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct FullTransactionEntry {
+    /// The slot in which the transaction was processed
+    pub slot: u64,
+    /// Zero-based position of the transaction within its block
+    pub transaction_index: u64,
+    /// The encoded transaction object
+    pub transaction: EncodedTransaction,
+    /// Transaction status metadata (fees, balances, logs, etc.)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub meta: Option<UiTransactionStatusMeta>,
+    /// Estimated block production time as a Unix timestamp (seconds since epoch)
+    pub block_time: Option<i64>,
+}
+
+/// A single transaction entry from `getTransactionsForAddress`.
+///
+/// The variant depends on the `transaction_details` option:
+/// - [`TransactionDetails::Signatures`]: deserializes as [`TransactionEntry::Signature`]
+/// - [`TransactionDetails::Full`]: deserializes as [`TransactionEntry::Full`]
+///
+/// If the API returns a shape that doesn't match either known variant,
+/// [`TransactionEntry::Unknown`] captures the raw JSON so deserialization
+/// never fails silently.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[serde(untagged)]
+pub enum TransactionEntry {
+    /// Full transaction data with block-level metadata
+    Full(Box<FullTransactionEntry>),
+    /// Lightweight signature entry with slot, timing, and status metadata
+    Signature(TransactionSignatureEntry),
+    /// Fallback for unrecognized response shapes (e.g., new API modes)
+    Unknown(serde_json::Value),
+}
+
+impl Default for TransactionEntry {
+    fn default() -> Self {
+        TransactionEntry::Signature(TransactionSignatureEntry {
+            signature: String::new(),
+            slot: 0,
+            transaction_index: 0,
+            err: None,
+            memo: None,
+            block_time: None,
+            confirmation_status: None,
+        })
+    }
+}
+
 /// Response from `getTransactionsForAddress`.
 ///
 /// Contains a page of transaction data and an optional pagination cursor. The format
 /// of items in `data` depends on the `transaction_details` setting:
-/// - `Signatures`: each item is a transaction signature string
-/// - `Full`: each item is a full transaction object
+/// - `Signatures`: each item is a [`TransactionEntry::Signature`]
+/// - `Full`: each item is a [`TransactionEntry::Full`]
 ///
 /// When `pagination_token` is `None`, all results have been returned.
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct GetTransactionsForAddressResponse {
     /// Transaction data for this page (signatures or full transactions depending on options)
-    pub data: Vec<serde_json::Value>,
+    pub data: Vec<TransactionEntry>,
     /// Cursor for the next page; `None` when no more results remain
     pub pagination_token: Option<String>,
 }
@@ -2725,6 +2842,61 @@ pub struct FundingSource {
     pub slot: u64,
     /// Explorer URL for the transaction
     pub explorer_url: String,
+}
+
+/// Billing cycle dates for an Admin API project usage response.
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+pub struct AdminBillingCycle {
+    /// Inclusive start date of the current billing cycle in `YYYY-MM-DD` format.
+    pub start: String,
+    /// Exclusive end date of the current billing cycle in `YYYY-MM-DD` format.
+    pub end: String,
+}
+
+/// Subscription metadata returned by the Admin API project usage endpoint.
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct AdminSubscriptionDetails {
+    /// Current billing cycle window for the project.
+    pub billing_cycle: AdminBillingCycle,
+    /// Included credit limit for the active plan.
+    pub credits_limit: u64,
+    /// Human-readable plan name.
+    pub plan: String,
+}
+
+/// Per-product credit usage returned by the Admin API project usage endpoint.
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct AdminUsageBreakdown {
+    pub api: u64,
+    pub archival: u64,
+    pub das: u64,
+    pub grpc: u64,
+    pub grpc_geyser: u64,
+    pub photon: u64,
+    pub rpc: u64,
+    pub stream: u64,
+    pub webhook: u64,
+    pub websocket: u64,
+}
+
+/// Project-level usage summary returned by the Admin API.
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct ProjectUsage {
+    /// Remaining included credits for the current billing period.
+    pub credits_remaining: u64,
+    /// Total credits consumed in the current billing period.
+    pub credits_used: u64,
+    /// Remaining prepaid credits.
+    pub prepaid_credits_remaining: u64,
+    /// Prepaid credits consumed in the current billing period.
+    pub prepaid_credits_used: u64,
+    /// Plan and billing cycle details for the project.
+    pub subscription_details: AdminSubscriptionDetails,
+    /// Per-product usage counters for the current billing period.
+    pub usage: AdminUsageBreakdown,
 }
 
 /// Options for the token accounts filter in the `get_wallet_history` endpoint.

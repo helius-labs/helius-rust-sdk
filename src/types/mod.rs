@@ -7,19 +7,19 @@ pub mod zk_compression_types;
 
 pub use self::enhanced_transaction_types::*;
 pub use self::enhanced_websocket::{
-    RpcTransactionsConfig, TransactionCommitment, TransactionNotification, TransactionSubscribeFilter,
-    TransactionSubscribeOptions, UiEnhancedTransactionEncoding,
+    FullTransactionNotification, RpcTransactionsConfig, TransactionCommitment, TransactionNotification,
+    TransactionSubscribeFilter, TransactionSubscribeOptions, UiEnhancedTransactionEncoding,
 };
 pub use self::enums::*;
 pub use self::inner::*;
 pub use self::options::*;
 pub use self::zk_compression_types::*;
 
-// Re-export wallet types
+// Re-export wallet and admin types
 pub use self::inner::{
-    BalanceChange, BalancesPagination, BalancesResponse, BatchIdentityRequest, FundingSource, HistoryResponse,
-    HistoryTransaction, Identity, Nft, Pagination, TokenAccountsOption, TokenBalance, Transfer, TransferDirection,
-    TransfersResponse,
+    AdminBillingCycle, AdminSubscriptionDetails, AdminUsageBreakdown, BalanceChange, BalancesPagination,
+    BalancesResponse, BatchIdentityRequest, FundingSource, HistoryResponse, HistoryTransaction, Identity, Nft,
+    Pagination, ProjectUsage, TokenAccountsOption, TokenBalance, Transfer, TransferDirection, TransfersResponse,
 };
 
 use crate::error::{HeliusError, Result};

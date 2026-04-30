@@ -15,6 +15,7 @@ mod rpc {
     mod test_get_assets_by_owner;
     mod test_get_nft_editions;
     mod test_get_priority_fee_estimate;
+    mod test_get_program_accounts_v2;
     mod test_get_signatures_for_asset;
     mod test_get_token_accounts;
     mod test_get_transactions_for_address;
@@ -28,6 +29,9 @@ mod wallet {
     mod test_get_wallet_identity;
     mod test_get_wallet_transfers;
 }
+mod admin {
+    mod test_get_project_usage;
+}
 mod webhook {
     mod test_create_webhook;
     mod test_edit_webhook;
@@ -38,6 +42,25 @@ mod webhook {
     mod test_get_all_webhooks;
     mod test_remove_addresses_from_webhook;
     mod test_toggle_webhook;
+}
+mod smart_transactions {
+    mod helpers;
+    mod test_create_smart_transaction;
+    mod test_input_validation;
+    mod test_sender_urls;
+}
+mod websocket {
+    mod test_get_url;
+    mod test_transaction_subscribe;
+    mod test_websocket_lifecycle;
+}
+mod staking {
+    mod helpers;
+    mod test_create_stake_transaction;
+    mod test_create_unstake_transaction;
+    mod test_create_withdraw_transaction;
+    mod test_get_unstake_instruction;
+    mod test_get_withdraw_instruction;
 }
 mod zk_compression {
     mod helpers;

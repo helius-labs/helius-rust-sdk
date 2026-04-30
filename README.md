@@ -257,6 +257,11 @@ Our SDK is designed to provide a seamless developer experience when building on 
 - [`get_wallet_transfers`](https://www.helius.dev/docs/api-reference/wallet/get-wallet-transfers) - Gets all token transfer activity for a wallet
 - [`get_wallet_funding_source`](https://www.helius.dev/docs/api-reference/wallet/get-wallet-funding-source) - Discovers the original funding source of a wallet
 
+### Admin API
+- `get_project_usage` - Gets billing-period credits, prepaid credits, subscription details, and per-product usage breakdown for a project
+
+Admin API access is feature-gated per project and served from `https://admin-api.helius.xyz/v0`. The API key must belong to the same project as the requested `project_id`.
+
 ### Helius Sender
 - [`create_smart_transaction_with_tip_for_sender`](https://github.com/helius-labs/helius-rust-sdk/blob/47d68afcf644938bc474f609368b214170423bba/src/optimized_transaction.rs#L978-L1007) - Creates an optimized smart transaction with an appended tip transfer instruction for Sender
 - [`determine_tip_lamports`](https://github.com/helius-labs/helius-rust-sdk/blob/47d68afcf644938bc474f609368b214170423bba/src/optimized_transaction.rs#L966-L976) - Determines the tip amount in lamports using the 75th percentile floor or falling back to the minimum required by Sender

@@ -1,6 +1,7 @@
 use helius::error::Result;
 use helius::types::inner::{
-    GetTransactionsFilters, SlotFilter, TokenAccountsFilter, TransactionDetails, TransactionStatusFilter,
+    GetTransactionsFilters, SlotFilter, TokenAccountsFilter, TransactionDetails, TransactionEntry,
+    TransactionStatusFilter,
 };
 use helius::types::{Cluster, GetTransactionsForAddressOptions, SortOrder};
 use helius::Helius;
@@ -13,7 +14,7 @@ async fn main() -> Result<()> {
 
     let address = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA";
 
-    println!("=== Example 1: Recent successful transactions ===");
+    println!("=== Example 1: Recent successful transactions (full) ===");
     let options = GetTransactionsForAddressOptions {
         limit: Some(10),
         transaction_details: Some(TransactionDetails::Full),
@@ -32,6 +33,19 @@ async fn main() -> Result<()> {
     {
         Ok(result) => {
             println!("Fetched {} successful transactions", result.data.len());
+            for (i, entry) in result.data.iter().enumerate() {
+                match entry {
+                    TransactionEntry::Full(tx) => {
+                        println!("  {}. slot={}, has_meta={}", i + 1, tx.slot, tx.meta.is_some());
+                    }
+                    TransactionEntry::Signature(sig) => {
+                        println!("  {}. {}", i + 1, sig.signature);
+                    }
+                    TransactionEntry::Unknown(val) => {
+                        println!("  {}. (unknown format): {}", i + 1, val);
+                    }
+                }
+            }
             println!("Pagination token: {:?}", result.pagination_token);
         }
         Err(e) => println!("Error: {:?}", e),
@@ -61,8 +75,16 @@ async fn main() -> Result<()> {
     {
         Ok(result) => {
             println!("Fetched {} transactions in slot range", result.data.len());
-            for (i, tx) in result.data.iter().enumerate() {
-                println!("  {}. {:?}", i + 1, tx);
+            for (i, entry) in result.data.iter().enumerate() {
+                if let TransactionEntry::Signature(sig) = entry {
+                    println!(
+                        "  {}. sig={}, slot={}, block_time={:?}",
+                        i + 1,
+                        sig.signature,
+                        sig.slot,
+                        sig.block_time
+                    );
+                }
             }
         }
         Err(e) => println!("Error: {:?}", e),
@@ -88,6 +110,11 @@ async fn main() -> Result<()> {
     {
         Ok(result) => {
             println!("Fetched {} failed transactions", result.data.len());
+            for (i, entry) in result.data.iter().enumerate() {
+                if let TransactionEntry::Signature(sig) = entry {
+                    println!("  {}. sig={}, err={:?}", i + 1, sig.signature, sig.err);
+                }
+            }
         }
         Err(e) => println!("Error: {:?}", e),
     }
@@ -143,6 +170,11 @@ async fn main() -> Result<()> {
         {
             Ok(result) => {
                 println!("Page {}: {} transactions", page, result.data.len());
+                for entry in &result.data {
+                    if let TransactionEntry::Signature(sig) = entry {
+                        println!("  - {} (slot {})", sig.signature, sig.slot);
+                    }
+                }
 
                 if let Some(token) = result.pagination_token {
                     pagination_token = Some(token);

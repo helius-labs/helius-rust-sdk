@@ -155,7 +155,9 @@ impl EnhancedWebsocket {
     /// This consumes `self`, preventing further use of the connection.
     pub async fn shutdown(self) -> Result<()> {
         let _ = self.shutdown_sender.send(());
-        self.ws.await.unwrap() // WS future should not be cancelled or panicked
+        self.ws
+            .await
+            .map_err(|e| HeliusError::WebsocketClosed(format!("WebSocket task failed: {}", e)))?
     }
 
     /// Sets the node version for compatibility-aware message handling.
@@ -379,7 +381,7 @@ impl EnhancedWebsocket {
                           }
                           Err(err) => format!(
                               "Failed to deserialize RPC error response: {} [{}]",
-                              serde_json::to_string(error_object).unwrap(),
+                              serde_json::to_string(error_object).unwrap_or_default(),
                               err
                           )
                       }

@@ -1,4 +1,6 @@
+use super::inner::TransactionSignatureEntry;
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use solana_sdk::pubkey::Pubkey;
 use solana_transaction_status::EncodedTransactionWithStatusMeta;
 
@@ -137,17 +139,59 @@ pub struct RpcTransactionsConfig {
     pub options: TransactionSubscribeOptions,
 }
 
-/// A real-time transaction notification received from a `transactionSubscribe` subscription.
+/// A transaction notification returned in `"full"` mode from `transactionSubscribe`.
 ///
-/// Delivered whenever a transaction matching the subscription filter is observed at the
-/// configured commitment level.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+/// Contains the websocket-specific full transaction payload, including the top-level signature
+/// and the transaction index within the slot.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct TransactionNotification {
-    /// The full encoded transaction with status metadata
+pub struct FullTransactionNotification {
+    /// The full encoded transaction with status metadata.
     pub transaction: EncodedTransactionWithStatusMeta,
-    /// The transaction signature (base-58 encoded)
+    /// The transaction signature (base-58 encoded).
     pub signature: String,
-    /// The slot in which the transaction was processed
+    /// The slot in which the transaction was processed.
     pub slot: u64,
+    /// Zero-based position of the transaction within its block.
+    pub transaction_index: u64,
+}
+
+/// A single transaction notification from `transactionSubscribe`.
+///
+/// The variant depends on the `transaction_details` option:
+/// - [`TransactionDetails::Signatures`]: deserializes as [`TransactionNotification::Signature`]
+/// - [`TransactionDetails::Full`] and [`TransactionDetails::Accounts`]: deserializes as
+///   [`TransactionNotification::Full`]
+///
+/// If the API returns a shape that doesn't match a known variant,
+/// [`TransactionNotification::Unknown`] captures the raw JSON so deserialization
+/// never fails silently.
+///
+/// **Variant ordering matters:** serde tries `untagged` variants top-down.
+/// `Full` must precede `Signature` because `Signature` would also match a full
+/// payload (its extra fields are simply ignored). Reordering the variants will
+/// cause full notifications to silently deserialize as `Signature`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum TransactionNotification {
+    /// Full websocket transaction notification with the encoded transaction payload.
+    Full(Box<FullTransactionNotification>),
+    /// Lightweight signature notification with slot metadata only.
+    Signature(TransactionSignatureEntry),
+    /// Fallback for unrecognized response shapes (e.g. future API modes).
+    Unknown(Value),
+}
+
+impl Default for TransactionNotification {
+    fn default() -> Self {
+        TransactionNotification::Signature(TransactionSignatureEntry {
+            signature: String::new(),
+            slot: 0,
+            transaction_index: 0,
+            err: None,
+            memo: None,
+            block_time: None,
+            confirmation_status: None,
+        })
+    }
 }

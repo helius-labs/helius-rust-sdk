@@ -529,7 +529,7 @@ impl Helius {
 
         // Rebuild the transaction with the final instructions
         if is_versioned {
-            let lookup_tables: &[AddressLookupTableAccount] = config.lookup_tables.as_deref().unwrap();
+            let lookup_tables: &[AddressLookupTableAccount] = config.lookup_tables.as_deref().unwrap_or(&[]);
             let v0_message: v0::Message =
                 v0::Message::try_compile(&payer_pubkey, &final_instructions, lookup_tables, recent_blockhash)?;
             let versioned_message: VersionedMessage = VersionedMessage::V0(v0_message);
@@ -1002,7 +1002,7 @@ impl Helius {
 
         // Rebuild the final unsigned tx with the updated ixs
         if is_versioned {
-            let lookup_tables: &[AddressLookupTableAccount] = config.lookup_tables.as_deref().unwrap();
+            let lookup_tables: &[AddressLookupTableAccount] = config.lookup_tables.as_deref().unwrap_or(&[]);
             let v0_message: v0::Message =
                 v0::Message::try_compile(&payer_pubkey, &final_instructions, lookup_tables, recent_blockhash)?;
             let versioned_message: VersionedMessage = VersionedMessage::V0(v0_message);

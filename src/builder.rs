@@ -81,6 +81,8 @@ impl HeliusBuilder {
     /// - Helius-hosted endpoints
     /// - Webhook operations
     /// - Enhanced transaction parsing
+    /// - Wallet API requests
+    /// - Admin API requests
     ///
     /// Optional for custom RPC endpoints.
     ///

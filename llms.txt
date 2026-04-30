@@ -32,6 +32,7 @@ Use the Helius Rust SDK when you need to:
 - Set up webhooks for on-chain events (sales, transfers, swaps)
 - Stream real-time blockchain data via Enhanced WebSockets
 - Look up wallet identity, balances, transfers, and funding sources
+- Inspect project-level credit usage and billing-period consumption
 - Work with ZK compressed accounts and tokens
 - Stake SOL, unstake, and withdraw via the Helius validator
 - Make RPC calls on Solana's most performant infrastructure
@@ -94,6 +95,8 @@ examples/
 │   └── get_latest_blockhash_async.rs         #   Async blockhash fetch
 ├── transactions/                             # Smart transactions & Helius Sender
 │   └── send_smart_transaction_with_seeds.rs  #   Thread-safe transaction sending
+├── admin/                                    # Admin API
+│   └── get_project_usage.rs                  #   Project credit usage
 ├── wallet/                                   # Wallet API
 │   ├── get_wallet_identity.rs                #   Wallet identity lookup
 │   ├── get_batch_wallet_identity.rs          #   Batch identity lookup
@@ -496,6 +499,17 @@ let funding = helius.get_wallet_funding_source("wallet_address").await?;
 println!("Funded by: {} with {} SOL", funding.funder, funding.amount);
 ```
 
+### Admin API
+
+Inspect billing-period credits, prepaid credits, and per-product usage for a project.
+
+```rust
+let usage = helius.get_project_usage("project_id").await?;
+println!("Credits used: {}", usage.credits_used);
+println!("Credits remaining: {}", usage.credits_remaining);
+println!("RPC usage: {}", usage.usage.rpc);
+```
+
 ### ZK Compression
 
 Work with ZK compressed accounts and tokens for up to 1000x cost savings on-chain storage.
@@ -658,11 +672,11 @@ tokio::spawn(async move {
 ```toml
 # Default: native TLS (OpenSSL)
 [dependencies]
-helius = "1.0"
+helius = "1.1"
 
 # Alternative: rustls (pure Rust, no OpenSSL dependency)
 [dependencies]
-helius = { version = "1.0", default-features = false, features = ["rustls"] }
+helius = { version = "1.1", default-features = false, features = ["rustls"] }
 ```
 
 ## Plans and Rate Limits
