@@ -1,7 +1,7 @@
 use helius::error::Result;
 use helius::types::{
     Cluster, GetTransfersByAddressConfig, GetTransfersByAddressDirection, GetTransfersByAddressFilters,
-    GetTransfersByAddressSolMode, SortOrder, TransferBlockTimeFilter, TransferStatusFilter,
+    GetTransfersByAddressSolMode, SortOrder, TransferBlockTimeFilter,
 };
 use helius::Helius;
 
@@ -21,7 +21,6 @@ async fn main() -> Result<()> {
                 gte: Some(1_704_067_200),
                 ..Default::default()
             }),
-            status: Some(TransferStatusFilter::Succeeded),
             ..Default::default()
         }),
         ..Default::default()

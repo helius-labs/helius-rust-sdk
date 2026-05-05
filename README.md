@@ -279,7 +279,7 @@ Our SDK is designed to provide a seamless developer experience when building on 
 ### RPC Methods
 - [`get_priority_fee_estimate`](https://www.helius.dev/docs/api-reference/priority-fee/getpriorityfeeestimate#getpriorityfeeestimate) - Gets an estimate of the priority fees required for a transaction to be processed more quickly
 - [`get_transactions_for_address`](https://www.helius.dev/docs/api-reference/rpc/http/gettransactionsforaddress) - Gets transaction history for a specific address with advanced filtering, sorting, and pagination. Optionally include transactions from associated token accounts
-- `get_transfers_by_address` - Gets token and native SOL transfers for a specific address with counterparty, mint, direction, amount, slot, block time, status, sorting, and cursor pagination filters
+- [`get_transfers_by_address`](https://www.helius.dev/docs/rpc/gettransfersbyaddress) - Gets token and native SOL transfers for a specific address with counterparty, mint, direction, amount, slot, block time, sorting, and cursor pagination filters
 
 ### Helper Methods
 - [`deserialize_str_to_number`](https://github.com/helius-labs/helius-rust-sdk/blob/dev/src/utils/deserialize_str_to_number.rs) - Deserializes a `String` to a `Number`

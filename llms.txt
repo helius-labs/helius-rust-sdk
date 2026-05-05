@@ -379,8 +379,7 @@ Fetch token and native SOL transfers for an address. This is a thin Helius-only 
 
 ```rust
 use helius::types::{
-    GetTransfersByAddressConfig, GetTransfersByAddressDirection, GetTransfersByAddressFilters,
-    TransferStatusFilter,
+    GetTransfersByAddressConfig, GetTransfersByAddressDirection,
 };
 
 let transfers = helius.rpc().get_transfers_by_address(
@@ -388,10 +387,6 @@ let transfers = helius.rpc().get_transfers_by_address(
     Some(GetTransfersByAddressConfig {
         limit: Some(100),
         direction: Some(GetTransfersByAddressDirection::Any),
-        filters: Some(GetTransfersByAddressFilters {
-            status: Some(TransferStatusFilter::Succeeded),
-            ..Default::default()
-        }),
         ..Default::default()
     }),
 ).await?;

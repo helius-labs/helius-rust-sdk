@@ -2605,13 +2605,13 @@ pub enum GetTransfersByAddressSolMode {
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
 pub struct TransferAmountFilter {
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub gt: Option<f64>,
+    pub gt: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub gte: Option<f64>,
+    pub gte: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub lt: Option<f64>,
+    pub lt: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub lte: Option<f64>,
+    pub lte: Option<u64>,
 }
 
 /// Filter transfers by block timestamp (Unix seconds).
@@ -2640,19 +2640,6 @@ pub struct TransferSlotFilter {
     pub lte: Option<u64>,
 }
 
-/// Filter transfers by execution status.
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default)]
-#[serde(rename_all = "lowercase")]
-pub enum TransferStatusFilter {
-    /// Successful transfers only
-    Succeeded,
-    /// Failed transfers only
-    Failed,
-    /// Successful and failed transfers
-    #[default]
-    Any,
-}
-
 /// Combined filters for `getTransfersByAddress`.
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
 #[serde(rename_all = "camelCase")]
@@ -2663,8 +2650,6 @@ pub struct GetTransfersByAddressFilters {
     pub block_time: Option<TransferBlockTimeFilter>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub slot: Option<TransferSlotFilter>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub status: Option<TransferStatusFilter>,
 }
 
 /// Commitment level accepted by `getTransfersByAddress`.
@@ -2694,7 +2679,7 @@ pub struct GetTransfersByAddressConfig {
     /// Native SOL grouping mode
     #[serde(skip_serializing_if = "Option::is_none")]
     pub sol_mode: Option<GetTransfersByAddressSolMode>,
-    /// Combined filters for amount, block time, slot, and status
+    /// Combined filters for amount, block time, and slot
     #[serde(skip_serializing_if = "Option::is_none")]
     pub filters: Option<GetTransfersByAddressFilters>,
     /// Maximum number of transfers per page. The server accepts 1-100.
@@ -2747,12 +2732,11 @@ impl Serialize for GetTransfersByAddressRequest {
 #[serde(rename_all = "camelCase")]
 pub enum GetTransfersByAddressTransferType {
     Transfer,
-    TransferFee,
     Mint,
     Burn,
     Wrap,
     Unwrap,
-    ChangeAccountOwner,
+    ChangeOwner,
     WithdrawWithheldFee,
 }
 
@@ -2783,8 +2767,6 @@ pub struct GetTransfersByAddressTransfer {
     pub amount: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub fee_amount: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub fee_account: Option<String>,
     pub decimals: u8,
     pub ui_amount: String,
     #[serde(skip_serializing_if = "Option::is_none")]

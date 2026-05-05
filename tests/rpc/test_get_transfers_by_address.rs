@@ -43,7 +43,7 @@ fn test_get_transfers_by_address_request_serialization() {
         sol_mode: Some(GetTransfersByAddressSolMode::Separate),
         filters: Some(GetTransfersByAddressFilters {
             amount: Some(TransferAmountFilter {
-                gte: Some(1.0),
+                gte: Some(1),
                 ..Default::default()
             }),
             block_time: Some(TransferBlockTimeFilter {
@@ -54,7 +54,6 @@ fn test_get_transfers_by_address_request_serialization() {
                 lte: Some(250_000_000),
                 ..Default::default()
             }),
-            status: Some(TransferStatusFilter::Succeeded),
         }),
         limit: Some(25),
         pagination_token: Some("250000000:3".to_string()),
@@ -82,10 +81,9 @@ fn test_get_transfers_by_address_request_serialization() {
                     "mint": "So11111111111111111111111111111111111111112",
                     "solMode": "separate",
                     "filters": {
-                        "amount": { "gte": 1.0 },
+                        "amount": { "gte": 1 },
                         "blockTime": { "gt": 1701234567 },
-                        "slot": { "lte": 250000000 },
-                        "status": "succeeded"
+                        "slot": { "lte": 250000000 }
                     },
                     "limit": 25,
                     "paginationToken": "250000000:3",
@@ -148,13 +146,12 @@ async fn test_get_transfers_by_address_success() {
                     "signature": "4m7xBEauJ3PK6SWCZ1PGjBvj8vDdWG3KpwATGy1ARAXFSDwt8GFXM7W5Ncn16wmqokgpiKRLuS83KUxyZyv2sUYv",
                     "slot": 250000001,
                     "blockTime": 1701234600,
-                    "type": "transferFee",
+                    "type": "transfer",
                     "fromUserAccount": null,
                     "toUserAccount": "FeeCollector",
                     "mint": "So11111111111111111111111111111111111111111",
                     "amount": "5000",
                     "feeAmount": "5000",
-                    "feeAccount": "FeeAccount",
                     "decimals": 9,
                     "uiAmount": "0.000005",
                     "feeUiAmount": "0.000005",
@@ -204,10 +201,7 @@ async fn test_get_transfers_by_address_success() {
     assert_eq!(token_transfer.to_token_account, Some("ToTokenAccount".to_string()));
 
     let sol_transfer = &result.data[1];
-    assert_eq!(
-        sol_transfer.transfer_type,
-        GetTransfersByAddressTransferType::TransferFee
-    );
+    assert_eq!(sol_transfer.transfer_type, GetTransfersByAddressTransferType::Transfer);
     assert_eq!(sol_transfer.mint, "So11111111111111111111111111111111111111111");
     assert!(sol_transfer.from_token_account.is_none());
     assert!(sol_transfer.to_token_account.is_none());
