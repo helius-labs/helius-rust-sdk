@@ -2652,17 +2652,6 @@ pub struct GetTransfersByAddressFilters {
     pub slot: Option<TransferSlotFilter>,
 }
 
-/// Commitment level accepted by `getTransfersByAddress`.
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default)]
-#[serde(rename_all = "lowercase")]
-pub enum GetTransfersByAddressCommitment {
-    /// Finalized transfer data
-    #[default]
-    Finalized,
-    /// Confirmed transfer data
-    Confirmed,
-}
-
 /// Request config for the `getTransfersByAddress` RPC method.
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
 #[serde(rename_all = "camelCase")]
@@ -2690,7 +2679,7 @@ pub struct GetTransfersByAddressConfig {
     pub pagination_token: Option<String>,
     /// Commitment level for the query
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub commitment: Option<GetTransfersByAddressCommitment>,
+    pub commitment: Option<CommitmentLevel>,
     /// Sort direction
     #[serde(skip_serializing_if = "Option::is_none")]
     pub sort_order: Option<SortOrder>,

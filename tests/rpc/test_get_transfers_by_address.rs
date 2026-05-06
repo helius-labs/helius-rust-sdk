@@ -10,6 +10,7 @@ use helius::types::*;
 use mockito::{self, Server};
 use reqwest::Client;
 use serde_json::json;
+use solana_commitment_config::CommitmentLevel;
 
 fn test_helius(url: &str) -> Helius {
     let config = Arc::new(Config {
@@ -57,7 +58,7 @@ fn test_get_transfers_by_address_request_serialization() {
         }),
         limit: Some(25),
         pagination_token: Some("250000000:3".to_string()),
-        commitment: Some(GetTransfersByAddressCommitment::Confirmed),
+        commitment: Some(CommitmentLevel::Confirmed),
         sort_order: Some(SortOrder::Asc),
     };
 
