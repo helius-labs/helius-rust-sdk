@@ -19,6 +19,7 @@ mod rpc {
     mod test_get_signatures_for_asset;
     mod test_get_token_accounts;
     mod test_get_transactions_for_address;
+    mod test_get_transfers_by_address;
     mod test_search_assets;
 }
 mod wallet {

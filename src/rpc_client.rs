@@ -29,7 +29,8 @@ use crate::types::{
     GetPriorityFeeEstimateRequest, GetPriorityFeeEstimateResponse, GetProgramAccountsV2Config,
     GetProgramAccountsV2Request, GetProgramAccountsV2Response, GetTokenAccounts, GetTokenAccountsByOwnerV2Config,
     GetTokenAccountsByOwnerV2Request, GetTokenAccountsByOwnerV2Response, GetTransactionsForAddressOptions,
-    GetTransactionsForAddressRequest, GetTransactionsForAddressResponse, GpaAccount, SearchAssets, TokenAccountRecord,
+    GetTransactionsForAddressRequest, GetTransactionsForAddressResponse, GetTransfersByAddressConfig,
+    GetTransfersByAddressRequest, GetTransfersByAddressResponse, GpaAccount, SearchAssets, TokenAccountRecord,
     TokenAccountsList, TokenAccountsOwnerFilter, TransactionSignatureList,
 };
 
@@ -447,5 +448,26 @@ impl RpcClient {
     ) -> Result<GetTransactionsForAddressResponse> {
         let params: GetTransactionsForAddressRequest = (address, options);
         self.post_rpc_request("getTransactionsForAddress", params).await
+    }
+
+    /// Gets token and native SOL transfers for a specific address.
+    ///
+    /// This is a thin wrapper around the Helius-only `getTransfersByAddress`
+    /// JSON-RPC method. The config is optional; when omitted, the request params
+    /// serialize as `[address]`.
+    ///
+    /// # Arguments
+    /// * `address` - The base58 encoded public key of the account
+    /// * `config` - Optional filters, pagination, commitment, and sorting config
+    ///
+    /// # Returns
+    /// A `Result` containing transfer data and an optional pagination token.
+    pub async fn get_transfers_by_address(
+        &self,
+        address: String,
+        config: Option<GetTransfersByAddressConfig>,
+    ) -> Result<GetTransfersByAddressResponse> {
+        let params: GetTransfersByAddressRequest = GetTransfersByAddressRequest::new(address, config);
+        self.post_rpc_request("getTransfersByAddress", params).await
     }
 }

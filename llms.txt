@@ -1,6 +1,6 @@
 ---
 url: https://github.com/helius-labs/helius-rust-sdk
-last_updated: 2026-03-20
+last_updated: 2026-05-05
 ---
 
 # Helius Rust SDK
@@ -89,7 +89,8 @@ examples/
 │   ├── async_config_based_creation.rs        #   HeliusBuilder usage
 │   ├── get_priority_fee_estimate.rs          #   Priority fee estimation
 │   ├── get_program_accounts_v2.rs            #   RPC V2: paginated program accounts
-│   └── get_token_accounts_by_owner_v2.rs     #   RPC V2: paginated token accounts
+│   ├── get_token_accounts_by_owner_v2.rs     #   RPC V2: paginated token accounts
+│   └── get_transfers_by_address.rs           #   Address transfer history
 ├── solana/                                   # Standard Solana RPC
 │   ├── get_latest_blockhash.rs               #   Sync blockhash fetch
 │   └── get_latest_blockhash_async.rs         #   Async blockhash fetch
@@ -373,6 +374,35 @@ let all_token_accounts = helius.rpc().get_all_token_accounts_by_owner(
     TokenAccountsOwnerFilter::Mint("mint_address".to_string()),
     GetTokenAccountsByOwnerV2Config::default(),
 ).await?;
+```
+
+#### getTransfersByAddress
+
+Fetch token and native SOL transfers for an address. This is a thin Helius-only RPC wrapper with cursor pagination.
+
+```rust
+use helius::types::{
+    GetTransfersByAddressConfig, GetTransfersByAddressDirection,
+};
+
+let transfers = helius.rpc().get_transfers_by_address(
+    "wallet_address".to_string(),
+    Some(GetTransfersByAddressConfig {
+        limit: Some(100),
+        direction: Some(GetTransfersByAddressDirection::Any),
+        ..Default::default()
+    }),
+).await?;
+
+if let Some(token) = transfers.pagination_token {
+    let next_page = helius.rpc().get_transfers_by_address(
+        "wallet_address".to_string(),
+        Some(GetTransfersByAddressConfig {
+            pagination_token: Some(token),
+            ..Default::default()
+        }),
+    ).await?;
+}
 ```
 
 ### Enhanced Transactions

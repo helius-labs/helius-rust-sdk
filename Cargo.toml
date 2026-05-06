@@ -108,6 +108,10 @@ path = "examples/helius/get_priority_fee_estimate.rs"
 name = "get_token_accounts_by_owner_v2"
 path = "examples/helius/get_token_accounts_by_owner_v2.rs"
 
+[[example]]
+name = "get_transfers_by_address"
+path = "examples/helius/get_transfers_by_address.rs"
+
 # Solana RPC examples
 [[example]]
 name = "get_latest_blockhash"
