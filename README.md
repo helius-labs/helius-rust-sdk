@@ -253,6 +253,7 @@ Our SDK is designed to provide a seamless developer experience when building on 
 - [`get_wallet_identity`](https://www.helius.dev/docs/api-reference/wallet/get-wallet-identity) - Gets identity information (name, type, category) for a known wallet address
 - [`get_batch_wallet_identity`](https://www.helius.dev/docs/api-reference/wallet/get-batch-wallet-identity) - Gets identity information for multiple wallet addresses in a single request (up to 100)
 - [`get_wallet_balances`](https://www.helius.dev/docs/api-reference/wallet/get-wallet-balances) - Gets token and NFT balances for a wallet, sorted by USD value
+- [`get_wallet_balance_at`](https://www.helius.dev/docs/api-reference/wallet-api/balance-at) - Gets a wallet's balance of a specific token or native SOL at a past timestamp, datetime, or slot
 - [`get_wallet_history`](https://www.helius.dev/docs/api-reference/wallet/get-wallet-history) - Gets parsed transaction history with balance changes for a wallet
 - [`get_wallet_transfers`](https://www.helius.dev/docs/api-reference/wallet/get-wallet-transfers) - Gets all token transfer activity for a wallet
 - [`get_wallet_funding_source`](https://www.helius.dev/docs/api-reference/wallet/get-wallet-funding-source) - Discovers the original funding source of a wallet

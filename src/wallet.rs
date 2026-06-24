@@ -1,6 +1,7 @@
 use crate::error::Result;
 use crate::types::{
-    BalancesResponse, BatchIdentityRequest, FundingSource, HistoryResponse, Identity, TransfersResponse,
+    BalanceAtQuery, BalanceAtResponse, BalancesResponse, BatchIdentityRequest, FundingSource, HistoryResponse,
+    Identity, TransfersResponse,
 };
 use crate::Helius;
 
@@ -413,6 +414,87 @@ impl Helius {
             api_key.as_str()
         );
         let parsed_url: Url = Url::parse(&url).expect("Failed to parse URL");
+
+        self.rpc_client.handler.send(Method::GET, parsed_url, None::<&()>).await
+    }
+
+    /// Retrieves a wallet's balance of a specific token or native SOL at a past point in time
+    ///
+    /// The balance is read from the wallet's most recent transaction involving the token at or
+    /// before the requested point — its post-transaction balance, which held until the wallet's
+    /// next transaction. This is an exact value, not an estimate.
+    ///
+    /// A wallet with no matching activity at or before the requested point is not an error: the
+    /// response has `balance: "0"` and `as_of: None`.
+    ///
+    /// # Arguments
+    /// * `wallet` - The Solana wallet address (base58 encoded)
+    /// * `mint` - Token mint address. For native SOL, use `So11111111111111111111111111111111111111111`
+    /// * `query` - The point in time to query: a [`BalanceAtQuery::Time`] (Unix seconds),
+    ///   [`BalanceAtQuery::Datetime`] string (interpreted as UTC unless a timezone is included),
+    ///   or [`BalanceAtQuery::Slot`] (exact and deterministic)
+    ///
+    /// # Returns
+    /// A `Result` wrapping a `BalanceAtResponse` with the historical balance. `balance` and
+    /// `balance_raw` are strings to avoid precision loss on large values.
+    ///
+    /// # Errors
+    /// Returns a `HeliusError` if:
+    /// - The API key is missing
+    /// - The wallet address or mint is invalid
+    /// - The datetime string is unparseable
+    /// - The API request fails
+    ///
+    /// # Example
+    /// ```ignore
+    /// use helius::Helius;
+    /// use helius::types::{BalanceAtQuery, Cluster};
+    ///
+    /// #[tokio::main]
+    /// async fn main() {
+    ///     let helius = Helius::new("your_api_key", Cluster::MainnetBeta).unwrap();
+    ///     let balance = helius
+    ///         .get_wallet_balance_at(
+    ///             "GQUtvPx89ZNCwmvQqFmH59bJcU8fW8siETpaxod7Aydz",
+    ///             "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+    ///             BalanceAtQuery::Time(1736536800),
+    ///         )
+    ///         .await
+    ///         .unwrap();
+    ///     println!("Balance: {} ({} raw)", balance.balance, balance.balance_raw);
+    /// }
+    /// ```
+    pub async fn get_wallet_balance_at(
+        &self,
+        wallet: &str,
+        mint: &str,
+        query: BalanceAtQuery,
+    ) -> Result<BalanceAtResponse> {
+        let api_key = self.config.require_api_key("wallet balance at")?;
+        let base_url = self.get_wallet_api_base_url();
+        let url: String = format!(
+            "{}v1/wallet/{}/balance-at?api-key={}&mint={}",
+            base_url,
+            wallet,
+            api_key.as_str(),
+            mint
+        );
+
+        let mut parsed_url: Url = Url::parse(&url).expect("Failed to parse URL");
+
+        // Append the time selector with form-encoding so datetime values containing
+        // spaces or `+` timezone offsets survive transport intact.
+        match query {
+            BalanceAtQuery::Time(time) => {
+                parsed_url.query_pairs_mut().append_pair("time", &time.to_string());
+            }
+            BalanceAtQuery::Datetime(datetime) => {
+                parsed_url.query_pairs_mut().append_pair("datetime", &datetime);
+            }
+            BalanceAtQuery::Slot(slot) => {
+                parsed_url.query_pairs_mut().append_pair("slot", &slot.to_string());
+            }
+        }
 
         self.rpc_client.handler.send(Method::GET, parsed_url, None::<&()>).await
     }

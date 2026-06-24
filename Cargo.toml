@@ -137,6 +137,10 @@ name = "get_batch_wallet_identity"
 path = "examples/wallet/get_batch_wallet_identity.rs"
 
 [[example]]
+name = "get_wallet_balance_at"
+path = "examples/wallet/get_wallet_balance_at.rs"
+
+[[example]]
 name = "get_wallet_balances"
 path = "examples/wallet/get_wallet_balances.rs"
 
