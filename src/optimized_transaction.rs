@@ -52,18 +52,29 @@ use tokio::time::sleep;
 /// and minimizing wasted compute unit fees (too much buffer).
 const CU_BUFFER_MULTIPLIER_DEFAULT: f32 = 1.25;
 
-/// Minimum tip in lamports for Dual mode (SWQOS + Jito).
+/// Minimum tip in lamports for **Sender Max** (`swqos_only = false`).
 ///
-/// Dual mode sends transactions through both SWQOS and Jito for redundancy.
-/// Minimum tip: 0.0002 SOL (200,000 lamports).
-const MIN_TIP_LAMPORTS_DUAL: u64 = 200_000; // 0.0002 SOL
+/// Sender Max routes a transaction across multiple high-speed pathways and
+/// enters it into a priority auction; tip more to land first. The same tier
+/// handles both single transactions and bundles — a bundle simply carries this
+/// minimum tip in at least one of its transactions.
+/// Minimum tip: 0.001 SOL (1,000,000 lamports).
+pub const MIN_TIP_LAMPORTS_MAX: u64 = 1_000_000; // 0.001 SOL
 
-/// Minimum tip in lamports for SWQOS-only mode.
+/// Deprecated alias for [`MIN_TIP_LAMPORTS_MAX`].
+///
+/// The non-SWQOS tier is now branded **Sender Max**. The previous 0.0002 SOL
+/// minimum has been removed; this alias now resolves to the Sender Max minimum
+/// (0.001 SOL) for backward compatibility.
+#[deprecated(since = "0.2.6", note = "renamed to MIN_TIP_LAMPORTS_MAX (Sender Max); value is now 0.001 SOL")]
+pub const MIN_TIP_LAMPORTS_DUAL: u64 = MIN_TIP_LAMPORTS_MAX;
+
+/// Minimum tip in lamports for SWQOS-only mode (`swqos_only = true`).
 ///
 /// SWQOS (Stake Weighted Quality of Service) mode prioritizes transactions
 /// based on the sender's stake weight and tip amount.
 /// Minimum tip: 0.000005 SOL (5,000 lamports).
-const MIN_TIP_LAMPORTS_SWQOS: u64 = 5_000; // 0.000005 SOL
+pub const MIN_TIP_LAMPORTS_SWQOS: u64 = 5_000; // 0.000005 SOL
 
 fn collect_unique_signers(signers: &[Arc<dyn Signer>], fee_payer: Option<&Arc<dyn Signer>>) -> Vec<Arc<dyn Signer>> {
     let mut all_signers: Vec<Arc<dyn Signer>> = Vec::with_capacity(signers.len() + usize::from(fee_payer.is_some()));
@@ -115,13 +126,14 @@ const TIP_FLOOR_URL: &str = "https://bundles.jito.wtf/api/v1/bundles/tip_floor";
 ///
 /// # What is Helius Sender?
 ///
-/// Helius Sender is an ultra-low latency transaction submission service that optimizes
-/// transaction landing through:
-/// - **Dual Routing**: Sends to both Solana validators and Jito simultaneously
-/// - **Global Infrastructure**: Regional endpoints for optimal performance
-/// - **Direct Validator Connections**: Minimizes network hops
-/// - **Advanced Retry Logic**: Intelligent routing and resubmission
-/// - **SWQOS Integration**: Stake Weighted Quality of Service support
+/// Helius Sender is an ultra-low latency transaction submission service that
+/// optimizes transaction landing by routing across multiple high-speed pathways
+/// and entering a priority auction — tip more to land first. It offers two tiers:
+/// - **Sender Max** (`swqos_only = false`): the multi-path tier. Routes across
+///   multiple high-speed pathways and enters a priority auction. Handles both
+///   single transactions and bundles over the same paths.
+/// - **SWQOS-only** (`swqos_only = true`): Stake Weighted Quality of Service only,
+///   with a lower minimum tip.
 ///
 /// # Why multiple tip accounts?
 ///
@@ -132,7 +144,7 @@ const TIP_FLOOR_URL: &str = "https://bundles.jito.wtf/api/v1/bundles/tip_floor";
 /// # Requirements
 ///
 /// All transactions through Sender must include:
-/// - **Tips**: Minimum 0.0002 SOL for Dual mode (or 0.000005 SOL for SWQOS-only mode)
+/// - **Tips**: Minimum 0.001 SOL for Sender Max (or 0.000005 SOL for SWQOS-only mode)
 /// - **Priority Fees**: Via `ComputeBudgetProgram::set_compute_unit_price`
 /// - **Skip Preflight**: `skip_preflight: true` for optimal speed
 ///
@@ -1056,7 +1068,7 @@ impl Helius {
         let min_lamports: u64 = if swqos_only {
             MIN_TIP_LAMPORTS_SWQOS
         } else {
-            MIN_TIP_LAMPORTS_DUAL
+            MIN_TIP_LAMPORTS_MAX
         };
         let floor_lamports: u64 = self.fetch_tip_floor_75th().await?.unwrap_or(min_lamports);
 
@@ -1176,7 +1188,7 @@ impl Helius {
         let floor = if sender_opts.swqos_only {
             MIN_TIP_LAMPORTS_SWQOS
         } else {
-            MIN_TIP_LAMPORTS_DUAL
+            MIN_TIP_LAMPORTS_MAX
         };
 
         if tip_lamports < floor {

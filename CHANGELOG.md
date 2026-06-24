@@ -7,8 +7,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Added
+- **Pre Confirmations** (`preconfSubscribe`): new standalone `preconf::PreconfClient` for Helius's lowest-latency transaction stream, delivering scheduled transactions over WebSocket before they are shredded. Yields a stream of `PreconfNotification { version, slot, transaction_index, transaction, transaction_bytes }`, deserializing the bincode `VersionedTransaction` and exposing the raw bytes. Credit-based pricing (billed per notification). Includes `PreconfClient::connect`/`connect_mainnet`/`shutdown`, `PreconfStream`, and `examples/websockets/preconf_subscribe.rs`. A pre-confirmation is an early signal, not a guarantee.
 - `get_wallet_balance_at` Wallet API method for querying a wallet's balance of a specific token or native SOL at a past timestamp, datetime, or slot
 - `BalanceAtQuery` enum (`Time`, `Datetime`, `Slot`) for selecting the historical point to query, plus `BalanceAtResponse`, `BalanceAtRequested`, and `BalanceAtAsOf` response types
+
+### Changed
+- **BREAKING (defaults): Sender tip tiers.** The non-SWQOS tier is now branded **Sender Max** (`swqos_only = false`) with a minimum tip of **0.001 SOL** (`MIN_TIP_LAMPORTS_MAX = 1_000_000`), up from the removed 0.0002 SOL tier. SWQOS-only (`swqos_only = true`) is unchanged at 0.000005 SOL (`MIN_TIP_LAMPORTS_SWQOS = 5_000`). `determine_tip_lamports` and `send_smart_transaction_with_sender` now floor non-SWQOS tips at 0.001 SOL.
+
+### Deprecated
+- `MIN_TIP_LAMPORTS_DUAL` is deprecated in favor of `MIN_TIP_LAMPORTS_MAX`. It is now an alias resolving to the Sender Max minimum (0.001 SOL), not the removed 0.0002 SOL value.
 
 ## [1.1.0] - 2026-04-29
 

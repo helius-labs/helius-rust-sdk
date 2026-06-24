@@ -1874,7 +1874,9 @@ impl CreateSmartTransactionSeedConfig {
 pub struct SenderSendOptions {
     /// Must match a key in SENDER_ENDPOINTS (e.g., "Default", "US_EAST")
     pub region: String,
-    /// If true, appends `?swqos_only=true` to `/fast`
+    /// If `false` (default), uses the **Sender Max** tier (multi-path routing +
+    /// priority auction, 0.001 SOL minimum tip). If `true`, uses SWQOS-only
+    /// (lower 0.000005 SOL minimum tip) and appends `?swqos_only=true` to `/fast`.
     pub swqos_only: bool,
     /// Poll settings
     pub poll_timeout_ms: u64,

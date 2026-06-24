@@ -171,6 +171,27 @@ For asynchronous operations, use `Helius::new_async()` or `HeliusBuilder` with `
 ### Enhanced WebSockets
 Use `Helius::new_async()` or `HeliusBuilder` with `.with_websocket(None, None)` to create a client with WebSocket support. This enables our [Enhanced WebSocket methods](https://www.helius.dev/docs/enhanced-websockets) [`transactionSubscribe`](https://www.helius.dev/docs/enhanced-websockets/transaction-subscribe) and [`accountSubscribe`](https://www.helius.dev/docs/enhanced-websockets/account-subscribe)
 
+### Pre Confirmations (`preconfSubscribe`)
+Pre Confirmations are Helius's lowest-latency transaction stream: scheduled transactions are delivered over WebSocket **before** they are shredded. A pre-confirmation is an **early signal, not a guarantee** — a streamed transaction may still fail to land. Pricing is credit-based (billed per notification message), the same as other Helius WebSocket subscriptions.
+
+Use the standalone [`PreconfClient`](src/preconf.rs):
+
+```rust
+use futures_util::StreamExt;
+use helius::preconf::PreconfClient;
+
+let (client, mut stream) = PreconfClient::connect_mainnet("your_api_key").await?;
+while let Some(event) = stream.next().await {
+    // event: { version, slot, transaction_index, transaction, transaction_bytes }
+    println!("slot={} index={}", event.slot, event.transaction_index);
+}
+client.shutdown().await?;
+```
+
+`preconfSubscribe` takes no filter parameters — it streams **all** scheduled transactions. Each notification exposes the decoded `VersionedTransaction` plus the raw `transaction_bytes`. See [`examples/websockets/preconf_subscribe.rs`](examples/websockets/preconf_subscribe.rs).
+
+> **Note:** The public Pre Confirmations hostname (`PRECONF_WEBSOCKET_URL_MAINNET`) is a best-effort default and may change; pass an explicit URL to `PreconfClient::connect` if your endpoint differs.
+
 ### Examples
 More examples of how to use the SDK can be found in the [`examples`](https://github.com/helius-labs/helius-rust-sdk/tree/dev/examples) directory.
 
