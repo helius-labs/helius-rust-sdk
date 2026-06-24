@@ -102,6 +102,7 @@ examples/
 │   ├── get_wallet_identity.rs                #   Wallet identity lookup
 │   ├── get_batch_wallet_identity.rs          #   Batch identity lookup
 │   ├── get_wallet_balances.rs                #   Token & NFT balances
+│   ├── get_wallet_balance_at.rs              #   Historical balance at a point in time
 │   ├── get_wallet_history.rs                 #   Transaction history with deltas
 │   ├── get_wallet_transfers.rs               #   Token transfer activity
 │   └── get_wallet_funding_source.rs          #   Original funding source
@@ -510,6 +511,14 @@ let balances = helius.get_wallet_balances(
     Some(true),  // show_nfts
 ).await?;
 println!("Portfolio: ${}", balances.total_usd_value);
+
+// Historical balance at a past timestamp, datetime, or slot (provide exactly one)
+let balance_at = helius.get_wallet_balance_at(
+    "wallet_address",
+    "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v", // mint (SOL pseudo-mint for native)
+    BalanceAtQuery::Time(1736536800),               // or ::Datetime(s) / ::Slot(n)
+).await?;
+println!("Balance: {} ({} raw)", balance_at.balance, balance_at.balance_raw);
 
 // Transaction history with balance changes
 let history = helius.get_wallet_history(

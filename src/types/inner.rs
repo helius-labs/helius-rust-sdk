@@ -3042,6 +3042,70 @@ pub struct FundingSource {
     pub explorer_url: String,
 }
 
+/// Point in time at which to read a wallet's historical balance
+///
+/// Exactly one of these must be provided to the balance-at endpoint. Use
+/// [`BalanceAtQuery::Slot`] for exact, deterministic results, since block times
+/// reported by validators can drift by a few seconds.
+#[derive(Debug, Clone, PartialEq)]
+pub enum BalanceAtQuery {
+    /// Unix timestamp in seconds. Returns the balance as of this time.
+    Time(i64),
+    /// Datetime string (e.g. `2025-01-10`, `2025-01-10 19:20:00`, `2025-01-10T19:20:00Z`).
+    /// Interpreted as UTC unless an explicit timezone is included.
+    Datetime(String),
+    /// Slot number. Returns the balance as of this slot. Exact and deterministic.
+    Slot(u64),
+}
+
+/// Echo of the query parameters from the balance-at endpoint
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct BalanceAtRequested {
+    /// Requested time as epoch seconds (also set when `datetime` was used)
+    pub time: Option<i64>,
+    /// Requested slot, when `slot` was used
+    pub slot: Option<u64>,
+    /// The original datetime string, when `datetime` was used
+    pub datetime: Option<String>,
+}
+
+/// The transaction a historical balance was read from
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct BalanceAtAsOf {
+    /// Slot of the transaction
+    pub slot: u64,
+    /// Block time of the transaction in Unix seconds (may be null)
+    pub block_time: Option<i64>,
+    /// Transaction signature
+    pub signature: String,
+}
+
+/// Response from the historical balance (balance-at) endpoint
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct BalanceAtResponse {
+    /// Echo of the queried wallet address
+    pub wallet: String,
+    /// Echo of the queried mint (the SOL pseudo-mint when native)
+    pub mint: String,
+    /// Whether the result is native SOL
+    pub is_native: bool,
+    /// Human-readable amount as a decimal string. Trailing zeros are trimmed.
+    pub balance: String,
+    /// Exact amount in the smallest unit (lamports for SOL), as a string
+    pub balance_raw: String,
+    /// Token decimals (9 for SOL)
+    pub decimals: u8,
+    /// Echo of the query parameters
+    pub requested: BalanceAtRequested,
+    /// The transaction the balance was read from. `None` when the wallet had no
+    /// matching transaction at or before the requested point — the balance is
+    /// genuinely `0`, not an error.
+    pub as_of: Option<BalanceAtAsOf>,
+}
+
 /// Billing cycle dates for an Admin API project usage response.
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
 pub struct AdminBillingCycle {

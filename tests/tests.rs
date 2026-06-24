@@ -24,6 +24,7 @@ mod rpc {
 }
 mod wallet {
     mod test_get_batch_wallet_identity;
+    mod test_get_wallet_balance_at;
     mod test_get_wallet_balances;
     mod test_get_wallet_funding_source;
     mod test_get_wallet_history;
