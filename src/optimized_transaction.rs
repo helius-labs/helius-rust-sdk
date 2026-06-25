@@ -1220,8 +1220,8 @@ impl Helius {
     /// Sender Max handles single transactions and bundles over the same paths and
     /// priority auction. The caller only needs to include the **0.001 SOL Sender
     /// tip** in at least one transaction of the bundle — Helius adds any pathway
-    /// tips (including Jito) on your behalf. Do **not** add a separate Jito tip,
-    /// use Jito tip accounts, or set a jito-region header.
+    /// tips on your behalf. Do **not** add a separate pathway-specific tip or set
+    /// a pathway-region header.
     ///
     /// Landing is tracked via each transaction's **signature**
     /// (`getSignatureStatuses`), not bundle IDs / `getBundleStatuses`.
