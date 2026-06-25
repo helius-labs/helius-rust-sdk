@@ -143,10 +143,12 @@ const TIP_FLOOR_URL: &str = "https://bundles.jito.wtf/api/v1/bundles/tip_floor";
 ///
 /// # Requirements
 ///
-/// All transactions through Sender must include:
-/// - **Tips**: Minimum 0.001 SOL for Sender Max (or 0.000005 SOL for SWQOS-only mode)
-/// - **Priority Fees**: Via `ComputeBudgetProgram::set_compute_unit_price`
-/// - **Skip Preflight**: `skip_preflight: true` for optimal speed
+/// Every transaction through Sender must include:
+/// - **Tip**: Minimum 0.001 SOL for Sender Max (or 0.000005 SOL for SWQOS-only mode). This is the only hard requirement.
+///
+/// Recommended (but not required):
+/// - **Priority Fee**: Via `ComputeBudgetProgram::set_compute_unit_price`. Recommended to improve landing, but not strictly required for Sender Max.
+/// - **Skip Preflight**: `skip_preflight` is a caller-controlled passthrough (defaults to `true`); it is no longer required to be `true`.
 ///
 /// Learn more: <https://www.helius.dev/docs/sending-transactions/sender>
 const SENDER_TIP_ACCOUNTS: [&str; 10] = [
@@ -251,7 +253,7 @@ async fn post_to_sender(tx64: &str, opts: &SenderSendOptions) -> Result<Signatur
         "method": "sendTransaction",
         "params": [
             tx64,
-            { "encoding": "base64", "skipPreflight": true, "maxRetries": 0 }
+            { "encoding": "base64", "skipPreflight": opts.skip_preflight, "maxRetries": 0 }
         ]
     });
 
@@ -1122,7 +1124,7 @@ impl Helius {
     }
 
     /// Sends a signed tx via Sender `/fast` and polls until confirmed (or until timeout/last valid blockhash expiry).
-    /// NOTE: Uses `skipPreflight = true`, `maxRetries = 0`.
+    /// NOTE: `skipPreflight` follows `opts.skip_preflight` (defaults to `true`); `maxRetries = 0`.
     pub async fn send_and_confirm_via_sender<T>(
         &self,
         transaction: &T,
@@ -1211,6 +1213,129 @@ impl Helius {
                     .await
             }
         }
+    }
+
+    /// Submits a **bundle** of up to 5 transactions to Sender Max via `sendBundle`.
+    ///
+    /// Sender Max handles single transactions and bundles over the same paths and
+    /// priority auction. The caller only needs to include the **0.001 SOL Sender
+    /// tip** in at least one transaction of the bundle — Helius adds any pathway
+    /// tips (including Jito) on your behalf. Do **not** add a separate Jito tip,
+    /// use Jito tip accounts, or set a jito-region header.
+    ///
+    /// Landing is tracked via each transaction's **signature**
+    /// (`getSignatureStatuses`), not bundle IDs / `getBundleStatuses`.
+    ///
+    /// # Arguments
+    /// * `transactions` - 1..=5 signed transactions to submit as a bundle.
+    /// * `opts` - Sender options (region, polling, etc.). `swqos_only` is ignored
+    ///   for bundles (Sender Max only).
+    ///
+    /// # Returns
+    /// The signatures of every transaction in the bundle, in submission order,
+    /// once all have confirmed (or an error/timeout).
+    pub async fn send_bundle_with_sender<T>(
+        &self,
+        transactions: &[T],
+        last_valid_block_height: u64,
+        opts: SenderSendOptions,
+    ) -> Result<Vec<Signature>>
+    where
+        T: SerializableTransaction + serde::Serialize,
+    {
+        if transactions.is_empty() {
+            return Err(HeliusError::InvalidInput("Bundle must contain at least one transaction".into()));
+        }
+        if transactions.len() > 5 {
+            return Err(HeliusError::InvalidInput(format!(
+                "Bundle supports at most 5 transactions, got {}",
+                transactions.len()
+            )));
+        }
+        if opts.region.trim().is_empty() {
+            return Err(HeliusError::InvalidInput("Sender region must be specified".to_string()));
+        }
+
+        // Base64-encode each wire transaction.
+        let mut encoded: Vec<String> = Vec::with_capacity(transactions.len());
+        let mut signatures: Vec<Signature> = Vec::with_capacity(transactions.len());
+        for tx in transactions {
+            let wire: Vec<u8> =
+                bincode::serialize(tx).map_err(|e: Box<ErrorKind>| HeliusError::InvalidInput(e.to_string()))?;
+            encoded.push(B64.encode(&wire));
+            signatures.push(*tx.get_signature());
+        }
+
+        // Bundles always go through Sender Max (no `?swqos_only=true`).
+        let endpoint = sender_fast_url(&opts.region);
+        let body = json!({
+            "jsonrpc": "2.0",
+            "id": format!("helius-rust-bundle-{}", std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_millis()),
+            "method": "sendBundle",
+            "params": [ encoded, { "encoding": "base64" } ]
+        });
+
+        let res = reqwest::Client::new()
+            .post(&endpoint)
+            .header("User-Agent", SDK_USER_AGENT)
+            .json(&body)
+            .send()
+            .await
+            .map_err(|e| HeliusError::InvalidInput(format!("Sender bundle request error: {e}")))?;
+
+        let status = res.status();
+        if !status.is_success() {
+            let text = res.text().await.unwrap_or_default();
+            return Err(HeliusError::InvalidInput(format!(
+                "Sender bundle HTTP {}: {}",
+                status,
+                text.chars().take(200).collect::<String>()
+            )));
+        }
+
+        // Parse the response for an explicit error; the result (bundle id, etc.) is
+        // intentionally ignored — we track landing by signature, not bundle id.
+        let val: serde_json::Value = res
+            .json()
+            .await
+            .map_err(|e| HeliusError::InvalidInput(format!("Sender bundle JSON parse error: {e}")))?;
+        if let Some(err) = val.get("error") {
+            return Err(HeliusError::InvalidInput(format!("Sender bundle error: {err}")));
+        }
+
+        // Track landing via each transaction's signature.
+        let start: Instant = Instant::now();
+        let timeout: Duration = Duration::from_millis(opts.poll_timeout_ms);
+        let interval: Duration = Duration::from_millis(opts.poll_interval_ms);
+
+        for sig in &signatures {
+            loop {
+                if start.elapsed() >= timeout {
+                    return Err(HeliusError::Timeout {
+                        code: StatusCode::REQUEST_TIMEOUT,
+                        text: format!("Bundle transaction {sig}'s confirmation timed out"),
+                    });
+                }
+
+                if self.connection().get_block_height()? > last_valid_block_height {
+                    return Err(HeliusError::Timeout {
+                        code: StatusCode::REQUEST_TIMEOUT,
+                        text: format!(
+                            "Bundle transaction {sig} expired (last_valid_block_height={last_valid_block_height})"
+                        ),
+                    });
+                }
+
+                match self.poll_transaction_confirmation(*sig).await {
+                    Ok(_) => break,
+                    Err(err) if is_retryable_confirmation_error(&err) => sleep(interval).await,
+                    Err(err) => return Err(err),
+                }
+            }
+        }
+
+        Ok(signatures)
     }
 }
 

@@ -9,21 +9,20 @@ use helius::preconf::PreconfClient;
 /// an **early signal, not a guarantee** — a streamed transaction may still fail
 /// to land.
 ///
-/// NOTE: the public Pre Confirmations hostname was not yet wired into the public
-/// router when this example was written. If `connect_mainnet` fails to resolve,
-/// pass an explicit `wss://...` URL to `PreconfClient::connect` instead.
+/// NOTE: Pre Confirmations are served from the Gatekeeper endpoint
+/// (`wss://beta.helius-rpc.com`). Despite the `beta` host name this is not a beta
+/// product — it is where Pre Confirmations launch during the Gatekeeper migration.
 #[tokio::main]
 async fn main() -> Result<()> {
     let api_key: &str = "your_api_key";
 
     // `preconfSubscribe` takes no filters; it streams ALL scheduled transactions.
-    let (client, mut stream) = PreconfClient::connect_mainnet(api_key).await?;
+    let (client, mut stream) = PreconfClient::connect_with_api_key(api_key).await?;
 
     let mut count = 0;
     while let Some(event) = stream.next().await {
         println!(
-            "preconf: version={} slot={} index={} sig={:?} ({} raw bytes)",
-            event.version,
+            "preconf: slot={} index={} sig={:?} ({} raw bytes)",
             event.slot,
             event.transaction_index,
             event.transaction.signatures.first(),

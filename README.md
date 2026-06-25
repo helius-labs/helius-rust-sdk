@@ -174,23 +174,23 @@ Use `Helius::new_async()` or `HeliusBuilder` with `.with_websocket(None, None)` 
 ### Pre Confirmations (`preconfSubscribe`)
 Pre Confirmations are Helius's lowest-latency transaction stream: scheduled transactions are delivered over WebSocket **before** they are shredded. A pre-confirmation is an **early signal, not a guarantee** — a streamed transaction may still fail to land. Pricing is credit-based (billed per notification message), the same as other Helius WebSocket subscriptions.
 
+Served from the Gatekeeper endpoint (`wss://beta.helius-rpc.com`). Despite the `beta` host name this is not a beta product — it is where Pre Confirmations launch during the Gatekeeper migration.
+
 Use the standalone [`PreconfClient`](src/preconf.rs):
 
 ```rust
 use futures_util::StreamExt;
 use helius::preconf::PreconfClient;
 
-let (client, mut stream) = PreconfClient::connect_mainnet("your_api_key").await?;
+let (client, mut stream) = PreconfClient::connect_with_api_key("your_api_key").await?;
 while let Some(event) = stream.next().await {
-    // event: { version, slot, transaction_index, transaction, transaction_bytes }
+    // event: { slot, transaction_index, transaction, transaction_bytes }
     println!("slot={} index={}", event.slot, event.transaction_index);
 }
 client.shutdown().await?;
 ```
 
-`preconfSubscribe` takes no filter parameters — it streams **all** scheduled transactions. Each notification exposes the decoded `VersionedTransaction` plus the raw `transaction_bytes`. See [`examples/websockets/preconf_subscribe.rs`](examples/websockets/preconf_subscribe.rs).
-
-> **Note:** The public Pre Confirmations hostname (`PRECONF_WEBSOCKET_URL_MAINNET`) is a best-effort default and may change; pass an explicit URL to `PreconfClient::connect` if your endpoint differs.
+`preconfSubscribe` takes no filter parameters — it streams **all** scheduled transactions. The binary frame layout is `slot:u64_le | transaction_index:u64_le | bincode(VersionedTransaction)` (no version field). Each notification exposes the decoded `VersionedTransaction` plus the raw `transaction_bytes`. See [`examples/websockets/preconf_subscribe.rs`](examples/websockets/preconf_subscribe.rs).
 
 ### Examples
 More examples of how to use the SDK can be found in the [`examples`](https://github.com/helius-labs/helius-rust-sdk/tree/dev/examples) directory.
@@ -289,7 +289,8 @@ Admin API access is feature-gated per project and served from `https://admin-api
 - [`determine_tip_lamports`](https://github.com/helius-labs/helius-rust-sdk/blob/47d68afcf644938bc474f609368b214170423bba/src/optimized_transaction.rs#L966-L976) - Determines the tip amount in lamports using the 75th percentile floor or falling back to the minimum required by Sender
 - [`fetch_tip_floor_75th`](https://github.com/helius-labs/helius-rust-sdk/blob/47d68afcf644938bc474f609368b214170423bba/src/optimized_transaction.rs#L940-L964) - Fetches the 75th percentile landed tip floor from Jito's endpoint (in SOL)
 - [`send_and_confirm_via_sender`](https://github.com/helius-labs/helius-rust-sdk/blob/47d68afcf644938bc474f609368b214170423bba/src/optimized_transaction.rs#L1023-L1071) - Send a signed tx via Sender `/fast` and poll until confirmed (or until timeout/last valid blockhash expiry)
-- [`send_smart_transaction_with_sender`](https://github.com/helius-labs/helius-rust-sdk/blob/47d68afcf644938bc474f609368b214170423bba/src/optimized_transaction.rs#L1073-L1113) - Builds an optimized tx and sent via Sender
+- [`send_smart_transaction_with_sender`](https://github.com/helius-labs/helius-rust-sdk/blob/dev/src/optimized_transaction.rs) - Builds an optimized tx and sends it via Sender
+- [`send_bundle_with_sender`](https://github.com/helius-labs/helius-rust-sdk/blob/dev/src/optimized_transaction.rs) - Submits a bundle of up to 5 transactions to Sender Max via `sendBundle`. The caller includes only the 0.001 SOL Sender tip in ≥1 transaction; Helius adds any pathway tips. Landing is tracked per-transaction by signature (not bundle IDs)
 - [`warm_sender_connection`](https://github.com/helius-labs/helius-rust-sdk/blob/47d68afcf644938bc474f609368b214170423bba/src/optimized_transaction.rs#L1009-L1021) - Warms Sender connection by hitting `/ping`
 
 ### Smart Transactions

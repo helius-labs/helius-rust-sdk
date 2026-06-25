@@ -1878,6 +1878,12 @@ pub struct SenderSendOptions {
     /// priority auction, 0.001 SOL minimum tip). If `true`, uses SWQOS-only
     /// (lower 0.000005 SOL minimum tip) and appends `?swqos_only=true` to `/fast`.
     pub swqos_only: bool,
+    /// Whether to skip Solana's preflight checks on the Sender side.
+    ///
+    /// Sender no longer *requires* `skip_preflight = true`; this is now a
+    /// caller-controlled passthrough. Defaults to `true` to preserve prior
+    /// behavior, but you may set it to `false` to have preflight run.
+    pub skip_preflight: bool,
     /// Poll settings
     pub poll_timeout_ms: u64,
     pub poll_interval_ms: u64,
@@ -1888,6 +1894,7 @@ impl Default for SenderSendOptions {
         Self {
             region: "Default".to_string(),
             swqos_only: false,
+            skip_preflight: true,
             poll_timeout_ms: 60_000,
             poll_interval_ms: 2_000,
         }

@@ -24,13 +24,8 @@
 //! slot:u64_le (8 bytes) | transaction_index:u64_le (8 bytes) | bincode(VersionedTransaction)
 //! ```
 //!
-//! Note: the server's internal datagram format carries a leading
-//! `magic | version:u8` prefix, but that prefix is **stripped** before frames are
-//! sent to subscribers. The wire `version` is therefore not present on the
-//! WebSocket frame; the server only forwards datagrams whose version equals the
-//! current protocol version (`1`), so [`PreconfNotification::version`] is
-//! synthesized as `1`. See the `preconfs-wss` service (`src/udp.rs`,
-//! `src/protocol.rs`) for the authoritative format.
+//! There is **no version field** on the wire. See the `preconfs-wss` service
+//! (`src/udp.rs`, `src/protocol.rs`) for the authoritative format.
 
 use std::pin::Pin;
 use std::task::{Context, Poll};
@@ -56,24 +51,14 @@ use tokio_tungstenite::{
 };
 
 use crate::error::{HeliusError, Result};
-use crate::types::Cluster;
 
-/// The current Pre Confirmations wire protocol version.
+/// Base WebSocket URL for the Helius Pre Confirmations endpoint.
 ///
-/// The version byte is stripped from the WebSocket frame by the server, which
-/// only forwards datagrams matching this version, so it is synthesized into
-/// [`PreconfNotification::version`].
-pub const PRECONF_PROTOCOL_VERSION: u8 = 1;
-
-/// Base WebSocket URL for the Helius Pre Confirmations endpoint on mainnet.
-///
-/// NOTE (unverified): the public hostname for Pre Confirmations was **not yet
-/// wired into the public router** at the time this SDK helper was written. This
-/// constant is a best-effort placeholder following the Helius `*-mainnet`
-/// convention. Pass an explicit URL to [`PreconfClient::connect`] if your
-/// endpoint differs, and confirm the canonical hostname before relying on this
-/// default. The API key is appended as a query parameter.
-pub const PRECONF_WEBSOCKET_URL_MAINNET: &str = "wss://preconf-mainnet.helius-rpc.com/?api-key=";
+/// Pre Confirmations are served from the Gatekeeper endpoint
+/// (`wss://beta.helius-rpc.com`). Despite the `beta` host name this is **not** a
+/// beta product — it is where Pre Confirmations launch during the Gatekeeper
+/// migration. The API key is appended as a query parameter.
+pub const PRECONF_WEBSOCKET_URL: &str = "wss://beta.helius-rpc.com/?api-key=";
 
 const JSONRPC_VERSION: &str = "2.0";
 const SUBSCRIBE_METHOD: &str = "preconfSubscribe";
@@ -89,9 +74,6 @@ const HEADER_LEN: usize = 16;
 /// still fail to land.
 #[derive(Debug, Clone)]
 pub struct PreconfNotification {
-    /// Protocol version. Synthesized as [`PRECONF_PROTOCOL_VERSION`] (`1`) because
-    /// the server strips the version byte before forwarding the frame.
-    pub version: u8,
     /// The slot the scheduled transaction targets.
     pub slot: u64,
     /// The transaction's index within the scheduled batch for that slot.
@@ -124,7 +106,6 @@ impl PreconfNotification {
             .map_err(|e| HeliusError::InvalidInput(format!("failed to deserialize VersionedTransaction: {e}")))?;
 
         Ok(Self {
-            version: PRECONF_PROTOCOL_VERSION,
             slot,
             transaction_index,
             transaction,
@@ -147,18 +128,11 @@ pub struct PreconfClient {
 type RequestMsg = (String, oneshot::Sender<Result<()>>);
 
 impl PreconfClient {
-    /// Constructs the mainnet Pre Confirmations WebSocket URL with the API key
-    /// appended.
+    /// Constructs the Pre Confirmations WebSocket URL with the API key appended.
     ///
-    /// NOTE: only `MainnetBeta` is supported; see
-    /// [`PRECONF_WEBSOCKET_URL_MAINNET`] for the (unverified) hostname caveat.
-    pub fn get_url(cluster: &Cluster, api_key: &str) -> Result<String> {
-        match cluster {
-            Cluster::MainnetBeta => Ok(format!("{PRECONF_WEBSOCKET_URL_MAINNET}{api_key}")),
-            other => Err(HeliusError::InvalidInput(format!(
-                "Pre Confirmations is only available on mainnet (got {other:?})"
-            ))),
-        }
+    /// Uses the Gatekeeper endpoint [`PRECONF_WEBSOCKET_URL`].
+    pub fn get_url(api_key: &str) -> String {
+        format!("{PRECONF_WEBSOCKET_URL}{api_key}")
     }
 
     /// Connect to a Pre Confirmations WebSocket endpoint and start streaming.
@@ -277,9 +251,9 @@ impl PreconfClient {
         Ok((client, stream))
     }
 
-    /// Convenience constructor: connect to mainnet with an API key.
-    pub async fn connect_mainnet(api_key: &str) -> Result<(Self, PreconfStream)> {
-        let url = Self::get_url(&Cluster::MainnetBeta, api_key)?;
+    /// Convenience constructor: connect with an API key using the Gatekeeper endpoint.
+    pub async fn connect_with_api_key(api_key: &str) -> Result<(Self, PreconfStream)> {
+        let url = Self::get_url(api_key);
         Self::connect(&url).await
     }
 
@@ -354,7 +328,6 @@ mod tests {
         let tx = sample_versioned_tx();
         let frame = build_frame(123, 7, &tx);
         let notif = PreconfNotification::from_frame(&frame).unwrap();
-        assert_eq!(notif.version, PRECONF_PROTOCOL_VERSION);
         assert_eq!(notif.slot, 123);
         assert_eq!(notif.transaction_index, 7);
         assert_eq!(notif.transaction.signatures.len(), tx.signatures.len());
@@ -386,11 +359,10 @@ mod tests {
     }
 
     #[test]
-    fn url_only_mainnet() {
+    fn url_uses_gatekeeper_endpoint() {
         assert_eq!(
-            PreconfClient::get_url(&Cluster::MainnetBeta, "key123").unwrap(),
-            "wss://preconf-mainnet.helius-rpc.com/?api-key=key123"
+            PreconfClient::get_url("key123"),
+            "wss://beta.helius-rpc.com/?api-key=key123"
         );
-        assert!(PreconfClient::get_url(&Cluster::Devnet, "key123").is_err());
     }
 }
