@@ -6,6 +6,7 @@ pub mod enhanced_transactions;
 pub mod error;
 pub mod factory;
 pub mod optimized_transaction;
+pub mod preconf;
 pub mod request_handler;
 pub mod rpc_client;
 pub mod staking;

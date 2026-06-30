@@ -7,8 +7,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Added
+- **Pre Confirmations** (`preconfSubscribe`): new standalone `preconf::PreconfClient` for Helius's lowest-latency transaction stream, delivering scheduled transactions over WebSocket before they are shredded. Yields a stream of `PreconfNotification { version, slot, transaction_index, status, transaction, transaction_bytes }`, deserializing the bincode `VersionedTransaction` and exposing the raw bytes. Served from the Gatekeeper endpoint (`wss://beta.helius-rpc.com`). Notifications are **binary** frames (the subscribe ack is a JSON text frame); the little-endian layout is `version:u8 | slot:u64_le | transaction_index:u64_le | status:u8 | bincode(VersionedTransaction)`. The `version` byte is checked first (currently `1`; unknown versions are dropped) and `status` is exposed as the `PreconfStatus` enum (`Failed = 0`, `Success = 1`, `Unknown = 2`). Credit-based pricing (10 credits per notification). Includes `PreconfClient::connect`/`connect_with_api_key`/`shutdown`, `PreconfStream`, `CURRENT_VERSION`, and `examples/websockets/preconf_subscribe.rs`. A pre-confirmation is an early signal, not a guarantee; coverage is not continuous (scales with stake forwarding to Helius — expect gaps).
+- **Sender Max bundles**: new `send_bundle_with_sender` submits up to 5 transactions to Sender Max via `sendBundle` (`params: [[base64Tx, ...], { encoding: "base64" }]`). The caller includes only the 0.001 SOL Sender tip in ≥1 transaction; Helius adds any pathway tips — callers must not add a separate pathway-specific tip. Landing is tracked per-transaction by signature (not bundle IDs / `getBundleStatuses`).
 - `get_wallet_balance_at` Wallet API method for querying a wallet's balance of a specific token or native SOL at a past timestamp, datetime, or slot
 - `BalanceAtQuery` enum (`Time`, `Datetime`, `Slot`) for selecting the historical point to query, plus `BalanceAtResponse`, `BalanceAtRequested`, and `BalanceAtAsOf` response types
+
+### Changed
+- **BREAKING (defaults): Sender tip tiers.** The non-SWQOS tier is now branded **Sender Max** (`swqos_only = false`) with a minimum tip of **0.001 SOL** (`MIN_TIP_LAMPORTS_MAX = 1_000_000`), up from the removed 0.0002 SOL tier. SWQOS-only (`swqos_only = true`) is unchanged at 0.000005 SOL (`MIN_TIP_LAMPORTS_SWQOS = 5_000`). `determine_tip_lamports` and `send_smart_transaction_with_sender` now floor non-SWQOS tips at 0.001 SOL.
+- **Sender requirements relaxed.** `skip_preflight` is no longer mandated — it is now a caller-controlled passthrough on `SenderSendOptions` (defaults to `true` for backward compatibility, set `false` to run preflight). A priority fee is recommended but no longer documented as a hard requirement; only the tip is mandatory. Doc comments describe routing generically (multiple high-speed pathways + priority auction).
+- **BREAKING (API): `SenderSendOptions` is now `#[non_exhaustive]`** and gains a public `skip_preflight: bool` field. Because the struct is `#[non_exhaustive]`, downstream code can no longer construct it with a struct literal; use `SenderSendOptions::default()` / `SenderSendOptions::new()` plus the new `with_region`/`with_swqos_only`/`with_skip_preflight`/`with_poll_timeout_ms`/`with_poll_interval_ms` builder methods. Field reads/writes on an existing value are unaffected.
+
+### Deprecated
+- `MIN_TIP_LAMPORTS_DUAL` is deprecated in favor of `MIN_TIP_LAMPORTS_MAX`. It is now an alias resolving to the Sender Max minimum (0.001 SOL), not the removed 0.0002 SOL value.
 
 ## [1.1.0] - 2026-04-29
 
