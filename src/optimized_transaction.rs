@@ -66,7 +66,10 @@ pub const MIN_TIP_LAMPORTS_MAX: u64 = 1_000_000; // 0.001 SOL
 /// The non-SWQOS tier is now branded **Sender Max**. The previous 0.0002 SOL
 /// minimum has been removed; this alias now resolves to the Sender Max minimum
 /// (0.001 SOL) for backward compatibility.
-#[deprecated(since = "0.2.6", note = "renamed to MIN_TIP_LAMPORTS_MAX (Sender Max); value is now 0.001 SOL")]
+#[deprecated(
+    since = "1.2.0",
+    note = "renamed to MIN_TIP_LAMPORTS_MAX (Sender Max); value is now 0.001 SOL"
+)]
 pub const MIN_TIP_LAMPORTS_DUAL: u64 = MIN_TIP_LAMPORTS_MAX;
 
 /// Minimum tip in lamports for SWQOS-only mode (`swqos_only = true`).
@@ -1244,7 +1247,9 @@ impl Helius {
         T: SerializableTransaction + serde::Serialize,
     {
         if transactions.is_empty() {
-            return Err(HeliusError::InvalidInput("Bundle must contain at least one transaction".into()));
+            return Err(HeliusError::InvalidInput(
+                "Bundle must contain at least one transaction".into(),
+            ));
         }
         if transactions.len() > 5 {
             return Err(HeliusError::InvalidInput(format!(
@@ -1267,6 +1272,10 @@ impl Helius {
         }
 
         // Bundles always go through Sender Max (no `?swqos_only=true`).
+        //
+        // Wire format verified against the Sender backend `/fast` handler
+        // (`atlas-txn-sender/src/http_server/server.rs`): the `sendBundle` method
+        // parses `params` as `[[base64Tx, ...], { "encoding": "base64" }]`.
         let endpoint = sender_fast_url(&opts.region);
         let body = json!({
             "jsonrpc": "2.0",

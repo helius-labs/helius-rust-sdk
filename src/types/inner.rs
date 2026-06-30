@@ -1870,7 +1870,12 @@ impl CreateSmartTransactionSeedConfig {
 }
 
 /// Options for sending via Sender
+///
+/// This struct is `#[non_exhaustive]`: construct it via [`SenderSendOptions::default`]
+/// or [`SenderSendOptions::new`] and the `with_*` builder methods rather than a struct
+/// literal, so that adding future fields remains non-breaking.
 #[derive(Clone, Debug)]
+#[non_exhaustive]
 pub struct SenderSendOptions {
     /// Must match a key in SENDER_ENDPOINTS (e.g., "Default", "US_EAST")
     pub region: String,
@@ -1898,6 +1903,43 @@ impl Default for SenderSendOptions {
             poll_timeout_ms: 60_000,
             poll_interval_ms: 2_000,
         }
+    }
+}
+
+impl SenderSendOptions {
+    /// Creates a new `SenderSendOptions` with default values.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Sets the Sender region (must match a key in `SENDER_ENDPOINTS`).
+    pub fn with_region(mut self, region: impl Into<String>) -> Self {
+        self.region = region.into();
+        self
+    }
+
+    /// Sets the SWQOS-only flag.
+    pub fn with_swqos_only(mut self, swqos_only: bool) -> Self {
+        self.swqos_only = swqos_only;
+        self
+    }
+
+    /// Sets whether Sender skips Solana's preflight checks.
+    pub fn with_skip_preflight(mut self, skip_preflight: bool) -> Self {
+        self.skip_preflight = skip_preflight;
+        self
+    }
+
+    /// Sets the poll timeout in milliseconds.
+    pub fn with_poll_timeout_ms(mut self, poll_timeout_ms: u64) -> Self {
+        self.poll_timeout_ms = poll_timeout_ms;
+        self
+    }
+
+    /// Sets the poll interval in milliseconds.
+    pub fn with_poll_interval_ms(mut self, poll_interval_ms: u64) -> Self {
+        self.poll_interval_ms = poll_interval_ms;
+        self
     }
 }
 

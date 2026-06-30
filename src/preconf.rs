@@ -402,20 +402,28 @@ mod tests {
     fn decodes_each_status_variant() {
         let tx = sample_versioned_tx();
         assert_eq!(
-            PreconfNotification::from_frame(&build_frame(1, 0, 0, &tx)).unwrap().status,
+            PreconfNotification::from_frame(&build_frame(1, 0, 0, &tx))
+                .unwrap()
+                .status,
             PreconfStatus::Failed
         );
         assert_eq!(
-            PreconfNotification::from_frame(&build_frame(1, 0, 1, &tx)).unwrap().status,
+            PreconfNotification::from_frame(&build_frame(1, 0, 1, &tx))
+                .unwrap()
+                .status,
             PreconfStatus::Success
         );
         assert_eq!(
-            PreconfNotification::from_frame(&build_frame(1, 0, 2, &tx)).unwrap().status,
+            PreconfNotification::from_frame(&build_frame(1, 0, 2, &tx))
+                .unwrap()
+                .status,
             PreconfStatus::Unknown
         );
         // Out-of-range status byte falls back to Unknown.
         assert_eq!(
-            PreconfNotification::from_frame(&build_frame(1, 0, 9, &tx)).unwrap().status,
+            PreconfNotification::from_frame(&build_frame(1, 0, 9, &tx))
+                .unwrap()
+                .status,
             PreconfStatus::Unknown
         );
     }
