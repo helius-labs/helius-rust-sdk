@@ -22,9 +22,11 @@ async fn main() -> Result<()> {
     let mut count = 0;
     while let Some(event) = stream.next().await {
         println!(
-            "preconf: slot={} index={} sig={:?} ({} raw bytes)",
+            "preconf: v{} slot={} index={} status={:?} sig={:?} ({} raw bytes)",
+            event.version,
             event.slot,
             event.transaction_index,
+            event.status,
             event.transaction.signatures.first(),
             event.transaction_bytes.len(),
         );

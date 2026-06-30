@@ -5,27 +5,36 @@
 //! pre-confirmation is an **early signal, not a guarantee** — a transaction that
 //! is streamed here may still fail to land.
 //!
+//! Coverage is **not continuous**: the stream scales with the share of stake
+//! forwarding scheduled transactions to Helius, so expect gaps — not every slot
+//! or transaction will appear.
+//!
 //! # Pricing
 //!
-//! Pre Confirmations use the standard credit-based pricing model (billed per
-//! notification message), the same as other Helius WebSocket subscriptions. It
-//! is **not** tip-based.
+//! Pre Confirmations use the standard credit-based pricing model, the same as
+//! other Helius WebSocket subscriptions. It is **not** tip-based. Each
+//! notification message costs **10 credits**.
 //!
 //! # Transport & wire format
 //!
-//! The subscription is a JSON-RPC 2.0 WebSocket:
+//! The subscription is a JSON-RPC 2.0 WebSocket served from the Gatekeeper
+//! endpoint (`wss://beta.helius-rpc.com/?api-key=<KEY>`):
 //! - `preconfSubscribe` — subscribe (takes **no parameters**; streams *all*
-//!   scheduled transactions). Responds with a numeric subscription id.
+//!   scheduled transactions). The ack is a JSON-RPC text frame carrying a
+//!   numeric subscription id.
 //! - `preconfUnsubscribe` — unsubscribe. Responds with a boolean.
 //!
-//! Notifications arrive as **binary** WebSocket frames (not JSON). Each frame is:
+//! Notifications arrive as **binary** WebSocket frames (not JSON), little-endian,
+//! with this exact layout:
 //!
 //! ```text
-//! slot:u64_le (8 bytes) | transaction_index:u64_le (8 bytes) | bincode(VersionedTransaction)
+//! version:u8 (1) | slot:u64_le (8) | transaction_index:u64_le (8) | status:u8 (1) | bincode(VersionedTransaction)
 //! ```
 //!
-//! There is **no version field** on the wire. See the `preconfs-wss` service
-//! (`src/udp.rs`, `src/protocol.rs`) for the authoritative format.
+//! The leading `version` byte is read and checked **first**: it is `1` today and
+//! increments if the layout changes. Unknown versions are rejected (the frame is
+//! dropped) rather than misparsed. `status` is `0 = failed`, `1 = success`,
+//! `2 = unknown`.
 
 use std::pin::Pin;
 use std::task::{Context, Poll};
@@ -64,8 +73,39 @@ const JSONRPC_VERSION: &str = "2.0";
 const SUBSCRIBE_METHOD: &str = "preconfSubscribe";
 const UNSUBSCRIBE_METHOD: &str = "preconfUnsubscribe";
 
-/// Minimum binary-frame length: `slot(8) + transaction_index(8)`.
-const HEADER_LEN: usize = 16;
+/// The wire schema version this client understands. Frames carrying any other
+/// version in byte 0 are rejected (dropped) rather than misparsed.
+pub const CURRENT_VERSION: u8 = 1;
+
+/// Fixed-size header before the bincode payload:
+/// `version(1) + slot(8) + transaction_index(8) + status(1)`.
+const HEADER_LEN: usize = 18;
+
+/// Landed status of a pre-confirmed transaction.
+///
+/// A pre-confirmation is an early signal; `status` reflects the scheduler's
+/// current view and may still change before the transaction is finalized.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PreconfStatus {
+    /// The transaction failed (`0`).
+    Failed,
+    /// The transaction succeeded (`1`).
+    Success,
+    /// Status is not yet known (`2`).
+    Unknown,
+}
+
+impl PreconfStatus {
+    /// Decode the on-the-wire `status` byte. Any value other than `0`/`1`/`2`
+    /// maps to [`PreconfStatus::Unknown`].
+    pub fn from_u8(byte: u8) -> Self {
+        match byte {
+            0 => PreconfStatus::Failed,
+            1 => PreconfStatus::Success,
+            _ => PreconfStatus::Unknown,
+        }
+    }
+}
 
 /// A single Pre Confirmations notification.
 ///
@@ -74,10 +114,14 @@ const HEADER_LEN: usize = 16;
 /// still fail to land.
 #[derive(Debug, Clone)]
 pub struct PreconfNotification {
+    /// The wire schema version (byte 0). Currently always [`CURRENT_VERSION`].
+    pub version: u8,
     /// The slot the scheduled transaction targets.
     pub slot: u64,
     /// The transaction's index within the scheduled batch for that slot.
     pub transaction_index: u64,
+    /// The reported landed status of the transaction.
+    pub status: PreconfStatus,
     /// The decoded transaction (deserialized from bincode).
     pub transaction: VersionedTransaction,
     /// The raw `bincode(VersionedTransaction)` bytes, exposed alongside the
@@ -88,7 +132,12 @@ pub struct PreconfNotification {
 impl PreconfNotification {
     /// Parse a raw Pre Confirmations binary WebSocket frame.
     ///
-    /// Expected layout: `slot:u64_le | transaction_index:u64_le | bincode(VersionedTransaction)`.
+    /// Expected layout:
+    /// `version:u8 | slot:u64_le | transaction_index:u64_le | status:u8 | bincode(VersionedTransaction)`.
+    ///
+    /// The leading `version` byte is checked first; a frame with an unrecognized
+    /// version is rejected so future format changes fail loudly instead of being
+    /// silently misparsed.
     pub fn from_frame(buf: &[u8]) -> Result<Self> {
         if buf.len() < HEADER_LEN + 1 {
             return Err(HeliusError::InvalidInput(format!(
@@ -98,16 +147,26 @@ impl PreconfNotification {
             )));
         }
 
-        let slot = u64::from_le_bytes(buf[0..8].try_into().unwrap());
-        let transaction_index = u64::from_le_bytes(buf[8..16].try_into().unwrap());
+        let version = buf[0];
+        if version != CURRENT_VERSION {
+            return Err(HeliusError::InvalidInput(format!(
+                "unsupported preconf wire version {version} (this client understands {CURRENT_VERSION})"
+            )));
+        }
+
+        let slot = u64::from_le_bytes(buf[1..9].try_into().unwrap());
+        let transaction_index = u64::from_le_bytes(buf[9..17].try_into().unwrap());
+        let status = PreconfStatus::from_u8(buf[17]);
         let transaction_bytes = buf[HEADER_LEN..].to_vec();
 
         let transaction: VersionedTransaction = deserialize(&transaction_bytes)
             .map_err(|e| HeliusError::InvalidInput(format!("failed to deserialize VersionedTransaction: {e}")))?;
 
         Ok(Self {
+            version,
             slot,
             transaction_index,
+            status,
             transaction,
             transaction_bytes,
         })
@@ -203,7 +262,8 @@ impl PreconfClient {
                                         }
                                     }
                                     Err(e) => {
-                                        // Malformed frame: skip rather than kill the stream.
+                                        // Malformed or unknown-version frame: skip
+                                        // rather than kill the stream.
                                         eprintln!("helius: dropping malformed preconf frame: {e}");
                                     }
                                 }
@@ -315,10 +375,12 @@ mod tests {
         }
     }
 
-    fn build_frame(slot: u64, idx: u64, tx: &VersionedTransaction) -> Vec<u8> {
+    fn build_frame(slot: u64, idx: u64, status: u8, tx: &VersionedTransaction) -> Vec<u8> {
         let mut buf = Vec::new();
+        buf.push(CURRENT_VERSION);
         buf.extend_from_slice(&slot.to_le_bytes());
         buf.extend_from_slice(&idx.to_le_bytes());
+        buf.push(status);
         buf.extend_from_slice(&bincode::serialize(tx).unwrap());
         buf
     }
@@ -326,25 +388,60 @@ mod tests {
     #[test]
     fn parses_valid_frame() {
         let tx = sample_versioned_tx();
-        let frame = build_frame(123, 7, &tx);
+        let frame = build_frame(123, 7, 1, &tx);
         let notif = PreconfNotification::from_frame(&frame).unwrap();
+        assert_eq!(notif.version, 1);
         assert_eq!(notif.slot, 123);
         assert_eq!(notif.transaction_index, 7);
+        assert_eq!(notif.status, PreconfStatus::Success);
         assert_eq!(notif.transaction.signatures.len(), tx.signatures.len());
         assert_eq!(notif.transaction_bytes, bincode::serialize(&tx).unwrap());
     }
 
     #[test]
+    fn decodes_each_status_variant() {
+        let tx = sample_versioned_tx();
+        assert_eq!(
+            PreconfNotification::from_frame(&build_frame(1, 0, 0, &tx)).unwrap().status,
+            PreconfStatus::Failed
+        );
+        assert_eq!(
+            PreconfNotification::from_frame(&build_frame(1, 0, 1, &tx)).unwrap().status,
+            PreconfStatus::Success
+        );
+        assert_eq!(
+            PreconfNotification::from_frame(&build_frame(1, 0, 2, &tx)).unwrap().status,
+            PreconfStatus::Unknown
+        );
+        // Out-of-range status byte falls back to Unknown.
+        assert_eq!(
+            PreconfNotification::from_frame(&build_frame(1, 0, 9, &tx)).unwrap().status,
+            PreconfStatus::Unknown
+        );
+    }
+
+    #[test]
+    fn rejects_unknown_version() {
+        let tx = sample_versioned_tx();
+        let mut frame = build_frame(1, 0, 1, &tx);
+        frame[0] = 2; // bump the version byte to an unsupported value
+        let err = PreconfNotification::from_frame(&frame).unwrap_err();
+        assert!(format!("{err}").contains("unsupported preconf wire version"));
+    }
+
+    #[test]
     fn rejects_short_frame() {
-        assert!(PreconfNotification::from_frame(&[0u8; 16]).is_err());
+        assert!(PreconfNotification::from_frame(&[0u8; 18]).is_err());
         assert!(PreconfNotification::from_frame(&[]).is_err());
     }
 
     #[test]
     fn rejects_garbage_transaction_bytes() {
         let mut frame = Vec::new();
+        frame.push(CURRENT_VERSION);
         frame.extend_from_slice(&1u64.to_le_bytes());
         frame.extend_from_slice(&0u64.to_le_bytes());
+        frame.push(1); // status = success
         frame.extend_from_slice(&[0xFF; 8]); // not a valid bincode VersionedTransaction
         assert!(PreconfNotification::from_frame(&frame).is_err());
     }
@@ -352,7 +449,7 @@ mod tests {
     #[test]
     fn large_slot_and_index() {
         let tx = sample_versioned_tx();
-        let frame = build_frame(u64::MAX, u64::MAX - 1, &tx);
+        let frame = build_frame(u64::MAX, u64::MAX - 1, 1, &tx);
         let notif = PreconfNotification::from_frame(&frame).unwrap();
         assert_eq!(notif.slot, u64::MAX);
         assert_eq!(notif.transaction_index, u64::MAX - 1);

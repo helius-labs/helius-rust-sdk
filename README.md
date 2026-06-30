@@ -172,7 +172,7 @@ For asynchronous operations, use `Helius::new_async()` or `HeliusBuilder` with `
 Use `Helius::new_async()` or `HeliusBuilder` with `.with_websocket(None, None)` to create a client with WebSocket support. This enables our [Enhanced WebSocket methods](https://www.helius.dev/docs/enhanced-websockets) [`transactionSubscribe`](https://www.helius.dev/docs/enhanced-websockets/transaction-subscribe) and [`accountSubscribe`](https://www.helius.dev/docs/enhanced-websockets/account-subscribe)
 
 ### Pre Confirmations (`preconfSubscribe`)
-Pre Confirmations are Helius's lowest-latency transaction stream: scheduled transactions are delivered over WebSocket **before** they are shredded. A pre-confirmation is an **early signal, not a guarantee** — a streamed transaction may still fail to land. Pricing is credit-based (billed per notification message), the same as other Helius WebSocket subscriptions.
+Pre Confirmations are Helius's lowest-latency transaction stream: scheduled transactions are delivered over WebSocket **before** they are shredded. A pre-confirmation is an **early signal, not a guarantee** — a streamed transaction may still fail to land. Coverage is **not continuous**: it scales with the share of stake forwarding scheduled transactions to Helius, so expect gaps. Pricing is credit-based (10 credits per notification message), the same model as other Helius WebSocket subscriptions.
 
 Served from the Gatekeeper endpoint (`wss://beta.helius-rpc.com`). Despite the `beta` host name this is not a beta product — it is where Pre Confirmations launch during the Gatekeeper migration.
 
@@ -184,13 +184,13 @@ use helius::preconf::PreconfClient;
 
 let (client, mut stream) = PreconfClient::connect_with_api_key("your_api_key").await?;
 while let Some(event) = stream.next().await {
-    // event: { slot, transaction_index, transaction, transaction_bytes }
-    println!("slot={} index={}", event.slot, event.transaction_index);
+    // event: { version, slot, transaction_index, status, transaction, transaction_bytes }
+    println!("v{} slot={} index={} status={:?}", event.version, event.slot, event.transaction_index, event.status);
 }
 client.shutdown().await?;
 ```
 
-`preconfSubscribe` takes no filter parameters — it streams **all** scheduled transactions. The binary frame layout is `slot:u64_le | transaction_index:u64_le | bincode(VersionedTransaction)` (no version field). Each notification exposes the decoded `VersionedTransaction` plus the raw `transaction_bytes`. See [`examples/websockets/preconf_subscribe.rs`](examples/websockets/preconf_subscribe.rs).
+`preconfSubscribe` takes no filter parameters — it streams **all** scheduled transactions. Notifications are **binary** frames (the subscribe ack is a JSON text frame); the layout is little-endian `version:u8 | slot:u64_le | transaction_index:u64_le | status:u8 | bincode(VersionedTransaction)`. The leading `version` byte is checked first (currently `1`); unknown versions are dropped. `status` is exposed as the `PreconfStatus` enum (`Failed = 0`, `Success = 1`, `Unknown = 2`). Each notification exposes the decoded `VersionedTransaction` plus the raw `transaction_bytes`. See [`examples/websockets/preconf_subscribe.rs`](examples/websockets/preconf_subscribe.rs).
 
 ### Examples
 More examples of how to use the SDK can be found in the [`examples`](https://github.com/helius-labs/helius-rust-sdk/tree/dev/examples) directory.
