@@ -14,7 +14,7 @@ The Helius Rust SDK provides asynchronous access to Helius APIs and enhanced Sol
 - Crate: `helius` (crates.io)
 - Version: 1.0.x
 - Changelog: https://github.com/helius-labs/helius-rust-sdk/blob/dev/CHANGELOG.md
-- Rust: 1.85+ (edition 2021)
+- Rust: 1.89+ (edition 2021)
 - Async Runtime: tokio
 - HTTP Client: reqwest
 - Solana: solana-client 3.0.x, solana-sdk 3.0.x
@@ -43,7 +43,7 @@ Use the Helius Rust SDK when you need to:
 Add to your `Cargo.toml`:
 ```toml
 [dependencies]
-helius = "1.0"
+helius = "1.2.0-alpha.1"
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 ```
 
@@ -711,11 +711,11 @@ tokio::spawn(async move {
 ```toml
 # Default: native TLS (OpenSSL)
 [dependencies]
-helius = "1.1"
+helius = "1.2.0-alpha.1"
 
 # Alternative: rustls (pure Rust, no OpenSSL dependency)
 [dependencies]
-helius = { version = "1.1", default-features = false, features = ["rustls"] }
+helius = { version = "1.2.0-alpha.1", default-features = false, features = ["rustls"] }
 ```
 
 ## Plans and Rate Limits

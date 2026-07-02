@@ -3,9 +3,9 @@
 Machine-readable guide for AI agents using the Helius Rust SDK to build on Solana.
 
 - Crate: `helius` (crates.io)
-- Version: 1.x (uses solana-sdk 3.0, solana-client 3.0)
+- Version: 1.2.0-alpha.1 (uses solana-sdk 3.0, solana-client 3.0)
 - Runtime: Async (tokio 1.x)
-- Rust: 1.85+
+- Rust: 1.89+
 - License: MIT
 
 ## Getting an API Key
@@ -17,7 +17,7 @@ Get an API key from https://dashboard.helius.dev, or sign up programmatically vi
 ```toml
 # Cargo.toml
 [dependencies]
-helius = "1.0.0"
+helius = "1.2.0-alpha.1"
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 solana-sdk = "3.0.0"
 ```
@@ -472,8 +472,14 @@ helius.warm_sender_connection(region)                                    // Warm
 ### Enhanced Transactions
 
 ```rust
-helius.parse_transactions(ParseTransactionsRequest { transactions })     // Parse by signatures
-helius.parsed_transaction_history(ParsedTransactionHistoryRequest { address, .. })  // Parse by address
+helius.enhanced().v1().parse_transactions(ParseTransactionsRequest { transactions })     // v1 parse by signatures
+helius.enhanced().v1().parsed_transaction_history(ParsedTransactionHistoryRequest { address, .. })  // v1 parse by address
+helius.enhanced().v2().transactions(TransactionsV2Request { transactions, .. })  // v2 parse by signatures, optional raw tx
+helius.enhanced().v2().transaction_history(TransactionHistoryV2Request { address, .. })  // v2 POST history with filters
+
+// Compatibility wrappers for v1:
+helius.parse_transactions(ParseTransactionsRequest { transactions })
+helius.parsed_transaction_history(ParsedTransactionHistoryRequest { address, .. })
 ```
 
 ### Webhooks
