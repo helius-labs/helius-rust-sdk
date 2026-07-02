@@ -198,6 +198,10 @@ path = "examples/websockets/enhanced_websocket_accounts.rs"
 name = "enhanced_websocket_transactions"
 path = "examples/websockets/enhanced_websocket_transactions.rs"
 
+[[example]]
+name = "preconf_subscribe"
+path = "examples/websockets/preconf_subscribe.rs"
+
 # ZK Compression examples
 [[example]]
 name = "get_compressed_account"

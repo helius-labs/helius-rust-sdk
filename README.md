@@ -171,6 +171,27 @@ For asynchronous operations, use `Helius::new_async()` or `HeliusBuilder` with `
 ### Enhanced WebSockets
 Use `Helius::new_async()` or `HeliusBuilder` with `.with_websocket(None, None)` to create a client with WebSocket support. This enables our [Enhanced WebSocket methods](https://www.helius.dev/docs/enhanced-websockets) [`transactionSubscribe`](https://www.helius.dev/docs/enhanced-websockets/transaction-subscribe) and [`accountSubscribe`](https://www.helius.dev/docs/enhanced-websockets/account-subscribe)
 
+### Pre Confirmations (`preconfSubscribe`)
+Pre Confirmations are Helius's lowest-latency transaction stream: scheduled transactions are delivered over WebSocket **before** they are shredded. A pre-confirmation is an **early signal, not a guarantee** — a streamed transaction may still fail to land. Coverage is **not continuous**: it scales with the share of stake forwarding scheduled transactions to Helius, so expect gaps. Pricing is credit-based (10 credits per notification message), the same model as other Helius WebSocket subscriptions.
+
+Served from the Gatekeeper endpoint (`wss://beta.helius-rpc.com`). Despite the `beta` host name this is not a beta product — it is where Pre Confirmations launch during the Gatekeeper migration.
+
+Use the standalone [`PreconfClient`](src/preconf.rs):
+
+```rust
+use futures_util::StreamExt;
+use helius::preconf::PreconfClient;
+
+let (client, mut stream) = PreconfClient::connect_with_api_key("your_api_key").await?;
+while let Some(event) = stream.next().await {
+    // event: { version, slot, transaction_index, status, transaction, transaction_bytes }
+    println!("v{} slot={} index={} status={:?}", event.version, event.slot, event.transaction_index, event.status);
+}
+client.shutdown().await?;
+```
+
+`preconfSubscribe` takes no filter parameters — it streams **all** scheduled transactions. Notifications are **binary** frames (the subscribe ack is a JSON text frame); the layout is little-endian `version:u8 | slot:u64_le | transaction_index:u64_le | status:u8 | bincode(VersionedTransaction)`. The leading `version` byte is checked first (currently `1`); unknown versions are dropped. `status` is exposed as the `PreconfStatus` enum (`Failed = 0`, `Success = 1`, `Unknown = 2`). Each notification exposes the decoded `VersionedTransaction` plus the raw `transaction_bytes`. See [`examples/websockets/preconf_subscribe.rs`](examples/websockets/preconf_subscribe.rs).
+
 ### Examples
 More examples of how to use the SDK can be found in the [`examples`](https://github.com/helius-labs/helius-rust-sdk/tree/dev/examples) directory.
 
@@ -275,7 +296,8 @@ Admin API access is feature-gated per project and served from `https://admin-api
 - [`determine_tip_lamports`](https://github.com/helius-labs/helius-rust-sdk/blob/47d68afcf644938bc474f609368b214170423bba/src/optimized_transaction.rs#L966-L976) - Determines the tip amount in lamports using the 75th percentile floor or falling back to the minimum required by Sender
 - [`fetch_tip_floor_75th`](https://github.com/helius-labs/helius-rust-sdk/blob/47d68afcf644938bc474f609368b214170423bba/src/optimized_transaction.rs#L940-L964) - Fetches the 75th percentile landed tip floor from Jito's endpoint (in SOL)
 - [`send_and_confirm_via_sender`](https://github.com/helius-labs/helius-rust-sdk/blob/47d68afcf644938bc474f609368b214170423bba/src/optimized_transaction.rs#L1023-L1071) - Send a signed tx via Sender `/fast` and poll until confirmed (or until timeout/last valid blockhash expiry)
-- [`send_smart_transaction_with_sender`](https://github.com/helius-labs/helius-rust-sdk/blob/47d68afcf644938bc474f609368b214170423bba/src/optimized_transaction.rs#L1073-L1113) - Builds an optimized tx and sent via Sender
+- [`send_smart_transaction_with_sender`](https://github.com/helius-labs/helius-rust-sdk/blob/dev/src/optimized_transaction.rs) - Builds an optimized tx and sends it via Sender
+- [`send_bundle_with_sender`](https://github.com/helius-labs/helius-rust-sdk/blob/dev/src/optimized_transaction.rs) - Submits a bundle of up to 5 transactions to Sender Max via `sendBundle`. The caller includes only the 0.001 SOL Sender tip in ≥1 transaction; Helius adds any pathway tips. Landing is tracked per-transaction by signature (not bundle IDs)
 - [`warm_sender_connection`](https://github.com/helius-labs/helius-rust-sdk/blob/47d68afcf644938bc474f609368b214170423bba/src/optimized_transaction.rs#L1009-L1021) - Warms Sender connection by hitting `/ping`
 
 ### Smart Transactions
