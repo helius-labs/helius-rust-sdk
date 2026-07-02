@@ -236,8 +236,15 @@ Our SDK is designed to provide a seamless developer experience when building on 
 - [`get_validity_proof`](https://www.helius.dev/docs/api-reference/zk-compression/getvalidityproof) - Gets a validity proof for compressed data
 
 ### Enhanced Transactions API
-- [`parse_transactions`](https://www.helius.dev/docs/api-reference/enhanced-transactions/gettransactions) - Parses transactions given an array of transaction IDs
-- [`parsed_transaction_history`](https://www.helius.dev/docs/api-reference/enhanced-transactions/gettransactionsbyaddress) - Retrieves a parsed transaction history for a specific address
+- `helius.enhanced().v1().parse_transactions` - Parses transactions with the v1 Enhanced Transactions API (`POST /v0/transactions`)
+- `helius.enhanced().v1().parsed_transaction_history` - Retrieves parsed address history with the v1 Enhanced Transactions API
+- `helius.enhanced().v2().transactions` - Parses transactions with the v2 Enhanced Transactions API (`POST /transactions`), with optional raw transaction payloads
+- `helius.enhanced().v2().transaction_history` - Retrieves parsed address history with the v2 Enhanced Transactions API (`POST /transaction-history`), including POST body filters and cursor pagination
+
+The original root methods remain available for compatibility:
+
+- [`parse_transactions`](https://www.helius.dev/docs/api-reference/enhanced-transactions/gettransactions) - Delegates to `helius.enhanced().v1().parse_transactions`
+- [`parsed_transaction_history`](https://www.helius.dev/docs/api-reference/enhanced-transactions/gettransactionsbyaddress) - Delegates to `helius.enhanced().v1().parsed_transaction_history`
 
 ### Webhooks
 - [`append_addresses_to_webhook`](https://github.com/helius-labs/helius-rust-sdk/blob/2d161e1ebf6d06df686d9e248ea80de215457b40/src/webhook.rs#L50-L73) - Appends a set of addresses to a given webhook

@@ -2,14 +2,15 @@ use helius::config::Config;
 use helius::error::Result;
 use helius::rpc_client::RpcClient;
 use helius::types::{
-    AccountData, ApiKey, Cluster, EnhancedTransaction, HeliusEndpoints, InnerInstruction, Instruction, NativeTransfer,
-    ParseTransactionsRequest, ParsedTransactionHistoryRequest, Source, TokenStandard, TokenTransfer, TransactionEvent,
-    TransactionType, TransferUserAccounts,
+    AccountData, ApiKey, Cluster, ComparisonFilterV2, EnhancedTransaction, HeliusEndpoints, InnerInstruction,
+    Instruction, NativeTransfer, ParseTransactionsRequest, ParsedTransactionHistoryRequest, ParserStatusV2,
+    ProgramFilterV2, SortOrder, Source, TokenStandard, TokenTransfer, TransactionEvent, TransactionHistoryV2Request,
+    TransactionType, TransactionsV2Request, TransferUserAccounts,
 };
 use helius::Helius;
 use mockito::Server;
 use reqwest::Client;
-use serde_json::Number;
+use serde_json::{json, Number};
 use solana_commitment_config::CommitmentLevel;
 use std::sync::Arc;
 
@@ -446,4 +447,208 @@ async fn test_parse_transaction_history_empty_response() {
     let response: Result<Vec<EnhancedTransaction>> = helius.parsed_transaction_history(request).await;
     assert!(response.is_ok(), "The API call failed: {:?}", response.err());
     assert!(response.unwrap().is_empty(), "Expected empty transaction history");
+}
+
+#[tokio::test]
+async fn test_enhanced_v1_namespace_delegates_to_parse_transactions() {
+    let mut server: Server = Server::new_with_opts_async(mockito::ServerOpts::default()).await;
+    let url: String = format!("{}/", server.url());
+
+    let mock_response: Vec<EnhancedTransaction> = vec![create_mock_transaction(
+        "sig_namespace_aaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        TransactionType::Transfer,
+        Source::SystemProgram,
+    )];
+
+    server
+        .mock("POST", "/v0/transactions?api-key=fake_api_key")
+        .with_status(200)
+        .with_header("Content-Type", "application/json")
+        .with_body(serde_json::to_string(&mock_response).unwrap())
+        .create();
+
+    let helius: Helius = create_test_helius(&url);
+    let request = ParseTransactionsRequest {
+        transactions: vec!["sig_namespace_aaaaaaaaaaaaaaaaaaaaaaaaaaa".to_string()],
+    };
+
+    let response = helius.enhanced().v1().parse_transactions(request).await;
+    assert!(response.is_ok(), "The API call failed: {:?}", response.err());
+    assert_eq!(response.unwrap()[0].transaction_type, TransactionType::Transfer);
+}
+
+#[tokio::test]
+async fn test_enhanced_v2_transactions_success() {
+    let mut server: Server = Server::new_with_opts_async(mockito::ServerOpts::default()).await;
+    let url: String = format!("{}/", server.url());
+
+    server
+        .mock("POST", "/transactions?api-key=fake_api_key")
+        .match_body(mockito::Matcher::Json(json!({
+            "transactions": ["sig_v2_aaaaaaaaaaaaaaaaaaaaaaaaaaa"],
+            "commitment": "confirmed",
+            "includeRawTransaction": true
+        })))
+        .with_status(200)
+        .with_header("Content-Type", "application/json")
+        .with_body(v2_transaction_result_response().to_string())
+        .create();
+
+    let helius: Helius = create_test_helius(&url);
+    let request = TransactionsV2Request {
+        transactions: vec!["sig_v2_aaaaaaaaaaaaaaaaaaaaaaaaaaa".to_string()],
+        commitment: Some(CommitmentLevel::Confirmed),
+        include_raw_transaction: Some(true),
+    };
+
+    let response = helius.enhanced().v2().transactions(request).await;
+    assert!(response.is_ok(), "The API call failed: {:?}", response.err());
+
+    let transactions = response.unwrap();
+    assert_eq!(transactions.len(), 1);
+    assert_eq!(transactions[0].parser_status, ParserStatusV2::Ok);
+    assert!(transactions[0].raw_transaction.is_some());
+
+    let parsed = transactions[0].parsed.as_ref().expect("parsed transaction");
+    assert_eq!(parsed.slot, 250_000_000);
+    assert_eq!(parsed.instructions[0].program_name.as_deref(), Some("System Program"));
+    assert_eq!(
+        parsed.instructions[0].decoded.as_ref().unwrap().accounts[0].name,
+        "from"
+    );
+}
+
+#[tokio::test]
+async fn test_enhanced_v2_transaction_history_success() {
+    let mut server: Server = Server::new_with_opts_async(mockito::ServerOpts::default()).await;
+    let url: String = format!("{}/", server.url());
+
+    server
+        .mock("POST", "/transaction-history?api-key=fake_api_key")
+        .match_body(mockito::Matcher::Json(json!({
+            "address": "Address111111111111111111111111111111111",
+            "limit": 7,
+            "beforeSignature": "before_sig",
+            "afterSignature": "after_sig",
+            "paginationToken": "250000000:1",
+            "sortOrder": "asc",
+            "commitment": "finalized",
+            "includeRawTransaction": true,
+            "programFilter": {
+                "programId": "11111111111111111111111111111111",
+                "discriminators": ["0x01", "0x02"]
+            },
+            "slot": { "gte": 10, "lt": 20 },
+            "time": { "gt": 30, "lte": 40 }
+        })))
+        .with_status(200)
+        .with_header("Content-Type", "application/json")
+        .with_body(
+            json!({
+                "data": v2_transaction_result_response(),
+                "paginationToken": "250000001:2"
+            })
+            .to_string(),
+        )
+        .create();
+
+    let helius: Helius = create_test_helius(&url);
+    let request = TransactionHistoryV2Request {
+        address: "Address111111111111111111111111111111111".to_string(),
+        limit: Some(7),
+        before_signature: Some("before_sig".to_string()),
+        after_signature: Some("after_sig".to_string()),
+        pagination_token: Some("250000000:1".to_string()),
+        sort_order: Some(SortOrder::Asc),
+        commitment: Some(CommitmentLevel::Finalized),
+        include_raw_transaction: Some(true),
+        program_filter: Some(ProgramFilterV2 {
+            program_id: "11111111111111111111111111111111".to_string(),
+            discriminators: vec!["0x01".to_string(), "0x02".to_string()],
+        }),
+        slot: Some(ComparisonFilterV2 {
+            gte: Some(10),
+            lt: Some(20),
+            ..Default::default()
+        }),
+        time: Some(ComparisonFilterV2 {
+            gt: Some(30),
+            lte: Some(40),
+            ..Default::default()
+        }),
+    };
+
+    let response = helius.enhanced().v2().transaction_history(request).await;
+    assert!(response.is_ok(), "The API call failed: {:?}", response.err());
+
+    let page = response.unwrap();
+    assert_eq!(page.pagination_token, Some("250000001:2".to_string()));
+    assert_eq!(page.data.len(), 1);
+    assert_eq!(page.data[0].signature, "sig_v2_aaaaaaaaaaaaaaaaaaaaaaaaaaa");
+}
+
+#[test]
+fn test_program_filter_v2_requires_discriminators() {
+    let result = serde_json::from_value::<ProgramFilterV2>(json!({
+        "programId": "11111111111111111111111111111111"
+    }));
+
+    assert!(result.is_err());
+}
+
+fn v2_transaction_result_response() -> serde_json::Value {
+    json!([
+        {
+            "signature": "sig_v2_aaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "parserStatus": "OK",
+            "parsed": {
+                "slot": 250000000,
+                "blockTime": 1701234567,
+                "fee": 5000,
+                "feePayer": "FeePayer1111111111111111111111111111111",
+                "transactionStatus": "OK",
+                "nativeTransfers": [
+                    {
+                        "fromUserAccount": "FromWallet111111111111111111111111111111",
+                        "toUserAccount": "ToWallet11111111111111111111111111111111",
+                        "amount": 1000
+                    }
+                ],
+                "tokenTransfers": [],
+                "transactionSummary": {
+                    "type": "TRANSFER",
+                    "description": "Transferred SOL"
+                },
+                "instructions": [
+                    {
+                        "topIxIdx": 0,
+                        "innerIxIdx": null,
+                        "stackHeight": 1,
+                        "programId": "11111111111111111111111111111111",
+                        "rawAccounts": ["FromWallet111111111111111111111111111111"],
+                        "rawData": "3Bxs4ThwQbE4vyj5",
+                        "instructionSummary": {
+                            "type": "TRANSFER",
+                            "description": "System transfer"
+                        },
+                        "programName": "System Program",
+                        "instructionName": "transfer",
+                        "decoded": {
+                            "args": { "lamports": 1000 },
+                            "accounts": [
+                                {
+                                    "name": "from",
+                                    "pubkey": "FromWallet111111111111111111111111111111",
+                                    "isSigner": true,
+                                    "isWritable": true
+                                }
+                            ]
+                        },
+                        "enrichment": null
+                    }
+                ]
+            },
+            "rawTransaction": { "slot": 250000000 }
+        }
+    ])
 }

@@ -6,9 +6,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+## [1.2.0-alpha.1] - 2026-07-02
+
 ### Added
 - `get_wallet_balance_at` Wallet API method for querying a wallet's balance of a specific token or native SOL at a past timestamp, datetime, or slot
 - `BalanceAtQuery` enum (`Time`, `Datetime`, `Slot`) for selecting the historical point to query, plus `BalanceAtResponse`, `BalanceAtRequested`, and `BalanceAtAsOf` response types
+- Versioned Enhanced Transactions namespace: `helius.enhanced().v1()` for existing v1 parse/history methods and `helius.enhanced().v2()` for parser-v2 methods
+- Enhanced Transactions v2 support via `transactions(TransactionsV2Request)` and `transaction_history(TransactionHistoryV2Request)` using the unprefixed `POST /transactions` and `POST /transaction-history` API paths
+
+### Changed
+- Minimum advertised Rust version is now 1.89.0 to match the resolved Solana 3.x dependency requirements
+
+### Fixed
+- Rust 1.96 compatibility for Enhanced Transactions v2 status enums by avoiding ambiguous `Error` variant macro expansion
 
 ## [1.1.0] - 2026-04-29
 
@@ -214,7 +224,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - Integration test suite using `mockito`
 - GitHub Actions CI workflow
 
-[Unreleased]: https://github.com/helius-labs/helius-rust-sdk/compare/v1.1.0...HEAD
+[Unreleased]: https://github.com/helius-labs/helius-rust-sdk/compare/v1.2.0-alpha.1...HEAD
+[1.2.0-alpha.1]: https://github.com/helius-labs/helius-rust-sdk/compare/v1.1.0...v1.2.0-alpha.1
 [1.1.0]: https://github.com/helius-labs/helius-rust-sdk/compare/v1.0.1...v1.1.0
 [1.0.1]: https://github.com/helius-labs/helius-rust-sdk/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/helius-labs/helius-rust-sdk/compare/v0.5.1...v1.0.0

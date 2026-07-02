@@ -1,6 +1,7 @@
 use super::*;
 use crate::utils::deserialize_str_to_number;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use serde_enum_str::{Deserialize_enum_str, Serialize_enum_str};
 use serde_json::{Number, Value};
 use solana_commitment_config::CommitmentLevel;
 
@@ -380,4 +381,288 @@ impl ParseTransactionsRequest {
             })
             .collect()
     }
+}
+
+/// Request body for `POST /transactions` on the v2 Enhanced Transactions API.
+///
+/// Parses a batch of transaction signatures with parser-v2. Set
+/// `include_raw_transaction` to include the raw Solana transaction alongside the
+/// parsed result for each item.
+#[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct TransactionsV2Request {
+    /// Transaction signatures to parse.
+    pub transactions: Vec<String>,
+    /// Commitment level for fetching transactions. The API accepts `confirmed` or `finalized`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub commitment: Option<CommitmentLevel>,
+    /// Include the raw transaction payload in each response item.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub include_raw_transaction: Option<bool>,
+}
+
+/// Request body for `POST /transaction-history` on the v2 Enhanced Transactions API.
+#[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct TransactionHistoryV2Request {
+    /// Address whose transaction history should be fetched.
+    pub address: String,
+    /// Maximum number of transactions to return. Defaults server-side to 100.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub limit: Option<usize>,
+    /// Return transactions before this signature.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub before_signature: Option<String>,
+    /// Return transactions after this signature.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub after_signature: Option<String>,
+    /// Cursor returned from a previous response.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub pagination_token: Option<String>,
+    /// Sort order for returned transactions.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sort_order: Option<SortOrder>,
+    /// Commitment level for fetching transactions. The API accepts `confirmed` or `finalized`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub commitment: Option<CommitmentLevel>,
+    /// Include the raw transaction payload in each response item.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub include_raw_transaction: Option<bool>,
+    /// Filter history by a program and required instruction discriminators.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub program_filter: Option<ProgramFilterV2>,
+    /// Slot range filter.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub slot: Option<ComparisonFilterV2<u64>>,
+    /// Block-time range filter, in Unix seconds.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub time: Option<ComparisonFilterV2<i64>>,
+}
+
+/// Program filter for `TransactionHistoryV2Request`.
+#[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ProgramFilterV2 {
+    pub program_id: String,
+    pub discriminators: Vec<String>,
+}
+
+/// Inclusive/exclusive comparison bounds used by v2 history filters.
+#[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq, Eq)]
+pub struct ComparisonFilterV2<T> {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub gt: Option<T>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub gte: Option<T>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub lt: Option<T>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub lte: Option<T>,
+}
+
+/// Per-transaction parse result returned by Enhanced Transactions v2.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct TransactionResultV2 {
+    pub signature: String,
+    pub parser_status: ParserStatusV2,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub parsed: Option<ParsedTransactionV2>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub parser_error: Option<ParseFailureV2>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub raw_transaction: Option<Value>,
+}
+
+/// Paginated response from Enhanced Transactions v2 history.
+#[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct TransactionPageV2 {
+    pub data: Vec<TransactionResultV2>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub pagination_token: Option<String>,
+}
+
+/// Parser outcome for a v2 transaction item.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum ParserStatusV2 {
+    Ok,
+    Error,
+    Other(String),
+}
+
+impl Serialize for ParserStatusV2 {
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        match self {
+            Self::Ok => "OK",
+            Self::Error => "ERROR",
+            Self::Other(value) => value,
+        }
+        .serialize(serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for ParserStatusV2 {
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        Ok(match String::deserialize(deserializer)?.as_str() {
+            "OK" => Self::Ok,
+            "ERROR" => Self::Error,
+            value => Self::Other(value.to_string()),
+        })
+    }
+}
+
+/// Parsed transaction payload returned inside a successful v2 item.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct ParsedTransactionV2 {
+    pub slot: u64,
+    pub block_time: Option<i64>,
+    pub fee: u64,
+    pub fee_payer: Option<String>,
+    pub transaction_status: ParsedTransactionStatusV2,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error: Option<Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub decoded_error: Option<DecodedTransactionErrorV2>,
+    pub native_transfers: Vec<NativeTransferV2>,
+    pub token_transfers: Vec<TokenTransferV2>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub transaction_summary: Option<ParsedSummaryV2>,
+    pub instructions: Vec<ParsedInstructionV2>,
+}
+
+/// Transaction execution status in a parsed v2 payload.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum ParsedTransactionStatusV2 {
+    Ok,
+    Error,
+    Other(String),
+}
+
+impl Serialize for ParsedTransactionStatusV2 {
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        match self {
+            Self::Ok => "OK",
+            Self::Error => "ERROR",
+            Self::Other(value) => value,
+        }
+        .serialize(serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for ParsedTransactionStatusV2 {
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        Ok(match String::deserialize(deserializer)?.as_str() {
+            "OK" => Self::Ok,
+            "ERROR" => Self::Error,
+            value => Self::Other(value.to_string()),
+        })
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct NativeTransferV2 {
+    pub from_user_account: Option<String>,
+    pub to_user_account: Option<String>,
+    pub amount: u64,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct TokenTransferV2 {
+    pub from_user_account: Option<String>,
+    pub to_user_account: Option<String>,
+    pub from_token_account: Option<String>,
+    pub to_token_account: Option<String>,
+    pub raw_token_amount: u64,
+    pub decimals: u8,
+    pub token_standard: TokenStandard,
+    pub mint: String,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct DecodedTransactionErrorV2 {
+    pub instruction_index: u8,
+    pub program_id: String,
+    pub program_name: String,
+    pub code: u32,
+    pub name: String,
+    pub msg: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct ParsedInstructionV2 {
+    pub top_ix_idx: u16,
+    pub inner_ix_idx: Option<u16>,
+    pub stack_height: Option<u32>,
+    pub program_id: String,
+    pub raw_accounts: Vec<String>,
+    pub raw_data: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub instruction_summary: Option<ParsedSummaryV2>,
+    pub program_name: Option<String>,
+    pub instruction_name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub decoded: Option<DecodedInstructionPayloadV2>,
+    /// Enrichment is intentionally left flexible so the SDK remains compatible
+    /// as parser-v2 adds new enrichment variants.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub enrichment: Option<Value>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct DecodedInstructionPayloadV2 {
+    pub args: Value,
+    pub accounts: Vec<DecodedAccountV2>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct DecodedAccountV2 {
+    pub name: String,
+    pub pubkey: String,
+    pub is_signer: bool,
+    pub is_writable: bool,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+pub struct ParsedSummaryV2 {
+    #[serde(rename = "type")]
+    pub summary_type: SummaryTypeV2,
+    pub description: String,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize_enum_str, Serialize_enum_str)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum SummaryTypeV2 {
+    CreateAccount,
+    CreateTokenAccount,
+    Swap,
+    Transfer,
+    #[serde(other)]
+    Other(String),
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ParseFailureV2 {
+    pub code: String,
+    pub message: String,
 }
