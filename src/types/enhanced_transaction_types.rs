@@ -428,7 +428,7 @@ pub struct TransactionHistoryV2Request {
     /// Include the raw transaction payload in each response item.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub include_raw_transaction: Option<bool>,
-    /// Filter history by a program and required instruction discriminators.
+    /// Filter history by a program and optional instruction discriminator or name filters.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub program_filter: Option<ProgramFilterV2>,
     /// Slot range filter.
@@ -444,7 +444,10 @@ pub struct TransactionHistoryV2Request {
 #[serde(rename_all = "camelCase")]
 pub struct ProgramFilterV2 {
     pub program_id: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub discriminators: Vec<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub instruction_names: Vec<String>,
 }
 
 /// Inclusive/exclusive comparison bounds used by v2 history filters.

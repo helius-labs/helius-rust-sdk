@@ -15,6 +15,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - `BalanceAtQuery` enum (`Time`, `Datetime`, `Slot`) for selecting the historical point to query, plus `BalanceAtResponse`, `BalanceAtRequested`, and `BalanceAtAsOf` response types
 - Versioned Enhanced Transactions namespace: `helius.enhanced().v1()` for existing v1 parse/history methods and `helius.enhanced().v2()` for parser-v2 methods
 - Enhanced Transactions v2 support via `transactions(TransactionsV2Request)` and `transaction_history(TransactionHistoryV2Request)` using the unprefixed `POST /transactions` and `POST /transaction-history` API paths
+- Enhanced Transactions v2 program filters now support `instructionNames` as an alternative to raw instruction discriminators
 
 ### Changed
 - Minimum advertised Rust version is now 1.89.0 to match the resolved Solana 3.x dependency requirements

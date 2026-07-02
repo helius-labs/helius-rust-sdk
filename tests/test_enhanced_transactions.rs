@@ -565,6 +565,7 @@ async fn test_enhanced_v2_transaction_history_success() {
         program_filter: Some(ProgramFilterV2 {
             program_id: "11111111111111111111111111111111".to_string(),
             discriminators: vec!["0x01".to_string(), "0x02".to_string()],
+            instruction_names: Vec::new(),
         }),
         slot: Some(ComparisonFilterV2 {
             gte: Some(10),
@@ -588,12 +589,21 @@ async fn test_enhanced_v2_transaction_history_success() {
 }
 
 #[test]
-fn test_program_filter_v2_requires_discriminators() {
-    let result = serde_json::from_value::<ProgramFilterV2>(json!({
-        "programId": "11111111111111111111111111111111"
-    }));
+fn test_program_filter_v2_serializes_instruction_names() {
+    let value = serde_json::to_value(ProgramFilterV2 {
+        program_id: "11111111111111111111111111111111".to_string(),
+        discriminators: Vec::new(),
+        instruction_names: vec!["swap".to_string(), "initializePool".to_string()],
+    })
+    .unwrap();
 
-    assert!(result.is_err());
+    assert_eq!(
+        value,
+        json!({
+            "programId": "11111111111111111111111111111111",
+            "instructionNames": ["swap", "initializePool"]
+        })
+    );
 }
 
 fn v2_transaction_result_response() -> serde_json::Value {
