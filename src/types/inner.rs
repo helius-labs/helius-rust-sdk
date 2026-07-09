@@ -81,16 +81,43 @@ impl<T> RpcRequest<T> {
 
 /// A JSON-RPC 2.0 response envelope returned by DAS API and other Helius RPC calls.
 ///
-/// Contains the typed result of a successful RPC call. Error responses are handled
-/// separately by the SDK's error handling layer.
+/// On success the server populates `result`; on a method-level failure (e.g. invalid
+/// params or an unknown method) it instead populates `error` and omits `result`, while
+/// still returning an HTTP 200 status. Exactly one of `result` or `error` is present for
+/// a well-formed response, so both fields are optional.
 #[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq)]
 pub struct RpcResponse<T> {
     /// The JSON-RPC protocol version (always `"2.0"`)
     pub jsonrpc: String,
     /// The request identifier, matching the corresponding [`RpcRequest::id`]
-    pub id: String,
-    /// The method-specific result data
-    pub result: T,
+    ///
+    /// Optional because the JSON-RPC spec requires servers to return `"id": null` for
+    /// parse errors and invalid requests (codes `-32700` / `-32600`) — exactly the error
+    /// class this envelope surfaces
+    #[serde(default)]
+    pub id: Option<String>,
+    /// The method-specific result data, present when the call succeeds
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub result: Option<T>,
+    /// The JSON-RPC error object, present when the call fails server-side
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub error: Option<RpcError>,
+}
+
+/// A JSON-RPC 2.0 error object, returned in the `error` field of an [`RpcResponse`] when a
+/// method call fails server-side (for example invalid params or an unknown method).
+///
+/// Per the JSON-RPC spec these arrive with an HTTP 200 status and no `result`, so the SDK
+/// inspects `error` before returning `result`.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+pub struct RpcError {
+    /// The JSON-RPC error code (e.g. `-32601` for "method not found", `-32602` for "invalid params")
+    pub code: i64,
+    /// A human-readable description of the error
+    pub message: String,
+    /// Optional structured data supplied by the server for additional context
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub data: Option<Value>,
 }
 
 /// Request parameters for the `getAssetsByOwner` DAS API method.

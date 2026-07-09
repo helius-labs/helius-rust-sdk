@@ -20,7 +20,7 @@ use std::fmt::Debug;
 use std::sync::Arc;
 
 use crate::config::Config;
-use crate::error::Result;
+use crate::error::{HeliusError, Result};
 use crate::request_handler::RequestHandler;
 use crate::types::inner::{RpcRequest, RpcResponse};
 use crate::types::{
@@ -37,6 +37,7 @@ use crate::types::{
 use reqwest::{Client, Method, Url};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
+use serde_json::Value;
 use solana_client::rpc_client::RpcClient as SolanaRpcClient;
 use solana_commitment_config::CommitmentConfig;
 
@@ -128,7 +129,31 @@ impl RpcClient {
         let rpc_request: RpcRequest<R> = RpcRequest::new(method.to_string(), request);
         let rpc_response: RpcResponse<T> = self.handler.send(Method::POST, url, Some(&rpc_request)).await?;
 
-        Ok(rpc_response.result)
+        // Solana/Helius report method-level failures as a JSON-RPC error object with an HTTP 200
+        // status, so surface `error` before returning `result`.
+        if let Some(error) = rpc_response.error {
+            let message: String = match error.data {
+                Some(data) => format!("{} ({})", error.message, data),
+                None => error.message,
+            };
+
+            return Err(HeliusError::RpcError {
+                code: error.code,
+                message,
+            });
+        }
+
+        match rpc_response.result {
+            Some(result) => Ok(result),
+            // A `"result": null` response deserializes the outer `Option` to `None`, not
+            // `Some(None)`, so recover the null case for methods whose `T` can represent it
+            // (e.g. `Option<Asset>`). If `T` cannot deserialize from null, the response
+            // genuinely carried neither a result nor an error, so surface that.
+            None => serde_json::from_value::<T>(Value::Null).map_err(|_| HeliusError::RpcError {
+                code: 0,
+                message: format!("RPC method '{}' returned neither a result nor an error", method),
+            }),
+        }
     }
 
     /// Gets an asset by its ID
