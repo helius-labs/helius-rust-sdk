@@ -20,7 +20,7 @@ use std::fmt::Debug;
 use std::sync::Arc;
 
 use crate::config::Config;
-use crate::error::Result;
+use crate::error::{HeliusError, Result};
 use crate::request_handler::RequestHandler;
 use crate::types::inner::{RpcRequest, RpcResponse};
 use crate::types::{
@@ -128,7 +128,24 @@ impl RpcClient {
         let rpc_request: RpcRequest<R> = RpcRequest::new(method.to_string(), request);
         let rpc_response: RpcResponse<T> = self.handler.send(Method::POST, url, Some(&rpc_request)).await?;
 
-        Ok(rpc_response.result)
+        // Solana/Helius report method-level failures as a JSON-RPC error object with an HTTP 200
+        // status, so surface `error` before returning `result`.
+        if let Some(error) = rpc_response.error {
+            let message: String = match error.data {
+                Some(data) => format!("{} ({})", error.message, data),
+                None => error.message,
+            };
+
+            return Err(HeliusError::RpcError {
+                code: error.code,
+                message,
+            });
+        }
+
+        rpc_response.result.ok_or_else(|| HeliusError::RpcError {
+            code: 0,
+            message: format!("RPC method '{}' returned neither a result nor an error", method),
+        })
     }
 
     /// Gets an asset by its ID

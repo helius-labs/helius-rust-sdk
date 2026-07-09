@@ -11,14 +11,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - **Sender Max bundles**: new `send_bundle_with_sender` submits up to 5 transactions to Sender Max via `sendBundle` (`params: [[base64Tx, ...], { encoding: "base64" }]`). The caller includes only the 0.001 SOL Sender tip in ≥1 transaction; Helius adds any pathway tips — callers must not add a separate pathway-specific tip. Landing is tracked per-transaction by signature (not bundle IDs / `getBundleStatuses`).
 - `get_wallet_balance_at` Wallet API method for querying a wallet's balance of a specific token or native SOL at a past timestamp, datetime, or slot
 - `BalanceAtQuery` enum (`Time`, `Datetime`, `Slot`) for selecting the historical point to query, plus `BalanceAtResponse`, `BalanceAtRequested`, and `BalanceAtAsOf` response types
+- `RpcError` type modeling the JSON-RPC 2.0 `error` object (`code`, `message`, optional `data`), and a `HeliusError::RpcError { code, message }` variant so server-side JSON-RPC failures are surfaced with their code and description (any `data` is appended to the message)
 
 ### Changed
+- **Breaking**: `RpcResponse<T>.result` changed from `T` to `Option<T>`, and `RpcResponse<T>` gained an `error: Option<RpcError>` field, to represent JSON-RPC responses that carry an `error` instead of a `result`. Code that reads `response.result` directly must now handle the `Option`. This is the JSON-RPC envelope type; most callers use the high-level RPC methods (which return `T`) and are unaffected.
 - **BREAKING (defaults): Sender tip tiers.** The non-SWQOS tier is now branded **Sender Max** (`swqos_only = false`) with a minimum tip of **0.001 SOL** (`MIN_TIP_LAMPORTS_MAX = 1_000_000`), up from the removed 0.0002 SOL tier. SWQOS-only (`swqos_only = true`) is unchanged at 0.000005 SOL (`MIN_TIP_LAMPORTS_SWQOS = 5_000`). `determine_tip_lamports` and `send_smart_transaction_with_sender` now floor non-SWQOS tips at 0.001 SOL.
 - **Sender requirements relaxed.** `skip_preflight` is no longer mandated — it is now a caller-controlled passthrough on `SenderSendOptions` (defaults to `true` for backward compatibility, set `false` to run preflight). A priority fee is recommended but no longer documented as a hard requirement; only the tip is mandatory. Doc comments describe routing generically (multiple high-speed pathways + priority auction).
 - **BREAKING (API): `SenderSendOptions` is now `#[non_exhaustive]`** and gains a public `skip_preflight: bool` field. Because the struct is `#[non_exhaustive]`, downstream code can no longer construct it with a struct literal; use `SenderSendOptions::default()` / `SenderSendOptions::new()` plus the new `with_region`/`with_swqos_only`/`with_skip_preflight`/`with_poll_timeout_ms`/`with_poll_interval_ms` builder methods. Field reads/writes on an existing value are unaffected.
 
 ### Deprecated
 - `MIN_TIP_LAMPORTS_DUAL` is deprecated in favor of `MIN_TIP_LAMPORTS_MAX`. It is now an alias resolving to the Sender Max minimum (0.001 SOL), not the removed 0.0002 SOL value.
+
+### Fixed
+- Server-side JSON-RPC errors are now surfaced instead of swallowed. Solana/Helius RPC methods report method-level failures (invalid params, unknown method, transaction preflight failures, etc.) as a JSON-RPC `error` object with an HTTP 200 status. Previously `RpcResponse<T>` had no `error` field and a required `result`, so these responses failed to deserialize and returned a misleading `missing field 'result'` error, discarding the real error code and message. `post_rpc_request` now inspects `error` and returns a `HeliusError::RpcError { code, message }` carrying the server's details. Affects all DAS and RPC V2 methods.
 
 ## [1.1.0] - 2026-04-29
 
