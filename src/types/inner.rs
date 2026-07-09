@@ -90,10 +90,14 @@ pub struct RpcResponse<T> {
     /// The JSON-RPC protocol version (always `"2.0"`)
     pub jsonrpc: String,
     /// The request identifier, matching the corresponding [`RpcRequest::id`]
+    ///
+    /// Optional because the JSON-RPC spec requires servers to return `"id": null` for
+    /// parse errors and invalid requests (codes `-32700` / `-32600`) — exactly the error
+    /// class this envelope surfaces
     #[serde(default)]
-    pub id: String,
+    pub id: Option<String>,
     /// The method-specific result data, present when the call succeeds
-    #[serde(default = "Option::default", skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub result: Option<T>,
     /// The JSON-RPC error object, present when the call fails server-side
     #[serde(default, skip_serializing_if = "Option::is_none")]

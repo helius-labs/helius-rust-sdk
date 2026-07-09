@@ -82,6 +82,9 @@ pub enum HeliusError {
     /// 200 status rather than an HTTP error code. The `code` follows the JSON-RPC convention
     /// (e.g. `-32602` for invalid params) and `message` carries the server's description,
     /// including any structured `data` the server supplied
+    ///
+    /// A `code` of `0` is a client-side sentinel (not a server code) used when a response
+    /// contained neither a `result` nor an `error` object
     #[error("RPC error (code {code}): {message}")]
     RpcError { code: i64, message: String },
 

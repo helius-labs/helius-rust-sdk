@@ -37,6 +37,7 @@ use crate::types::{
 use reqwest::{Client, Method, Url};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
+use serde_json::Value;
 use solana_client::rpc_client::RpcClient as SolanaRpcClient;
 use solana_commitment_config::CommitmentConfig;
 
@@ -142,10 +143,17 @@ impl RpcClient {
             });
         }
 
-        rpc_response.result.ok_or_else(|| HeliusError::RpcError {
-            code: 0,
-            message: format!("RPC method '{}' returned neither a result nor an error", method),
-        })
+        match rpc_response.result {
+            Some(result) => Ok(result),
+            // A `"result": null` response deserializes the outer `Option` to `None`, not
+            // `Some(None)`, so recover the null case for methods whose `T` can represent it
+            // (e.g. `Option<Asset>`). If `T` cannot deserialize from null, the response
+            // genuinely carried neither a result nor an error, so surface that.
+            None => serde_json::from_value::<T>(Value::Null).map_err(|_| HeliusError::RpcError {
+                code: 0,
+                message: format!("RPC method '{}' returned neither a result nor an error", method),
+            }),
+        }
     }
 
     /// Gets an asset by its ID
