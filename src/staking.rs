@@ -341,8 +341,12 @@ impl Helius {
 
         let current_epoch = self.connection().get_epoch_info()?.epoch;
 
-        if deactivation_epoch > current_epoch {
-            return Ok(0); // Still cooling down
+        // A stake deactivated in epoch N is only withdrawable once epoch N has fully passed
+        // (i.e. current_epoch > deactivation_epoch). During the deactivation epoch itself it is
+        // still cooling down, so `>=` is required here. Active stakes use a sentinel
+        // deactivation_epoch of u64::MAX and are likewise reported as not withdrawable.
+        if deactivation_epoch >= current_epoch {
+            return Ok(0); // Still active or cooling down
         }
 
         if include_rent_exempt {

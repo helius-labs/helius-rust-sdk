@@ -24,6 +24,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ### Fixed
 - Server-side JSON-RPC errors are now surfaced instead of swallowed. Solana/Helius RPC methods report method-level failures (invalid params, unknown method, transaction preflight failures, etc.) as a JSON-RPC `error` object with an HTTP 200 status. Previously `RpcResponse<T>` had no `error` field and a required `result`, so these responses failed to deserialize and returned a misleading `missing field 'result'` error, discarding the real error code and message. `post_rpc_request` now inspects `error` and returns a `HeliusError::RpcError { code, message }` carrying the server's details. Affects all DAS and RPC V2 methods.
+- `send_and_confirm_transaction` now honors its timeout. The retry loop used `||` where it needed `&&`, so it kept retrying until *both* the timeout elapsed *and* the blockhash expired instead of stopping as soon as either did. The timeout error message now reflects the actual configured duration rather than a hardcoded "60s".
+- `get_withdrawable_amount` no longer reports a stake account as withdrawable one epoch early. A stake deactivated in epoch N is still cooling down during epoch N; the check now uses `>=` so funds are only reported withdrawable once `current_epoch > deactivation_epoch`.
+- `create_smart_transaction_with_seeds` now returns `HeliusError::InvalidInput` on a keypair-from-seed failure instead of panicking via `expect`, matching its documented `# Errors` contract.
 
 ## [1.1.0] - 2026-04-29
 
