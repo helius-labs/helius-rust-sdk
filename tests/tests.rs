@@ -50,6 +50,7 @@ mod smart_transactions {
     mod helpers;
     mod test_create_smart_transaction;
     mod test_input_validation;
+    mod test_send_and_confirm;
     mod test_sender_urls;
 }
 mod websocket {
@@ -64,6 +65,7 @@ mod staking {
     mod test_create_withdraw_transaction;
     mod test_get_unstake_instruction;
     mod test_get_withdraw_instruction;
+    mod test_get_withdrawable_amount;
 }
 mod zk_compression {
     mod helpers;

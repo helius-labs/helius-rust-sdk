@@ -620,8 +620,11 @@ impl Helius {
         let timeout: Duration = timeout.unwrap_or(Duration::from_secs(60));
         let start_time: Instant = Instant::now();
 
+        // Keep retrying only while both conditions hold: there is time left in the timeout
+        // budget AND the blockhash is still valid. Using `&&` stops as soon as either expires;
+        // `||` would keep looping until both elapsed, defeating the timeout.
         while Instant::now().duration_since(start_time) < timeout
-            || self.connection().get_block_height()? <= last_valid_block_height
+            && self.connection().get_block_height()? <= last_valid_block_height
         {
             let result = self
                 .connection()
@@ -643,7 +646,10 @@ impl Helius {
 
         Err(HeliusError::Timeout {
             code: StatusCode::REQUEST_TIMEOUT,
-            text: "Transaction failed to confirm in 60s".to_string(),
+            text: format!(
+                "Transaction failed to confirm within {}s or the blockhash expired",
+                timeout.as_secs()
+            ),
         })
     }
 
@@ -733,12 +739,16 @@ impl Helius {
         let keypairs: Vec<Keypair> = create_config
             .signer_seeds
             .iter()
-            .map(|seed| keypair_from_seed(seed).expect("Failed to create keypair from seed"))
-            .collect();
+            .map(|seed| {
+                keypair_from_seed(seed)
+                    .map_err(|e| HeliusError::InvalidInput(format!("Failed to create keypair from seed: {e}")))
+            })
+            .collect::<Result<Vec<Keypair>>>()?;
 
         // Create the fee payer keypair if provided. Otherwise, we default to the first signer
         let fee_payer: Keypair = if let Some(fee_payer_seed) = create_config.fee_payer_seed {
-            keypair_from_seed(&fee_payer_seed).expect("Failed to create keypair from seed")
+            keypair_from_seed(&fee_payer_seed)
+                .map_err(|e| HeliusError::InvalidInput(format!("Failed to create fee payer keypair from seed: {e}")))?
         } else {
             keypairs[0].insecure_clone()
         };
