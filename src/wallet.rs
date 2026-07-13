@@ -63,7 +63,7 @@ impl Helius {
         let api_key = self.config.require_api_key("wallet identity")?;
         let base_url = self.get_wallet_api_base_url();
         let url: String = format!("{}v1/wallet/{}/identity?api-key={}", base_url, wallet, api_key.as_str());
-        let parsed_url: Url = Url::parse(&url).expect("Failed to parse URL");
+        let parsed_url: Url = Url::parse(&url)?;
 
         self.rpc_client.handler.send(Method::GET, parsed_url, None::<&()>).await
     }
@@ -107,7 +107,7 @@ impl Helius {
         let api_key = self.config.require_api_key("batch wallet identity")?;
         let base_url = self.get_wallet_api_base_url();
         let url: String = format!("{}v1/wallet/batch-identity?api-key={}", base_url, api_key.as_str());
-        let parsed_url: Url = Url::parse(&url).expect("Failed to parse URL");
+        let parsed_url: Url = Url::parse(&url)?;
 
         let request = BatchIdentityRequest {
             addresses: addresses.to_vec(),
@@ -201,7 +201,7 @@ impl Helius {
             url = format!("{}&showNfts={}", url, show_nfts);
         }
 
-        let parsed_url: Url = Url::parse(&url).expect("Failed to parse URL");
+        let parsed_url: Url = Url::parse(&url)?;
 
         self.rpc_client.handler.send(Method::GET, parsed_url, None::<&()>).await
     }
@@ -290,7 +290,7 @@ impl Helius {
             url = format!("{}&tokenAccounts={}", url, token_accounts);
         }
 
-        let parsed_url: Url = Url::parse(&url).expect("Failed to parse URL");
+        let parsed_url: Url = Url::parse(&url)?;
 
         self.rpc_client.handler.send(Method::GET, parsed_url, None::<&()>).await
     }
@@ -360,7 +360,7 @@ impl Helius {
             url = format!("{}&cursor={}", url, cursor);
         }
 
-        let parsed_url: Url = Url::parse(&url).expect("Failed to parse URL");
+        let parsed_url: Url = Url::parse(&url)?;
 
         self.rpc_client.handler.send(Method::GET, parsed_url, None::<&()>).await
     }
@@ -413,7 +413,7 @@ impl Helius {
             wallet,
             api_key.as_str()
         );
-        let parsed_url: Url = Url::parse(&url).expect("Failed to parse URL");
+        let parsed_url: Url = Url::parse(&url)?;
 
         self.rpc_client.handler.send(Method::GET, parsed_url, None::<&()>).await
     }
@@ -480,7 +480,7 @@ impl Helius {
             mint
         );
 
-        let mut parsed_url: Url = Url::parse(&url).expect("Failed to parse URL");
+        let mut parsed_url: Url = Url::parse(&url)?;
 
         // Append the time selector with form-encoding so datetime values containing
         // spaces or `+` timezone offsets survive transport intact.

@@ -66,7 +66,7 @@ impl Helius {
             project_id,
             api_key.as_str()
         );
-        let parsed_url: Url = Url::parse(&url).expect("Failed to parse URL");
+        let parsed_url: Url = Url::parse(&url)?;
 
         self.rpc_client.handler.send(Method::GET, parsed_url, None::<&()>).await
     }

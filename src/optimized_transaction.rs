@@ -405,7 +405,10 @@ impl Helius {
 
             let status = self.connection().get_signature_statuses(&[txt_sig])?;
 
-            match status.value[0].clone() {
+            // `value` should hold exactly one entry for the single signature queried, but guard
+            // against an empty/short response by treating a missing entry as "not yet available"
+            // (retry) rather than indexing and panicking.
+            match status.value.first().cloned().flatten() {
                 Some(status) => {
                     if status.err.is_none()
                         && (status.confirmation_status == Some(TransactionConfirmationStatus::Confirmed)

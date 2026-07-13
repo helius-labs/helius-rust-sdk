@@ -124,7 +124,7 @@ impl RpcClient {
         T: Debug + DeserializeOwned + Default,
     {
         let base_url: String = self.config.build_rpc_url();
-        let url: Url = Url::parse(&base_url).expect("Failed to parse URL");
+        let url: Url = Url::parse(&base_url)?;
 
         let rpc_request: RpcRequest<R> = RpcRequest::new(method.to_string(), request);
         let rpc_response: RpcResponse<T> = self.handler.send(Method::POST, url, Some(&rpc_request)).await?;
