@@ -20,7 +20,7 @@ impl Helius {
             self.config.endpoints.api,
             api_key.as_str()
         );
-        let parsed_url: Url = Url::parse(&url).expect("Failed to parse URL");
+        let parsed_url: Url = Url::parse(&url)?;
 
         self.rpc_client
             .handler
@@ -73,7 +73,7 @@ impl Helius {
             url = format!("{}&limit={}", url, limit);
         }
 
-        let parsed_url: Url = Url::parse(&url).expect("Failed to parse URL");
+        let parsed_url: Url = Url::parse(&url)?;
 
         self.rpc_client.handler.send(Method::GET, parsed_url, None::<&()>).await
     }

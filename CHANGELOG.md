@@ -27,6 +27,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - `send_and_confirm_transaction` now honors its timeout. The retry loop used `||` where it needed `&&`, so it kept retrying until *both* the timeout elapsed *and* the blockhash expired instead of stopping as soon as either did. The timeout error message now reflects the actual configured duration rather than a hardcoded "60s".
 - `get_withdrawable_amount` no longer reports a stake account as withdrawable one epoch early. A stake deactivated in epoch N is still cooling down during epoch N; the check now uses `>=` so funds are only reported withdrawable once `current_epoch > deactivation_epoch`.
 - `create_smart_transaction_with_seeds` now returns `HeliusError::InvalidInput` on a keypair-from-seed failure instead of panicking via `expect`, matching its documented `# Errors` contract.
+- `poll_transaction_confirmation` no longer panics if `getSignatureStatuses` returns an empty `value` array (e.g. from a misbehaving provider); a missing status entry is now treated as "not yet confirmed" and retried.
+- Hardened per-request URL construction across the Wallet, Webhook, enhanced-transaction, and admin APIs (and `post_rpc_request`): `Url::parse` failures now propagate as `HeliusError::UrlParseError` instead of panicking via `expect`. In practice the `url` parser tolerates the interpolated values, so this is defensive; behavior is unchanged for all valid inputs.
 
 ## [1.1.0] - 2026-04-29
 
