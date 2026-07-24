@@ -132,19 +132,22 @@ pub struct GetAssetsByOwner {
     /// The 1-indexed page number for page-based pagination
     pub page: u32,
     /// Maximum number of assets to return per page
-    pub limit: Option<i32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub limit: Option<u32>,
     /// Retrieve assets listed before this cursor value
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub before: Option<String>,
     /// Retrieve assets listed after this cursor value
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub after: Option<String>,
     /// Controls which optional fields are included in the response
-    #[serde(rename = "displayOptions")]
+    #[serde(rename = "displayOptions", skip_serializing_if = "Option::is_none")]
     pub display_options: Option<DisplayOptions>,
     /// Sort criteria and direction for the returned assets
-    #[serde(rename = "sortBy")]
+    #[serde(rename = "sortBy", skip_serializing_if = "Option::is_none")]
     pub sort_by: Option<AssetSorting>,
     /// Opaque cursor for cursor-based pagination (faster than page-based for large sets)
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub cursor: Option<String>,
 }
 

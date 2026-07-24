@@ -687,7 +687,7 @@ pub enum TransactionContext {
 #[derive(Clone, Debug, Eq, PartialEq, Serialize_enum_str, Deserialize_enum_str)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum ProgramName {
-    Unkown,
+    Unknown,
     JupiterV1,
     JupiterV2,
     JupiterV3,
