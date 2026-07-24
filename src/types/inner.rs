@@ -132,19 +132,22 @@ pub struct GetAssetsByOwner {
     /// The 1-indexed page number for page-based pagination
     pub page: u32,
     /// Maximum number of assets to return per page
-    pub limit: Option<i32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub limit: Option<u32>,
     /// Retrieve assets listed before this cursor value
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub before: Option<String>,
     /// Retrieve assets listed after this cursor value
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub after: Option<String>,
     /// Controls which optional fields are included in the response
-    #[serde(rename = "displayOptions")]
+    #[serde(rename = "displayOptions", skip_serializing_if = "Option::is_none")]
     pub display_options: Option<DisplayOptions>,
     /// Sort criteria and direction for the returned assets
-    #[serde(rename = "sortBy")]
+    #[serde(rename = "sortBy", skip_serializing_if = "Option::is_none")]
     pub sort_by: Option<AssetSorting>,
     /// Opaque cursor for cursor-based pagination (faster than page-based for large sets)
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub cursor: Option<String>,
 }
 
@@ -160,19 +163,22 @@ pub struct GetAssetsByAuthority {
     /// The 1-indexed page number for page-based pagination
     pub page: u32,
     /// Maximum number of assets to return per page
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub limit: Option<u32>,
     /// Retrieve assets listed before this cursor value
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub before: Option<String>,
     /// Retrieve assets listed after this cursor value
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub after: Option<String>,
     /// Controls which optional fields are included in the response
-    #[serde(rename = "displayOptions")]
+    #[serde(rename = "displayOptions", skip_serializing_if = "Option::is_none")]
     pub display_options: Option<DisplayOptions>,
     /// Sort criteria and direction for the returned assets
-    #[serde(rename = "sortBy")]
+    #[serde(rename = "sortBy", skip_serializing_if = "Option::is_none")]
     pub sort_by: Option<AssetSorting>,
     /// Opaque cursor for cursor-based pagination
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub cursor: Option<String>,
 }
 
@@ -202,22 +208,28 @@ pub struct GetAssetsByCreator {
     /// The creator address to query (base-58 encoded public key)
     pub creator_address: String,
     /// If `true`, only return assets where this creator is verified on-chain
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub only_verified: Option<bool>,
     /// Sort criteria and direction for the returned assets
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub sort_by: Option<AssetSorting>,
     /// Maximum number of assets to return per page
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub limit: Option<u32>,
     /// The 1-indexed page number for page-based pagination
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub page: Option<u32>,
     /// Retrieve assets listed before this cursor value
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub before: Option<String>,
     /// Retrieve assets listed after this cursor value
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub after: Option<String>,
     /// Controls which optional fields are included in the response
-    #[serde(default, alias = "displayOptions")]
+    #[serde(default, alias = "displayOptions", skip_serializing_if = "Option::is_none")]
     pub options: Option<DisplayOptions>,
     /// Opaque cursor for cursor-based pagination
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub cursor: Option<String>,
 }
 
@@ -287,20 +299,25 @@ pub struct GetAssetsByGroup {
     /// The group value to match (e.g., the collection mint address)
     pub group_value: String,
     /// Sort criteria and direction for the returned assets
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub sort_by: Option<AssetSorting>,
     /// Maximum number of assets to return per page
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub limit: Option<u32>,
     /// The 1-indexed page number for page-based pagination
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub page: Option<u32>,
     /// Retrieve assets listed before this cursor value
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub before: Option<String>,
     /// Retrieve assets listed after this cursor value
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub after: Option<String>,
     /// Controls which optional fields are included in the response
-    #[serde(default, alias = "displayOptions")]
+    #[serde(default, alias = "displayOptions", skip_serializing_if = "Option::is_none")]
     pub options: Option<DisplayOptions>,
     /// Opaque cursor for cursor-based pagination
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub cursor: Option<String>,
 }
 
@@ -407,24 +424,31 @@ pub struct SearchAssets {
 #[serde(rename_all = "camelCase")]
 pub struct GetAssetSignatures {
     /// The asset ID of the compressed NFT
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub id: Option<String>,
     /// Maximum number of signatures to return per page
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub limit: Option<u32>,
     /// The 1-indexed page number for page-based pagination
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub page: Option<u32>,
     /// Retrieve signatures listed before this cursor value
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub before: Option<String>,
     /// Retrieve signatures listed after this cursor value
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub after: Option<String>,
     /// The Merkle tree address (alternative to `id` for looking up by tree + leaf)
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub tree: Option<String>,
     /// The leaf index within the Merkle tree (used with `tree`)
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub leaf_index: Option<i64>,
     /// Opaque cursor for cursor-based pagination
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub cursor: Option<String>,
     /// Sort direction for the returned signatures (`Asc` or `Desc`)
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub sort_direction: Option<AssetSortDirection>,
 }
 
@@ -437,22 +461,28 @@ pub struct GetAssetSignatures {
 #[serde(rename_all = "camelCase")]
 pub struct GetTokenAccounts {
     /// Filter by the wallet that owns the token accounts
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub owner: Option<String>,
     /// Filter by the token mint address
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub mint: Option<String>,
     /// Maximum number of token accounts to return per page
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub limit: Option<u32>,
     /// The 1-indexed page number for page-based pagination
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub page: Option<u32>,
     /// Retrieve accounts listed before this cursor value
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub before: Option<String>,
     /// Retrieve accounts listed after this cursor value
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub after: Option<String>,
     /// Controls which optional fields are included in the response
-    #[serde(default, alias = "displayOptions")]
+    #[serde(default, alias = "displayOptions", skip_serializing_if = "Option::is_none")]
     pub options: Option<DisplayOptions>,
     /// Opaque cursor for cursor-based pagination
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub cursor: Option<String>,
 }
 
@@ -464,10 +494,13 @@ pub struct GetTokenAccounts {
 #[serde(rename_all = "camelCase")]
 pub struct GetNftEditions {
     /// The mint address of the master edition NFT
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub mint: Option<String>,
     /// Maximum number of editions to return per page
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub limit: Option<u32>,
     /// The 1-indexed page number for page-based pagination
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub page: Option<u32>,
 }
 

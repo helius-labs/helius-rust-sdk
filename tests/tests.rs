@@ -96,3 +96,6 @@ mod zk_compression {
     mod test_get_transaction_with_compression_info;
     mod test_get_validity_proof;
 }
+mod types {
+    mod test_serialization;
+}
