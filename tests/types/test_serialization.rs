@@ -1,4 +1,21 @@
-use helius::types::{GetAssetsByOwner, ProgramName};
+use helius::types::{
+    GetAssetSignatures, GetAssetsByAuthority, GetAssetsByCreator, GetAssetsByGroup, GetAssetsByOwner, GetNftEditions,
+    GetTokenAccounts, ProgramName,
+};
+
+/// Asserts that serializing `value` produces a JSON object with no `null`-valued members —
+/// i.e. every unset optional field was omitted via `skip_serializing_if`.
+fn assert_no_null_fields<T: serde::Serialize>(label: &str, value: &T) {
+    let json = serde_json::to_value(value).unwrap();
+    let obj = json
+        .as_object()
+        .unwrap_or_else(|| panic!("{label} did not serialize to an object"));
+    let nulls: Vec<&String> = obj.iter().filter(|(_, v)| v.is_null()).map(|(k, _)| k).collect();
+    assert!(
+        nulls.is_empty(),
+        "{label} serialized null fields {nulls:?} instead of omitting them"
+    );
+}
 
 /// The DAS API emits `"UNKNOWN"` for unrecognized swap programs. It must deserialize into the
 /// typed `ProgramName::Unknown` variant (not fall through to `Other`), and round-trip back to
@@ -69,4 +86,17 @@ fn test_get_assets_by_owner_limit_serializes() {
 
     let value = serde_json::to_value(&request).unwrap();
     assert_eq!(value["limit"], serde_json::json!(50));
+}
+
+/// Every paginated DAS request struct omits its unset optional fields, so no `null`s are sent
+/// in the JSON-RPC `params`. Keeps the whole `GetAssetsBy*`/token/edition family consistent.
+#[test]
+fn test_paginated_request_structs_omit_nulls() {
+    assert_no_null_fields("GetAssetsByOwner", &GetAssetsByOwner::default());
+    assert_no_null_fields("GetAssetsByAuthority", &GetAssetsByAuthority::default());
+    assert_no_null_fields("GetAssetsByCreator", &GetAssetsByCreator::default());
+    assert_no_null_fields("GetAssetsByGroup", &GetAssetsByGroup::default());
+    assert_no_null_fields("GetAssetSignatures", &GetAssetSignatures::default());
+    assert_no_null_fields("GetTokenAccounts", &GetTokenAccounts::default());
+    assert_no_null_fields("GetNftEditions", &GetNftEditions::default());
 }
