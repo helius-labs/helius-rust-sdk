@@ -85,7 +85,7 @@ async fn test_get_wallet_history_success() {
     let history: HistoryResponse = response.unwrap();
     assert_eq!(history.data.len(), 1);
     assert_eq!(history.data[0].balance_changes.len(), 2);
-    assert_eq!(history.pagination.has_more, true);
+    assert!(history.pagination.has_more);
     assert!(history.pagination.next_cursor.is_some());
 }
 
@@ -146,5 +146,5 @@ async fn test_get_wallet_history_with_pagination() {
     assert!(response.is_ok());
 
     let history: HistoryResponse = response.unwrap();
-    assert_eq!(history.pagination.has_more, false);
+    assert!(!history.pagination.has_more);
 }

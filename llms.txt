@@ -12,7 +12,7 @@ last_updated: 2026-05-05
 The Helius Rust SDK provides asynchronous access to Helius APIs and enhanced Solana RPC functionality. It simplifies Solana development with high-level abstractions for assets, transactions, webhooks, staking, and ultra-low latency transaction submission via Helius Sender.
 
 - Crate: `helius` (crates.io)
-- Version: 1.0.x
+- Version: 1.1.x
 - Changelog: https://github.com/helius-labs/helius-rust-sdk/blob/dev/CHANGELOG.md
 - Rust: 1.85+ (edition 2021)
 - Async Runtime: tokio
@@ -43,7 +43,7 @@ Use the Helius Rust SDK when you need to:
 Add to your `Cargo.toml`:
 ```toml
 [dependencies]
-helius = "1.0"
+helius = "1.1"
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 ```
 

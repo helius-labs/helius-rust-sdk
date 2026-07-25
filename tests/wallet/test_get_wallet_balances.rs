@@ -93,7 +93,7 @@ async fn test_get_wallet_balances_success() {
     assert_eq!(balances.balances.len(), 2);
     assert_eq!(balances.total_usd_value, 18025.80);
     assert_eq!(balances.pagination.page, 1);
-    assert_eq!(balances.pagination.has_more, false);
+    assert!(!balances.pagination.has_more);
     assert_eq!(balances.balances[0].symbol, Some("SOL".to_string()));
 }
 
@@ -158,5 +158,5 @@ async fn test_get_wallet_balances_with_pagination() {
 
     let balances: BalancesResponse = response.unwrap();
     assert_eq!(balances.pagination.page, 2);
-    assert_eq!(balances.pagination.has_more, true);
+    assert!(balances.pagination.has_more);
 }
