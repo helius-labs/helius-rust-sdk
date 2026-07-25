@@ -522,12 +522,6 @@ impl Helius {
             )
             .await?;
 
-        if units.is_none() {
-            return Err(HeliusError::InvalidInput(
-                "Error fetching compute units for the instructions provided".to_string(),
-            ));
-        }
-
         let compute_units: u64 = units.ok_or(HeliusError::InvalidInput(
             "Error fetching compute units for the instructions provided".to_string(),
         ))?;
@@ -1005,12 +999,6 @@ impl Helius {
             )
             .await?;
 
-        if units.is_none() {
-            return Err(HeliusError::InvalidInput(
-                "Error fetching compute units for the provided instructions".to_string(),
-            ));
-        }
-
         let compute_units: u64 = units.ok_or(HeliusError::InvalidInput(
             "Error fetching compute units for the instructions provided".to_string(),
         ))?;
@@ -1371,7 +1359,7 @@ mod tests {
         instruction::{AccountMeta, Instruction, InstructionError},
         message::{v0, VersionedMessage},
         pubkey::Pubkey,
-        signature::{Keypair, Signature, Signer},
+        signature::{Keypair, Signer},
         transaction::{Transaction, TransactionError, VersionedTransaction},
     };
     use std::sync::Arc;
@@ -1441,9 +1429,9 @@ mod tests {
         assert_eq!(
             tx.signatures,
             vec![
-                Signature::from(fee_payer.sign_message(&message_bytes)),
-                Signature::from(writable_signer.sign_message(&message_bytes)),
-                Signature::from(readonly_signer.sign_message(&message_bytes)),
+                fee_payer.sign_message(&message_bytes),
+                writable_signer.sign_message(&message_bytes),
+                readonly_signer.sign_message(&message_bytes),
             ]
         );
     }
@@ -1511,9 +1499,9 @@ mod tests {
         assert_eq!(
             tx.signatures,
             vec![
-                Signature::from(fee_payer.sign_message(&message_bytes)),
-                Signature::from(writable_signer.sign_message(&message_bytes)),
-                Signature::from(readonly_signer.sign_message(&message_bytes)),
+                fee_payer.sign_message(&message_bytes),
+                writable_signer.sign_message(&message_bytes),
+                readonly_signer.sign_message(&message_bytes),
             ]
         );
     }
