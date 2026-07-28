@@ -2097,6 +2097,14 @@ pub struct GetProgramAccountsV2Config {
     /// Standard `getProgramAccounts` filters (`memcmp`, `dataSize`)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub filters: Option<Vec<GpaFilter>>,
+
+    /// Client-side only (never sent to the server): the maximum number of pages
+    /// [`get_all_program_accounts`](crate::rpc_client::RpcClient::get_all_program_accounts) will
+    /// fetch before stopping. `None` uses [`DEFAULT_MAX_AUTO_PAGINATION_PAGES`](crate::rpc_client::DEFAULT_MAX_AUTO_PAGINATION_PAGES).
+    /// Raise it to fetch a larger result set, or lower it to bound work. Ignored by the
+    /// single-page `get_program_accounts_v2`.
+    #[serde(skip)]
+    pub max_pages: Option<usize>,
 }
 
 /// Request type for `getProgramAccountsV2`: a tuple of `(program_id, config)`.
@@ -2237,6 +2245,14 @@ pub struct GetTokenAccountsByOwnerV2Config {
     /// Only return token accounts modified after this slot
     #[serde(rename = "changedSinceSlot", skip_serializing_if = "Option::is_none")]
     pub changed_since_slot: Option<u64>,
+
+    /// Client-side only (never sent to the server): the maximum number of pages
+    /// [`get_all_token_accounts_by_owner`](crate::rpc_client::RpcClient::get_all_token_accounts_by_owner)
+    /// will fetch before stopping. `None` uses [`DEFAULT_MAX_AUTO_PAGINATION_PAGES`](crate::rpc_client::DEFAULT_MAX_AUTO_PAGINATION_PAGES).
+    /// Raise it to fetch a larger result set, or lower it to bound work. Ignored by the
+    /// single-page `get_token_accounts_by_owner_v2`.
+    #[serde(skip)]
+    pub max_pages: Option<usize>,
 }
 
 /// Request type for `getTokenAccountsByOwnerV2`: a tuple of `(owner_pubkey, filter, config)`.
