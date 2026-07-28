@@ -5,6 +5,8 @@ mod utils {
 }
 
 mod rpc {
+    mod test_get_all_program_accounts;
+    mod test_get_all_token_accounts_by_owner;
     mod test_get_asset;
     mod test_get_asset_batch;
     mod test_get_asset_proof;

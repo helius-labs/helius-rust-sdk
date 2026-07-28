@@ -41,6 +41,16 @@ use serde_json::Value;
 use solana_client::rpc_client::RpcClient as SolanaRpcClient;
 use solana_commitment_config::CommitmentConfig;
 
+/// Default upper bound on the number of pages the auto-paginating helpers
+/// (`get_all_program_accounts`, `get_all_token_accounts_by_owner`) will fetch. Acts as a
+/// backstop so a misbehaving server that never returns a terminal (`None`) cursor cannot loop
+/// indefinitely. At the default page size of 10,000 this allows up to 100M records before the
+/// cap trips; when it does, a warning is logged rather than silently truncating.
+///
+/// Callers with a legitimately larger result set can raise (or lower) this per call by setting
+/// `max_pages` on the request config.
+pub const DEFAULT_MAX_AUTO_PAGINATION_PAGES: usize = 10_000;
+
 /// Helius RPC client with an embedded Solana RPC client.
 ///
 /// Provides methods for interacting with the Helius DAS API, priority fee estimation,
@@ -399,18 +409,40 @@ impl RpcClient {
             config.limit = Some(10000);
         }
 
+        // Client-side page cap: caller override, else the default backstop.
+        let max_pages: usize = config.max_pages.unwrap_or(DEFAULT_MAX_AUTO_PAGINATION_PAGES);
+
         let mut all_accounts: Vec<GpaAccount> = Vec::new();
+        let mut pages: usize = 0;
         loop {
             let response: GetProgramAccountsV2Response =
                 self.get_program_accounts_v2(program_id.clone(), config.clone()).await?;
             all_accounts.extend(response.accounts);
+            pages += 1;
 
             log::info!("Fetched {} accounts so far", all_accounts.len());
 
-            if let Some(key) = response.pagination_key {
-                config.pagination_key = Some(key);
-            } else {
-                break;
+            match response.pagination_key {
+                // Stop if the server stops advancing the cursor (returns the same key) or if we
+                // hit the page cap, so a misbehaving server can't paginate forever.
+                Some(key) if config.pagination_key.as_ref() == Some(&key) => {
+                    log::warn!(
+                        "get_all_program_accounts stopping: server returned a non-advancing pagination cursor after {} pages ({} accounts)",
+                        pages,
+                        all_accounts.len()
+                    );
+                    break;
+                }
+                Some(_) if pages >= max_pages => {
+                    log::warn!(
+                        "get_all_program_accounts hit the {}-page cap ({} accounts); results may be truncated. Raise `max_pages` on the config to fetch more.",
+                        max_pages,
+                        all_accounts.len()
+                    );
+                    break;
+                }
+                Some(key) => config.pagination_key = Some(key),
+                None => break,
             }
         }
 
@@ -441,17 +473,39 @@ impl RpcClient {
             config.limit = Some(10000);
         }
 
+        // Client-side page cap: caller override, else the default backstop.
+        let max_pages: usize = config.max_pages.unwrap_or(DEFAULT_MAX_AUTO_PAGINATION_PAGES);
+
         let mut all_accounts: Vec<TokenAccountRecord> = Vec::new();
+        let mut pages: usize = 0;
         loop {
             let response: GetTokenAccountsByOwnerV2Response = self
                 .get_token_accounts_by_owner_v2(owner.clone(), filter.clone(), config.clone())
                 .await?;
             all_accounts.extend(response.value.accounts);
+            pages += 1;
 
-            if let Some(key) = response.value.pagination_key {
-                config.pagination_key = Some(key);
-            } else {
-                break;
+            match response.value.pagination_key {
+                // Stop if the server stops advancing the cursor (returns the same key) or if we
+                // hit the page cap, so a misbehaving server can't paginate forever.
+                Some(key) if config.pagination_key.as_ref() == Some(&key) => {
+                    log::warn!(
+                        "get_all_token_accounts_by_owner stopping: server returned a non-advancing pagination cursor after {} pages ({} accounts)",
+                        pages,
+                        all_accounts.len()
+                    );
+                    break;
+                }
+                Some(_) if pages >= max_pages => {
+                    log::warn!(
+                        "get_all_token_accounts_by_owner hit the {}-page cap ({} accounts); results may be truncated. Raise `max_pages` on the config to fetch more.",
+                        max_pages,
+                        all_accounts.len()
+                    );
+                    break;
+                }
+                Some(key) => config.pagination_key = Some(key),
+                None => break,
             }
         }
 
