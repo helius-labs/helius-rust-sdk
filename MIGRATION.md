@@ -1,6 +1,113 @@
-# Migration Guide: 0.x to 1.0
+# Migration Guide
 
-This guide covers the breaking changes in the Helius Rust SDK 1.0 release and how to update your code.
+This guide covers breaking changes between major releases of the Helius Rust SDK and how to
+update your code. The most recent upgrade is listed first.
+
+- [1.x → 2.0](#1x--20)
+- [0.x → 1.0](#0x--10)
+
+---
+
+# 1.x → 2.0
+
+2.0 is a correctness-focused release. Most breaking changes are narrow type refinements — many
+codebases need no changes, or only trivial ones. Each change below includes what to do.
+
+## Summary of Changes
+
+- **`RpcResponse<T>` fields are now optional**: `result` is `Option<T>`, `id` is `Option<String>`, and there is a new `error` field. Only affects code that inspects `RpcResponse` directly.
+- **`SenderSendOptions` is `#[non_exhaustive]`**: construct it via `default()`/`new()` + builder methods instead of a struct literal.
+- **`ProgramName::Unkown` renamed to `ProgramName::Unknown`**: fixes a typo that never matched the API's `"UNKNOWN"`.
+- **`GetAssetsByOwner.limit` is now `Option<u32>`** (was `Option<i32>`).
+- **`EnhancedTransaction.fee` and `.slot` are now `u64`** (were `i32`).
+- **Sender tip defaults changed**: the non-SWQOS tier ("Sender Max") now floors tips at 0.001 SOL.
+
+## `RpcResponse<T>`
+
+Server-side JSON-RPC errors (invalid params, unknown method, etc.) are now surfaced as
+`HeliusError::RpcError { code, message }` instead of a misleading deserialization error. To model
+this, the envelope changed:
+
+```rust
+// Before
+pub struct RpcResponse<T> { pub jsonrpc: String, pub id: String, pub result: T }
+
+// After
+pub struct RpcResponse<T> {
+    pub jsonrpc: String,
+    pub id: Option<String>,
+    pub result: Option<T>,
+    pub error: Option<RpcError>,
+}
+```
+
+**If you call the high-level methods** (`helius.rpc().get_asset(...)`, etc.) you are unaffected —
+they still return `T`, and now return `Err(HeliusError::RpcError { .. })` on a server error.
+
+**If you read `RpcResponse` directly**, handle the `Option`:
+
+```rust
+// Before
+let asset = response.result;
+// After
+let asset = response.result.ok_or_else(|| /* your error */)?;
+```
+
+## `SenderSendOptions` is `#[non_exhaustive]`
+
+Struct-literal construction no longer compiles. Use the constructors and builder methods:
+
+```rust
+// Before
+let opts = SenderSendOptions { region: Some(r), swqos_only: true, ..Default::default() };
+
+// After
+let opts = SenderSendOptions::new()
+    .with_region(r)
+    .with_swqos_only(true);
+```
+
+Reading and writing fields on an existing value is unchanged.
+
+## `ProgramName::Unkown` → `ProgramName::Unknown`
+
+Rename any references. Previously the typo'd variant serialized to `"UNKOWN"` and the API's real
+`"UNKNOWN"` fell through to `ProgramName::Other("UNKNOWN")`, so if you matched that string via
+`Other`, switch to the typed variant:
+
+```rust
+// Before
+ProgramName::Unkown => { /* ... */ }
+ProgramName::Other(s) if s == "UNKNOWN" => { /* ... */ }
+// After
+ProgramName::Unknown => { /* ... */ }
+```
+
+## Numeric type refinements
+
+`limit`, `fee`, and `slot` are non-negative, so they moved from signed to unsigned types:
+
+```rust
+// GetAssetsByOwner.limit:      Option<i32> -> Option<u32>
+// EnhancedTransaction.fee:     i32         -> u64
+// EnhancedTransaction.slot:    i32         -> u64
+```
+
+Integer literals (`Some(1000)`, `assert_eq!(tx.fee, 5000)`) need no change. Update only code that
+stored these in an explicit `i32`/`i64` binding or did signed arithmetic on them.
+
+## Sender tip defaults
+
+The non-SWQOS Sender tier is now branded **Sender Max** and floors tips at **0.001 SOL**
+(`MIN_TIP_LAMPORTS_MAX = 1_000_000`), up from the removed 0.0002 SOL tier. SWQOS-only
+(`swqos_only = true`) is unchanged at 0.000005 SOL. `MIN_TIP_LAMPORTS_DUAL` is deprecated; use
+`MIN_TIP_LAMPORTS_MAX`. If you relied on the old lower non-SWQOS floor, budget for the higher tip.
+
+---
+
+# 0.x → 1.0
+
+This section covers the breaking changes in the Helius Rust SDK 1.0 release and how to update your code.
 
 ## Summary of Changes
 
