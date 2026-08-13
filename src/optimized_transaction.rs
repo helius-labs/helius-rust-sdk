@@ -67,7 +67,7 @@ pub const MIN_TIP_LAMPORTS_MAX: u64 = 1_000_000; // 0.001 SOL
 /// minimum has been removed; this alias now resolves to the Sender Max minimum
 /// (0.001 SOL) for backward compatibility.
 #[deprecated(
-    since = "1.2.0",
+    since = "2.0.0",
     note = "renamed to MIN_TIP_LAMPORTS_MAX (Sender Max); value is now 0.001 SOL"
 )]
 pub const MIN_TIP_LAMPORTS_DUAL: u64 = MIN_TIP_LAMPORTS_MAX;

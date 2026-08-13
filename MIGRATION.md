@@ -8,12 +8,12 @@ update your code. The most recent upgrade is listed first.
 
 ---
 
-# 1.x → 2.0
+## 1.x → 2.0
 
 2.0 is a correctness-focused release. Most breaking changes are narrow type refinements — many
 codebases need no changes, or only trivial ones. Each change below includes what to do.
 
-## Summary of Changes
+### Summary of Changes
 
 - **`RpcResponse<T>` fields are now optional**: `result` is `Option<T>`, `id` is `Option<String>`, and there is a new `error` field. Only affects code that inspects `RpcResponse` directly.
 - **`SenderSendOptions` is `#[non_exhaustive]`**: construct it via `default()`/`new()` + builder methods instead of a struct literal.
@@ -22,7 +22,7 @@ codebases need no changes, or only trivial ones. Each change below includes what
 - **`EnhancedTransaction.fee` and `.slot` are now `u64`** (were `i32`).
 - **Sender tip defaults changed**: the non-SWQOS tier ("Sender Max") now floors tips at 0.001 SOL.
 
-## `RpcResponse<T>`
+### `RpcResponse<T>`
 
 Server-side JSON-RPC errors (invalid params, unknown method, etc.) are now surfaced as
 `HeliusError::RpcError { code, message }` instead of a misleading deserialization error. To model
@@ -53,7 +53,7 @@ let asset = response.result;
 let asset = response.result.ok_or_else(|| /* your error */)?;
 ```
 
-## `SenderSendOptions` is `#[non_exhaustive]`
+### `SenderSendOptions` is `#[non_exhaustive]`
 
 Struct-literal construction no longer compiles. Use the constructors and builder methods:
 
@@ -69,7 +69,7 @@ let opts = SenderSendOptions::new()
 
 Reading and writing fields on an existing value is unchanged.
 
-## `ProgramName::Unkown` → `ProgramName::Unknown`
+### `ProgramName::Unkown` → `ProgramName::Unknown`
 
 Rename any references. Previously the typo'd variant serialized to `"UNKOWN"` and the API's real
 `"UNKNOWN"` fell through to `ProgramName::Other("UNKNOWN")`, so if you matched that string via
@@ -83,7 +83,7 @@ ProgramName::Other(s) if s == "UNKNOWN" => { /* ... */ }
 ProgramName::Unknown => { /* ... */ }
 ```
 
-## Numeric type refinements
+### Numeric type refinements
 
 `limit`, `fee`, and `slot` are non-negative, so they moved from signed to unsigned types:
 
@@ -96,7 +96,7 @@ ProgramName::Unknown => { /* ... */ }
 Integer literals (`Some(1000)`, `assert_eq!(tx.fee, 5000)`) need no change. Update only code that
 stored these in an explicit `i32`/`i64` binding or did signed arithmetic on them.
 
-## Sender tip defaults
+### Sender tip defaults
 
 The non-SWQOS Sender tier is now branded **Sender Max** and floors tips at **0.001 SOL**
 (`MIN_TIP_LAMPORTS_MAX = 1_000_000`), up from the removed 0.0002 SOL tier. SWQOS-only
@@ -105,11 +105,11 @@ The non-SWQOS Sender tier is now branded **Sender Max** and floors tips at **0.0
 
 ---
 
-# 0.x → 1.0
+## 0.x → 1.0
 
 This section covers the breaking changes in the Helius Rust SDK 1.0 release and how to update your code.
 
-## Summary of Changes
+### Summary of Changes
 
 - **Simplified constructors**: 6 constructors replaced with 3 (`new`, `new_async`, `new_with_url`)
 - **New `HeliusBuilder`**: Builder pattern for advanced configuration
@@ -120,9 +120,9 @@ This section covers the breaking changes in the Helius Rust SDK 1.0 release and 
 - **Jito methods removed**: Use Helius Sender instead
 - **`UiTransactionEncoding` serialization fixed**: Variants now serialize as lowercase (`"json"`, `"jsonParsed"`)
 
-## Constructor Changes
+### Constructor Changes
 
-### `Helius::new()` — unchanged signature, still sync
+#### `Helius::new()` — unchanged signature, still sync
 
 ```rust
 // Before (0.x)
@@ -132,7 +132,7 @@ let helius = Helius::new("api-key", Cluster::MainnetBeta)?;
 let helius = Helius::new("api-key", Cluster::MainnetBeta)?;
 ```
 
-### Removed constructors — use `HeliusBuilder` instead
+#### Removed constructors — use `HeliusBuilder` instead
 
 | Removed Constructor | Replacement |
 |---|---|
@@ -142,7 +142,7 @@ let helius = Helius::new("api-key", Cluster::MainnetBeta)?;
 | `new_with_ws(key, cluster)` | `Helius::new_async(key, cluster).await?` |
 | `new_with_ws_with_timeouts(key, cluster, ping, pong)` | `HeliusBuilder::new().with_api_key(key)?.with_cluster(cluster).with_websocket(ping, pong).build().await?` |
 
-### New constructors
+#### New constructors
 
 ```rust
 // Full-featured: async Solana + WebSocket + confirmed commitment (async)
@@ -152,7 +152,7 @@ let helius = Helius::new_async("api-key", Cluster::MainnetBeta).await?;
 let helius = Helius::new_with_url("http://localhost:8899")?;
 ```
 
-## Config Struct Changes
+### Config Struct Changes
 
 The `Config` struct has two new fields:
 
@@ -175,7 +175,7 @@ let config = Config {
 };
 ```
 
-### Accessing the API key
+#### Accessing the API key
 
 ```rust
 // Before (0.x)
@@ -190,7 +190,7 @@ if config.has_api_key() {
 }
 ```
 
-## HeliusBuilder (New)
+### HeliusBuilder (New)
 
 The builder provides fine-grained control over client configuration:
 
@@ -209,7 +209,7 @@ let helius = HeliusBuilder::new()
     .await?;
 ```
 
-### Custom URL with builder
+#### Custom URL with builder
 
 ```rust
 let helius = HeliusBuilder::new()
@@ -220,7 +220,7 @@ let helius = HeliusBuilder::new()
     .await?;
 ```
 
-## Jito Methods Removed
+### Jito Methods Removed
 
 All Jito methods (deprecated in 0.3.0) have been removed. Use Helius Sender instead:
 
@@ -245,7 +245,7 @@ let sig = helius.send_smart_transaction_with_sender(config, Some(SendOptions {
 })).await?;
 ```
 
-## UiTransactionEncoding Serialization Fix
+### UiTransactionEncoding Serialization Fix
 
 `UiTransactionEncoding` variants now serialize as lowercase camelCase to match the Solana RPC spec. If you were passing raw encoding strings to work around this bug, you can now use the enum directly:
 
@@ -259,7 +259,7 @@ let encoding = UiTransactionEncoding::Json;       // serializes as "json"
 let encoding = UiTransactionEncoding::JsonParsed;  // serializes as "jsonParsed"
 ```
 
-## Quick Find-and-Replace
+### Quick Find-and-Replace
 
 For most codebases, these replacements will cover the migration:
 
