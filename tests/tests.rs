@@ -66,6 +66,7 @@ mod staking {
     mod test_create_stake_transaction;
     mod test_create_unstake_transaction;
     mod test_create_withdraw_transaction;
+    mod test_get_stake_accounts;
     mod test_get_unstake_instruction;
     mod test_get_withdraw_instruction;
     mod test_get_withdrawable_amount;

@@ -233,7 +233,7 @@ async fn transaction_subscribe_decodes_accounts_notifications() {
             );
             assert!(matches!(
                 entry.transaction.transaction,
-                solana_transaction_status::EncodedTransaction::Accounts(_)
+                solana_transaction_status_client_types::EncodedTransaction::Accounts(_)
             ));
         }
         other => panic!("expected full notification carrying accounts payload, got {other:?}"),

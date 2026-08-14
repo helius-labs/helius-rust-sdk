@@ -23,6 +23,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - **Breaking**: Renamed `ProgramName::Unkown` to `ProgramName::Unknown`, fixing a typo that caused the variant to (de)serialize as `"UNKOWN"`. The API's real `"UNKNOWN"` never matched it and fell through to `Other("UNKNOWN")`; it now maps to/from `"UNKNOWN"` correctly.
 - **Breaking**: `GetAssetsByOwner.limit` changed from `Option<i32>` to `Option<u32>`, matching the sibling `GetAssetsBy*` request structs (a page size is never negative).
 - **Breaking**: `EnhancedTransaction.fee` and `EnhancedTransaction.slot` changed from `i32` to `u64`. Fees and slots are non-negative and slots already exceed `i32::MAX`'s effective headroom; `u64` also matches `TransactionSignatureEntry.slot`.
+- **Breaking**: Upgraded the Solana crate dependencies from the `3.0.x` line to the Agave 4.2 set (`solana-sdk` 4.x; `solana-client`, `solana-transaction-status`, `solana-account-decoder`, `solana-rpc-client-api` 4.2.x). This is the groundwork for Transaction v1 / larger-transaction support and is a breaking change for downstreams that share Solana types — align your own `solana-*` dependencies to the 4.x line. The resolved `solana-message` exposes `VersionedMessage::V1`.
+- Replaced the direct `solana-transaction-status` dependency with `solana-transaction-status-client-types`: in 4.x the parent crate's root is gated behind the `agave-unstable-api` feature, while the wire/status types the SDK uses (`EncodedTransaction`, `EncodedTransactionWithStatusMeta`, `UiTransactionStatusMeta`, `TransactionConfirmationStatus`) live in the ungated companion crate.
+- Dropped the redundant direct `solana-program` dependency; `Hash` and `Pubkey` are now imported from `solana-sdk`.
 
 ### Deprecated
 - `MIN_TIP_LAMPORTS_DUAL` is deprecated in favor of `MIN_TIP_LAMPORTS_MAX`. It is now an alias resolving to the Sender Max minimum (0.001 SOL), not the removed 0.0002 SOL value.
@@ -37,6 +40,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - Hardened per-request URL construction across the Wallet, Webhook, enhanced-transaction, and admin APIs (and `post_rpc_request`): `Url::parse` failures now propagate as `HeliusError::UrlParseError` instead of panicking via `expect`. In practice the `url` parser tolerates the interpolated values, so this is defensive; behavior is unchanged for all valid inputs.
 - The auto-paginating `get_all_program_accounts` and `get_all_token_accounts_by_owner` helpers can no longer loop forever against a misbehaving server. They now stop when the pagination cursor stops advancing (the same key is returned) and are bounded by a page cap, logging a warning rather than truncating silently. The cap defaults to `DEFAULT_MAX_AUTO_PAGINATION_PAGES` (10,000) and is overridable per call via the new `max_pages` field on `GetProgramAccountsV2Config` / `GetTokenAccountsByOwnerV2Config` (client-side only; not sent to the server).
 - `RequestHandler::handle_response` no longer silently swallows a response body-read failure. A mid-body network error previously became an empty string, which deserialized to `T::default()` on a 2xx (a bogus "success"); it now propagates as `HeliusError::Network`.
+- `get_stake_accounts` now uses `get_program_ui_accounts_with_config` and decodes the returned UI accounts back into `Account`. The previous `get_program_accounts_with_config` method was removed in solana-client 4.x.
 
 ## [1.1.0] - 2026-04-29
 

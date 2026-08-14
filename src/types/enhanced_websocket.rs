@@ -2,7 +2,7 @@ use super::inner::TransactionSignatureEntry;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use solana_sdk::pubkey::Pubkey;
-use solana_transaction_status::EncodedTransactionWithStatusMeta;
+use solana_transaction_status_client_types::EncodedTransactionWithStatusMeta;
 
 /// Filters for the `transactionSubscribe` enhanced WebSocket method.
 ///

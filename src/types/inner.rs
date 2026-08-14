@@ -13,7 +13,7 @@ use std::time::Duration;
 use solana_client::rpc_config::RpcSendTransactionConfig;
 use solana_commitment_config::CommitmentLevel;
 use solana_sdk::{instruction::Instruction, message::AddressLookupTableAccount, signature::Signer};
-use solana_transaction_status::{EncodedTransaction, UiTransactionStatusMeta};
+use solana_transaction_status_client_types::{EncodedTransaction, UiTransactionStatusMeta};
 
 /// Defines the available clusters supported by Helius
 #[derive(Debug, Clone, PartialEq)]
