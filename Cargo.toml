@@ -43,6 +43,9 @@ tokio = { version = "1.37.0", features = ["macros", "rt-multi-thread", "net", "t
 tokio-stream = "0.1.15"
 tokio-tungstenite = "0.28.0"
 url = "2.5.0"
+# Transaction v1 (SIMD-0385) uses the wincode wire format, not bincode. Pinned to the version the
+# solana 4.x crates use so the `SchemaWrite` impl resolves to the same type.
+wincode = "0.5.5"
 
 [dev-dependencies]
 mockito = "1.4.0"

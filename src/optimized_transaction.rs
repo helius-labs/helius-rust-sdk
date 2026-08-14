@@ -83,8 +83,9 @@ pub const MIN_TIP_LAMPORTS_SWQOS: u64 = 5_000; // 0.000005 SOL
 ///
 /// Agave 4.2 activates larger transactions: v1 (SIMD-0385) raises the cap from the legacy/v0
 /// ~1,232-byte packet limit to 4,096 bytes. The larger size is reachable **only** through the
-/// v1 format.
-pub const MAX_TRANSACTION_V1_SIZE: usize = 4096;
+/// v1 format. Aliased to the canonical `solana_message::v1::MAX_TRANSACTION_SIZE` so it tracks the
+/// crate definition.
+pub const MAX_TRANSACTION_V1_SIZE: usize = solana_sdk::message::v1::MAX_TRANSACTION_SIZE;
 
 /// Builds and signs a Transaction v1 (SIMD-0385) — the format that unlocks larger transactions
 /// (up to [`MAX_TRANSACTION_V1_SIZE`] bytes, SIMD-0296).
@@ -132,8 +133,11 @@ pub fn build_v1_transaction(
 
     let transaction: VersionedTransaction = VersionedTransaction::try_new(VersionedMessage::V1(message), signers)?;
 
-    let serialized_len: usize = serialize(&transaction)
-        .map_err(|e: Box<ErrorKind>| HeliusError::InvalidInput(e.to_string()))?
+    // v1 uses the wincode wire format (version byte first, signatures as a fixed-length array at the
+    // end) — NOT bincode, which would misread the `0x81` version prefix. This is the same
+    // serialization the RPC client and validators use, so the byte count matches what is submitted.
+    let serialized_len: usize = wincode::serialize(&transaction)
+        .map_err(|e| HeliusError::InvalidInput(format!("Failed to serialize v1 transaction: {e:?}")))?
         .len();
     if serialized_len > MAX_TRANSACTION_V1_SIZE {
         return Err(HeliusError::InvalidInput(format!(
@@ -1305,8 +1309,11 @@ impl Helius {
     where
         T: SerializableTransaction + serde::Serialize + ?Sized,
     {
-        let wire: Vec<u8> =
-            bincode::serialize(transaction).map_err(|e: Box<ErrorKind>| HeliusError::InvalidInput(e.to_string()))?;
+        // Serialize with wincode (the RPC/validator wire format). This is required for Transaction
+        // v1 (SIMD-0385) — bincode would produce an invalid wire format — and is byte-identical to
+        // bincode for legacy and v0.
+        let wire: Vec<u8> = wincode::serialize(transaction)
+            .map_err(|e| HeliusError::InvalidInput(format!("Failed to serialize transaction: {e:?}")))?;
 
         // Base64 encode the wire transaction for Sender
         let tx64: String = B64.encode(&wire);
@@ -1433,8 +1440,10 @@ impl Helius {
         let mut encoded: Vec<String> = Vec::with_capacity(transactions.len());
         let mut signatures: Vec<Signature> = Vec::with_capacity(transactions.len());
         for tx in transactions {
-            let wire: Vec<u8> =
-                bincode::serialize(tx).map_err(|e: Box<ErrorKind>| HeliusError::InvalidInput(e.to_string()))?;
+            // wincode is the RPC/validator wire format (required for Transaction v1; identical to
+            // bincode for legacy/v0).
+            let wire: Vec<u8> = wincode::serialize(tx)
+                .map_err(|e| HeliusError::InvalidInput(format!("Failed to serialize transaction: {e:?}")))?;
             encoded.push(B64.encode(&wire));
             signatures.push(*tx.get_signature());
         }
@@ -1520,10 +1529,21 @@ impl Helius {
 mod tests {
     use super::{
         build_v1_transaction, collect_unique_keypair_refs, collect_unique_signers, is_retryable_confirmation_error,
-        MAX_TRANSACTION_V1_SIZE,
+        v1_priority_fee_lamports, MAX_TRANSACTION_V1_SIZE,
     };
+
+    /// The v1 total-lamports fee conversion must stay the exact inverse of Atlas's
+    /// `v1_priority_rate` (which the priority-fee estimator uses to price v1 transactions):
+    /// a 10,000 µL/CU rate over a 42,000 CU limit is 420 lamports total, matching the shared
+    /// SDK/Atlas golden vector. If this drifts, v1 fees are mispriced across systems.
+    #[test]
+    fn test_v1_priority_fee_lamports_matches_atlas_vector() {
+        assert_eq!(v1_priority_fee_lamports(10_000, 42_000), 420);
+        // Rounds up so the v1 total is never less than the per-CU equivalent.
+        assert_eq!(v1_priority_fee_lamports(1, 1), 1);
+        assert_eq!(v1_priority_fee_lamports(0, 200_000), 0);
+    }
     use crate::error::HeliusError;
-    use bincode::serialize;
     use reqwest::StatusCode;
     use solana_sdk::{
         hash::Hash,
@@ -1566,21 +1586,25 @@ mod tests {
             other => panic!("expected VersionedMessage::V1, got {other:?}"),
         }
 
-        let bytes = serialize(&tx).unwrap();
+        // v1 must be serialized with wincode, NOT bincode: the correct wire format leads with the
+        // `0x81` version byte and writes signatures as a fixed-length array at the end. (bincode
+        // would emit a signature-count-first legacy layout that the validator rejects.)
+        let bytes = wincode::serialize(&tx).unwrap();
         assert!(
             bytes.len() <= MAX_TRANSACTION_V1_SIZE,
             "v1 tx exceeds the {MAX_TRANSACTION_V1_SIZE}-byte cap"
         );
-        assert!(
-            bytes.contains(&0x81),
-            "serialized v1 transaction should contain the 0x81 version prefix"
+        assert_eq!(
+            bytes[0], 0x81,
+            "v1 wire format must start with the 0x81 version byte (got {:#x})",
+            bytes[0]
         );
 
-        // Round-trip through the crate's own (validator-shared) deserializer: if the exact bytes
-        // we submit deserialize back to an identical transaction, the v1 wire format is correct.
-        let decoded: VersionedTransaction =
-            bincode::deserialize(&bytes).expect("v1 transaction should deserialize (validator-compatible wire format)");
-        assert_eq!(decoded, tx, "v1 transaction did not round-trip through bincode");
+        // Round-trip through the crate's own (validator-shared) wincode deserializer: if the exact
+        // bytes we submit deserialize back to an identical transaction, the wire format is correct.
+        let decoded: VersionedTransaction = wincode::deserialize(&bytes)
+            .expect("v1 transaction should deserialize via wincode (validator-compatible wire format)");
+        assert_eq!(decoded, tx, "v1 transaction did not round-trip through wincode");
     }
 
     fn build_versioned_message(
