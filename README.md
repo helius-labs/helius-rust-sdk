@@ -314,5 +314,5 @@ Admin API access is feature-gated per project and served from `https://admin-api
 - [`is_valid_solana_address`](https://github.com/helius-labs/helius-rust-sdk/blob/dev/src/utils/is_valid_solana_address.rs) - Returns whether a given string slice is a valid Solana address
 - [`make_keypairs`](https://github.com/helius-labs/helius-rust-sdk/blob/dev/src/utils/make_keypairs.rs) - Generates a specified number of keypairs
 
-## Migrating from 0.x
-If you're upgrading from 0.x, see the [Migration Guide](MIGRATION.md) for details on breaking changes and how to update your code.
+## Migrating Between Major Versions
+Upgrading across a major version? See the [Migration Guide](MIGRATION.md) for the breaking changes in each release (1.x → 2.0 and 0.x → 1.0) and how to update your code.
