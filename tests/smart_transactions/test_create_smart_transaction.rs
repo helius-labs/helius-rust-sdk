@@ -1,5 +1,6 @@
-use helius::types::{CreateSmartTransactionConfig, SmartTransaction};
+use helius::types::{CreateSmartTransactionConfig, SmartTransaction, TransactionVersion};
 use solana_sdk::{
+    message::VersionedMessage,
     pubkey::Pubkey,
     signature::{Keypair, Signer},
 };
@@ -31,6 +32,7 @@ async fn test_create_smart_transaction_legacy_success() {
         fee_payer: None,
         priority_fee_cap: None,
         cu_buffer_multiplier: None,
+        ..Default::default()
     };
 
     let result = helius.create_smart_transaction(&config).await;
@@ -69,6 +71,7 @@ async fn test_create_smart_transaction_with_priority_fee_cap() {
         fee_payer: None,
         priority_fee_cap: Some(500), // Cap below the 1000 estimate
         cu_buffer_multiplier: None,
+        ..Default::default()
     };
 
     let result = helius.create_smart_transaction(&config).await;
@@ -101,6 +104,7 @@ async fn test_create_smart_transaction_with_custom_cu_multiplier() {
         fee_payer: None,
         priority_fee_cap: None,
         cu_buffer_multiplier: Some(1.5), // Custom 50% buffer
+        ..Default::default()
     };
 
     let result = helius.create_smart_transaction(&config).await;
@@ -136,6 +140,7 @@ async fn test_create_smart_transaction_with_separate_fee_payer() {
         fee_payer: Some(fee_payer_arc),
         priority_fee_cap: None,
         cu_buffer_multiplier: None,
+        ..Default::default()
     };
 
     let result = helius.create_smart_transaction(&config).await;
@@ -169,6 +174,7 @@ async fn test_create_smart_transaction_low_compute_units_gets_minimum() {
         fee_payer: None,
         priority_fee_cap: None,
         cu_buffer_multiplier: None,
+        ..Default::default()
     };
 
     // Should succeed — compute units below 1000 get clamped to 1000
@@ -177,5 +183,80 @@ async fn test_create_smart_transaction_low_compute_units_gets_minimum() {
         result.is_ok(),
         "create_smart_transaction with low CU failed: {:?}",
         result.err()
+    );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_create_smart_transaction_v1_success() {
+    let (mut server, helius) = setup_mock().await;
+
+    mock_latest_blockhash(&mut server);
+    mock_priority_fee_estimate(&mut server);
+    mock_simulate_transaction(&mut server, 50_000);
+
+    let payer = Keypair::new();
+    let payer_signer: Arc<dyn Signer> = Arc::new(payer.insecure_clone());
+
+    let config = CreateSmartTransactionConfig {
+        instructions: vec![system_instruction::transfer(
+            &payer.pubkey(),
+            &Pubkey::new_unique(),
+            1000,
+        )],
+        signers: vec![payer_signer],
+        version: TransactionVersion::V1,
+        ..Default::default()
+    };
+
+    let (transaction, last_valid_block_height) = helius
+        .create_smart_transaction(&config)
+        .await
+        .expect("v1 smart tx should build");
+
+    assert!(last_valid_block_height > 0);
+    match transaction {
+        SmartTransaction::Versioned(vtx) => match vtx.message {
+            VersionedMessage::V1(m) => {
+                // Fee and CU limit live in the v1 header config, not in ComputeBudget instructions.
+                assert!(
+                    m.config.compute_unit_limit.is_some(),
+                    "v1 CU limit should be set in the header config"
+                );
+                assert!(
+                    m.config.priority_fee.is_some(),
+                    "v1 priority fee should be set in the header config"
+                );
+                assert_eq!(m.instructions.len(), 1, "v1 must not add ComputeBudget instructions");
+            }
+            other => panic!("expected VersionedMessage::V1, got {other:?}"),
+        },
+        other => panic!("expected a versioned transaction, got {other:?}"),
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_create_smart_transaction_v1_rejects_lookup_tables() {
+    let (mut server, helius) = setup_mock().await;
+    mock_latest_blockhash(&mut server);
+
+    let payer = Keypair::new();
+    let payer_signer: Arc<dyn Signer> = Arc::new(payer.insecure_clone());
+
+    let config = CreateSmartTransactionConfig {
+        instructions: vec![system_instruction::transfer(
+            &payer.pubkey(),
+            &Pubkey::new_unique(),
+            1000,
+        )],
+        signers: vec![payer_signer],
+        version: TransactionVersion::V1,
+        lookup_tables: Some(vec![]),
+        ..Default::default()
+    };
+
+    let result = helius.create_smart_transaction(&config).await;
+    assert!(
+        result.is_err(),
+        "v1 with lookup tables should be rejected, got {result:?}"
     );
 }

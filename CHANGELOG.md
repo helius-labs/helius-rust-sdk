@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+### Added
+- **Transaction v1 (larger transactions) support** for Agave 4.2. Transaction v1 (SIMD-0385) unlocks larger transactions — up to the new `MAX_TRANSACTION_V1_SIZE` (4,096 bytes, SIMD-0296), vs. the ~1,232-byte legacy/v0 limit. v1 carries its compute-unit limit and **total** priority fee (in lamports) in the message header config rather than in `ComputeBudget` instructions, and does not support address lookup tables.
+  - `TransactionVersion` enum (`Auto` | `V1`) and a `version` field on `CreateSmartTransactionConfig` / `CreateSmartTransactionSeedConfig` (defaults to `Auto`, preserving legacy/v0 behavior). Set `TransactionVersion::V1` to build a v1 smart transaction; it flows through `create_smart_transaction`, `create_smart_transaction_with_seeds`, `send_smart_transaction`, and the Helius Sender path. A new `priority_fee_lamports_cap` field caps the absolute v1 priority fee.
+  - `build_v1_transaction` low-level helper and the `MAX_TRANSACTION_V1_SIZE` constant. The signed transaction is validated against the 4,096-byte cap before returning and round-trips through the validator-shared `VersionedTransaction` (de)serializer.
+  - v1 rejects `lookup_tables` up front, and adds no `ComputeBudget` instructions (they are no-ops on v1). The priority-fee estimate uses a legacy preflight draft (which the priority-fee API parses today) and is converted to v1's total-lamports fee.
+  - `create_smart_transaction_without_signers` (the unsigned/offline-signing path) does not yet support v1 and returns `HeliusError::InvalidInput` when `V1` is requested.
+  - **Receive side**: `max_supported_transaction_version` now defaults to `1` (was `0` / unset) on `TransactionSubscribeOptions` (enhanced WebSocket) and `GetTransactionsForAddressOptions`, so v1 transactions are returned/streamed rather than triggering a version error. Requesting a transaction newer than this value still fails fast.
+  - Requires the Agave 4.2 (`solana-*` 4.x) crates. Example: `examples/transactions/create_smart_transaction_v1.rs`.
+
 ## [2.0.0] - 2026-08-13
 
 ### Added

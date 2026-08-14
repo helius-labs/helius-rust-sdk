@@ -127,6 +127,10 @@ path = "examples/solana/get_latest_blockhash_async.rs"
 name = "send_smart_transaction_with_seeds"
 path = "examples/transactions/send_smart_transaction_with_seeds.rs"
 
+[[example]]
+name = "create_smart_transaction_v1"
+path = "examples/transactions/create_smart_transaction_v1.rs"
+
 # Admin API examples
 [[example]]
 name = "get_project_usage"

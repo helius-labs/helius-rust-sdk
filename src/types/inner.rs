@@ -3,7 +3,9 @@ use super::{
     AccountWebhookEncoding, CollectionIdentifier, PriorityLevel, SearchAssetsOptions, SearchConditionType, TokenType,
     TransactionStatus, TransactionType, UiTransactionEncoding, WebhookType,
 };
-use crate::types::{DisplayOptions, Encoding, GetAssetOptions, GpaFilter, TokenAccountsOwnerFilter};
+use crate::types::{
+    DisplayOptions, Encoding, GetAssetOptions, GpaFilter, TokenAccountsOwnerFilter, TransactionVersion,
+};
 use serde::ser::SerializeTuple;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -1796,6 +1798,13 @@ pub struct CreateSmartTransactionConfig {
     pub priority_fee_cap: Option<u64>,
     /// Multiplier applied to simulated compute units as a safety buffer (default: `1.25`)
     pub cu_buffer_multiplier: Option<f32>,
+    /// The transaction format to build. Defaults to [`TransactionVersion::Auto`] (legacy/v0).
+    /// Set to [`TransactionVersion::V1`] to build a larger Transaction v1 (SIMD-0385); `V1` is
+    /// incompatible with `lookup_tables`.
+    pub version: TransactionVersion,
+    /// Maximum **total** priority fee in lamports, applied to [`TransactionVersion::V1`]
+    /// transactions (whose fee is a flat lamport amount, not a per-CU rate). Caps absolute spend.
+    pub priority_fee_lamports_cap: Option<u64>,
 }
 
 impl Default for CreateSmartTransactionConfig {
@@ -1807,6 +1816,8 @@ impl Default for CreateSmartTransactionConfig {
             fee_payer: None,
             priority_fee_cap: None,
             cu_buffer_multiplier: Some(1.25),
+            version: TransactionVersion::Auto,
+            priority_fee_lamports_cap: None,
         }
     }
 }
@@ -1821,6 +1832,8 @@ impl CreateSmartTransactionConfig {
             fee_payer: None,
             priority_fee_cap: None,
             cu_buffer_multiplier: None,
+            version: TransactionVersion::Auto,
+            priority_fee_lamports_cap: None,
         }
     }
 }
@@ -1891,6 +1904,13 @@ pub struct CreateSmartTransactionSeedConfig {
     pub priority_fee_cap: Option<u64>,
     /// Multiplier applied to simulated compute units as a safety buffer (default: `1.25`)
     pub cu_buffer_multiplier: Option<f32>,
+    /// The transaction format to build. Defaults to [`TransactionVersion::Auto`] (legacy/v0).
+    /// Set to [`TransactionVersion::V1`] to build a larger Transaction v1; incompatible with
+    /// `lookup_tables`.
+    pub version: TransactionVersion,
+    /// Maximum **total** priority fee in lamports, applied to [`TransactionVersion::V1`]
+    /// transactions.
+    pub priority_fee_lamports_cap: Option<u64>,
 }
 
 impl Default for CreateSmartTransactionSeedConfig {
@@ -1902,6 +1922,8 @@ impl Default for CreateSmartTransactionSeedConfig {
             lookup_tables: None,
             priority_fee_cap: None,
             cu_buffer_multiplier: Some(1.25),
+            version: TransactionVersion::Auto,
+            priority_fee_lamports_cap: None,
         }
     }
 }
@@ -1915,6 +1937,8 @@ impl CreateSmartTransactionSeedConfig {
             lookup_tables: None,
             priority_fee_cap: None,
             cu_buffer_multiplier: None,
+            version: TransactionVersion::Auto,
+            priority_fee_lamports_cap: None,
         }
     }
 
@@ -1925,6 +1949,13 @@ impl CreateSmartTransactionSeedConfig {
 
     pub fn with_lookup_tables(mut self, lookup_tables: Vec<AddressLookupTableAccount>) -> Self {
         self.lookup_tables = Some(lookup_tables);
+        self
+    }
+
+    /// Selects [`TransactionVersion::V1`] for this transaction (larger transactions, header-config
+    /// fees, no lookup tables).
+    pub fn with_v1(mut self) -> Self {
+        self.version = TransactionVersion::V1;
         self
     }
 }
@@ -2616,7 +2647,7 @@ pub struct GetTransactionsFilters {
 /// - `encoding`: Transaction encoding when `transaction_details` is `Full`
 /// - `max_supported_transaction_version`: Maximum transaction version to return
 /// - `min_context_slot`: Minimum slot at which the request can be evaluated
-#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct GetTransactionsForAddressOptions {
     /// Level of detail for returned transactions (`Signatures` or `Full`)
@@ -2640,12 +2671,30 @@ pub struct GetTransactionsForAddressOptions {
     /// Transaction encoding when `transaction_details` is `Full`
     #[serde(skip_serializing_if = "Option::is_none")]
     pub encoding: Option<UiTransactionEncoding>,
-    /// Maximum transaction version to return (set to `0` for v0 transactions)
+    /// Maximum transaction version to return (`1` for Transaction v1 / Agave 4.2, `0` for v0).
+    /// Defaults to `1` so v1 transactions are returned rather than triggering a version error.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub max_supported_transaction_version: Option<u8>,
     /// Minimum slot at which the request can be evaluated
     #[serde(skip_serializing_if = "Option::is_none")]
     pub min_context_slot: Option<u64>,
+}
+
+impl Default for GetTransactionsForAddressOptions {
+    fn default() -> Self {
+        Self {
+            transaction_details: None,
+            sort_order: None,
+            limit: None,
+            pagination_token: None,
+            commitment: None,
+            filters: None,
+            encoding: None,
+            // Accept up to Transaction v1 (Agave 4.2) by default; the SDK can parse v1.
+            max_supported_transaction_version: Some(1),
+            min_context_slot: None,
+        }
+    }
 }
 
 /// A transaction entry returned in "signatures" mode from `getTransactionsForAddress`.

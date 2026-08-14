@@ -58,6 +58,7 @@ async fn main() {
             lookup_tables: Some(address_lut),
             priority_fee_cap: Some(100000),
             cu_buffer_multiplier: None,
+            ..Default::default()
         };
 
         // Configure send options (optional)
