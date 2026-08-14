@@ -36,7 +36,7 @@ use solana_sdk::{
     transaction::{Transaction, VersionedTransaction},
 };
 use solana_system_interface::instruction as system_instruction;
-use solana_transaction_status::TransactionConfirmationStatus;
+use solana_transaction_status_client_types::TransactionConfirmationStatus;
 use std::time::{Duration, Instant};
 use tokio::time::sleep;
 

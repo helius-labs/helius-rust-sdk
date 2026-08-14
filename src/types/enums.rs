@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use serde_enum_str::{Deserialize_enum_str, Serialize_enum_str};
-use solana_program::pubkey::Pubkey;
 use solana_sdk::pubkey;
+use solana_sdk::pubkey::Pubkey;
 use solana_sdk::transaction::{Transaction, VersionedTransaction};
 
 use super::*;

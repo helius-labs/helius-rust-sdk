@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+### Changed
+- **Breaking**: Upgraded the Solana crate dependencies from the `3.0.x` line to the Agave 4.2 set (`solana-sdk` 4.x; `solana-client`, `solana-transaction-status`, `solana-account-decoder`, `solana-rpc-client-api` 4.2.x). This is the groundwork for Transaction v1 / larger-transaction support and is a breaking change for downstreams that share Solana types — align your own `solana-*` dependencies to the 4.x line. The resolved `solana-message` exposes `VersionedMessage::V1`.
+- Replaced the direct `solana-transaction-status` dependency with `solana-transaction-status-client-types`: in 4.x the parent crate's root is gated behind the `agave-unstable-api` feature, while the wire/status types the SDK uses (`EncodedTransaction`, `EncodedTransactionWithStatusMeta`, `UiTransactionStatusMeta`, `TransactionConfirmationStatus`) live in the ungated companion crate.
+- Dropped the redundant direct `solana-program` dependency; `Hash` and `Pubkey` are now imported from `solana-sdk`.
+
+### Fixed
+- `get_stake_accounts` now uses `get_program_ui_accounts_with_config` and decodes the returned UI accounts back into `Account`. The previous `get_program_accounts_with_config` method was removed in solana-client 4.x.
+
 ## [1.1.0] - 2026-04-29
 
 ### Added

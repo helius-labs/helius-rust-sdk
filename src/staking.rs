@@ -13,8 +13,8 @@ use solana_client::{
     rpc_filter::{Memcmp, MemcmpEncodedBytes, RpcFilterType},
 };
 use solana_commitment_config::CommitmentConfig;
-use solana_program::hash::Hash;
 use solana_sdk::account::Account;
+use solana_sdk::hash::Hash;
 use solana_sdk::{
     bs58,
     instruction::Instruction,
@@ -391,10 +391,20 @@ impl Helius {
             ..Default::default()
         };
 
+        // `get_program_accounts_with_config` was removed in solana-client 4.x; its replacement
+        // returns UI-encoded accounts, so decode each back into an `Account`.
         let accounts: Vec<(Pubkey, Account)> = self
             .connection()
-            .get_program_accounts_with_config(&solana_stake_interface::program::id(), cfg)
-            .map_err(|e| HeliusError::InvalidInput(e.to_string()))?;
+            .get_program_ui_accounts_with_config(&solana_stake_interface::program::id(), cfg)
+            .map_err(|e| HeliusError::InvalidInput(e.to_string()))?
+            .into_iter()
+            .map(|(pubkey, ui_account)| {
+                ui_account
+                    .to_account()
+                    .map(|account| (pubkey, account))
+                    .ok_or_else(|| HeliusError::InvalidInput(format!("Failed to decode stake account {}", pubkey)))
+            })
+            .collect::<Result<Vec<_>>>()?;
 
         Ok(accounts)
     }
