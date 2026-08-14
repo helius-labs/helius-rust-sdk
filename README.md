@@ -171,6 +171,27 @@ For asynchronous operations, use `Helius::new_async()` or `HeliusBuilder` with `
 ### Enhanced WebSockets
 Use `Helius::new_async()` or `HeliusBuilder` with `.with_websocket(None, None)` to create a client with WebSocket support. This enables our [Enhanced WebSocket methods](https://www.helius.dev/docs/enhanced-websockets) [`transactionSubscribe`](https://www.helius.dev/docs/enhanced-websockets/transaction-subscribe) and [`accountSubscribe`](https://www.helius.dev/docs/enhanced-websockets/account-subscribe)
 
+### Pre Confirmations (`preconfSubscribe`)
+Pre Confirmations are Helius's lowest-latency transaction stream: scheduled transactions are delivered over WebSocket **before** they are shredded. A pre-confirmation is an **early signal, not a guarantee** — a streamed transaction may still fail to land. Coverage is **not continuous**: it scales with the share of stake forwarding scheduled transactions to Helius, so expect gaps. Pricing is credit-based (10 credits per notification message), the same model as other Helius WebSocket subscriptions.
+
+Served from the Gatekeeper endpoint (`wss://beta.helius-rpc.com`). Despite the `beta` host name this is not a beta product — it is where Pre Confirmations launch during the Gatekeeper migration.
+
+Use the standalone [`PreconfClient`](src/preconf.rs):
+
+```rust
+use futures_util::StreamExt;
+use helius::preconf::PreconfClient;
+
+let (client, mut stream) = PreconfClient::connect_with_api_key("your_api_key").await?;
+while let Some(event) = stream.next().await {
+    // event: { version, slot, transaction_index, status, transaction, transaction_bytes }
+    println!("v{} slot={} index={} status={:?}", event.version, event.slot, event.transaction_index, event.status);
+}
+client.shutdown().await?;
+```
+
+`preconfSubscribe` takes no filter parameters — it streams **all** scheduled transactions. Notifications are **binary** frames (the subscribe ack is a JSON text frame); the layout is little-endian `version:u8 | slot:u64_le | transaction_index:u64_le | status:u8 | bincode(VersionedTransaction)`. The leading `version` byte is checked first (currently `1`); unknown versions are dropped. `status` is exposed as the `PreconfStatus` enum (`Failed = 0`, `Success = 1`, `Unknown = 2`). Each notification exposes the decoded `VersionedTransaction` plus the raw `transaction_bytes`. See [`examples/websockets/preconf_subscribe.rs`](examples/websockets/preconf_subscribe.rs).
+
 ### Examples
 More examples of how to use the SDK can be found in the [`examples`](https://github.com/helius-labs/helius-rust-sdk/tree/dev/examples) directory.
 
@@ -253,6 +274,7 @@ Our SDK is designed to provide a seamless developer experience when building on 
 - [`get_wallet_identity`](https://www.helius.dev/docs/api-reference/wallet/get-wallet-identity) - Gets identity information (name, type, category) for a known wallet address
 - [`get_batch_wallet_identity`](https://www.helius.dev/docs/api-reference/wallet/get-batch-wallet-identity) - Gets identity information for multiple wallet addresses in a single request (up to 100)
 - [`get_wallet_balances`](https://www.helius.dev/docs/api-reference/wallet/get-wallet-balances) - Gets token and NFT balances for a wallet, sorted by USD value
+- [`get_wallet_balance_at`](https://www.helius.dev/docs/api-reference/wallet-api/balance-at) - Gets a wallet's balance of a specific token or native SOL at a past timestamp, datetime, or slot
 - [`get_wallet_history`](https://www.helius.dev/docs/api-reference/wallet/get-wallet-history) - Gets parsed transaction history with balance changes for a wallet
 - [`get_wallet_transfers`](https://www.helius.dev/docs/api-reference/wallet/get-wallet-transfers) - Gets all token transfer activity for a wallet
 - [`get_wallet_funding_source`](https://www.helius.dev/docs/api-reference/wallet/get-wallet-funding-source) - Discovers the original funding source of a wallet
@@ -267,7 +289,8 @@ Admin API access is feature-gated per project and served from `https://admin-api
 - [`determine_tip_lamports`](https://github.com/helius-labs/helius-rust-sdk/blob/47d68afcf644938bc474f609368b214170423bba/src/optimized_transaction.rs#L966-L976) - Determines the tip amount in lamports using the 75th percentile floor or falling back to the minimum required by Sender
 - [`fetch_tip_floor_75th`](https://github.com/helius-labs/helius-rust-sdk/blob/47d68afcf644938bc474f609368b214170423bba/src/optimized_transaction.rs#L940-L964) - Fetches the 75th percentile landed tip floor from Jito's endpoint (in SOL)
 - [`send_and_confirm_via_sender`](https://github.com/helius-labs/helius-rust-sdk/blob/47d68afcf644938bc474f609368b214170423bba/src/optimized_transaction.rs#L1023-L1071) - Send a signed tx via Sender `/fast` and poll until confirmed (or until timeout/last valid blockhash expiry)
-- [`send_smart_transaction_with_sender`](https://github.com/helius-labs/helius-rust-sdk/blob/47d68afcf644938bc474f609368b214170423bba/src/optimized_transaction.rs#L1073-L1113) - Builds an optimized tx and sent via Sender
+- [`send_smart_transaction_with_sender`](https://github.com/helius-labs/helius-rust-sdk/blob/dev/src/optimized_transaction.rs) - Builds an optimized tx and sends it via Sender
+- [`send_bundle_with_sender`](https://github.com/helius-labs/helius-rust-sdk/blob/dev/src/optimized_transaction.rs) - Submits a bundle of up to 5 transactions to Sender Max via `sendBundle`. The caller includes only the 0.001 SOL Sender tip in ≥1 transaction; Helius adds any pathway tips. Landing is tracked per-transaction by signature (not bundle IDs)
 - [`warm_sender_connection`](https://github.com/helius-labs/helius-rust-sdk/blob/47d68afcf644938bc474f609368b214170423bba/src/optimized_transaction.rs#L1009-L1021) - Warms Sender connection by hitting `/ping`
 
 ### Smart Transactions
@@ -284,11 +307,12 @@ Admin API access is feature-gated per project and served from `https://admin-api
 ### RPC Methods
 - [`get_priority_fee_estimate`](https://www.helius.dev/docs/api-reference/priority-fee/getpriorityfeeestimate#getpriorityfeeestimate) - Gets an estimate of the priority fees required for a transaction to be processed more quickly
 - [`get_transactions_for_address`](https://www.helius.dev/docs/api-reference/rpc/http/gettransactionsforaddress) - Gets transaction history for a specific address with advanced filtering, sorting, and pagination. Optionally include transactions from associated token accounts
+- [`get_transfers_by_address`](https://www.helius.dev/docs/api-reference/rpc/http/gettransfersbyaddress) - Gets token and native SOL transfers for a specific address with counterparty, mint, direction, amount, slot, block time, sorting, and cursor pagination filters
 
 ### Helper Methods
 - [`deserialize_str_to_number`](https://github.com/helius-labs/helius-rust-sdk/blob/dev/src/utils/deserialize_str_to_number.rs) - Deserializes a `String` to a `Number`
 - [`is_valid_solana_address`](https://github.com/helius-labs/helius-rust-sdk/blob/dev/src/utils/is_valid_solana_address.rs) - Returns whether a given string slice is a valid Solana address
 - [`make_keypairs`](https://github.com/helius-labs/helius-rust-sdk/blob/dev/src/utils/make_keypairs.rs) - Generates a specified number of keypairs
 
-## Migrating from 0.x
-If you're upgrading from 0.x, see the [Migration Guide](MIGRATION.md) for details on breaking changes and how to update your code.
+## Migrating Between Major Versions
+Upgrading across a major version? See the [Migration Guide](MIGRATION.md) for the breaking changes in each release (1.x → 2.0 and 0.x → 1.0) and how to update your code.

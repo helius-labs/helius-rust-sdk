@@ -83,7 +83,7 @@ async fn test_get_wallet_transfers_success() {
     assert_eq!(transfers.data.len(), 2);
     assert_eq!(transfers.data[0].direction, TransferDirection::In);
     assert_eq!(transfers.data[1].direction, TransferDirection::Out);
-    assert_eq!(transfers.pagination.has_more, true);
+    assert!(transfers.pagination.has_more);
 }
 
 #[tokio::test]
@@ -140,5 +140,5 @@ async fn test_get_wallet_transfers_with_cursor() {
     assert!(response.is_ok());
 
     let transfers: TransfersResponse = response.unwrap();
-    assert_eq!(transfers.pagination.has_more, false);
+    assert!(!transfers.pagination.has_more);
 }

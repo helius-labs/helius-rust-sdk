@@ -1,6 +1,6 @@
 [package]
 name = "helius"
-version = "1.1.0"
+version = "2.0.0"
 rust-version = "1.85.1"
 edition = "2021"
 description = "An asynchronous Helius Rust SDK for building the future of Solana"
@@ -109,6 +109,10 @@ path = "examples/helius/get_priority_fee_estimate.rs"
 name = "get_token_accounts_by_owner_v2"
 path = "examples/helius/get_token_accounts_by_owner_v2.rs"
 
+[[example]]
+name = "get_transfers_by_address"
+path = "examples/helius/get_transfers_by_address.rs"
+
 # Solana RPC examples
 [[example]]
 name = "get_latest_blockhash"
@@ -132,6 +136,10 @@ path = "examples/admin/get_project_usage.rs"
 [[example]]
 name = "get_batch_wallet_identity"
 path = "examples/wallet/get_batch_wallet_identity.rs"
+
+[[example]]
+name = "get_wallet_balance_at"
+path = "examples/wallet/get_wallet_balance_at.rs"
 
 [[example]]
 name = "get_wallet_balances"
@@ -190,6 +198,10 @@ path = "examples/websockets/enhanced_websocket_accounts.rs"
 [[example]]
 name = "enhanced_websocket_transactions"
 path = "examples/websockets/enhanced_websocket_transactions.rs"
+
+[[example]]
+name = "preconf_subscribe"
+path = "examples/websockets/preconf_subscribe.rs"
 
 # ZK Compression examples
 [[example]]

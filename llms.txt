@@ -1,6 +1,6 @@
 ---
 url: https://github.com/helius-labs/helius-rust-sdk
-last_updated: 2026-03-20
+last_updated: 2026-05-05
 ---
 
 # Helius Rust SDK
@@ -12,7 +12,7 @@ last_updated: 2026-03-20
 The Helius Rust SDK provides asynchronous access to Helius APIs and enhanced Solana RPC functionality. It simplifies Solana development with high-level abstractions for assets, transactions, webhooks, staking, and ultra-low latency transaction submission via Helius Sender.
 
 - Crate: `helius` (crates.io)
-- Version: 1.0.x
+- Version: 2.0.x
 - Changelog: https://github.com/helius-labs/helius-rust-sdk/blob/dev/CHANGELOG.md
 - Rust: 1.85+ (edition 2021)
 - Async Runtime: tokio
@@ -43,7 +43,7 @@ Use the Helius Rust SDK when you need to:
 Add to your `Cargo.toml`:
 ```toml
 [dependencies]
-helius = "1.0"
+helius = "2.0"
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 ```
 
@@ -89,7 +89,8 @@ examples/
 │   ├── async_config_based_creation.rs        #   HeliusBuilder usage
 │   ├── get_priority_fee_estimate.rs          #   Priority fee estimation
 │   ├── get_program_accounts_v2.rs            #   RPC V2: paginated program accounts
-│   └── get_token_accounts_by_owner_v2.rs     #   RPC V2: paginated token accounts
+│   ├── get_token_accounts_by_owner_v2.rs     #   RPC V2: paginated token accounts
+│   └── get_transfers_by_address.rs           #   Address transfer history
 ├── solana/                                   # Standard Solana RPC
 │   ├── get_latest_blockhash.rs               #   Sync blockhash fetch
 │   └── get_latest_blockhash_async.rs         #   Async blockhash fetch
@@ -101,6 +102,7 @@ examples/
 │   ├── get_wallet_identity.rs                #   Wallet identity lookup
 │   ├── get_batch_wallet_identity.rs          #   Batch identity lookup
 │   ├── get_wallet_balances.rs                #   Token & NFT balances
+│   ├── get_wallet_balance_at.rs              #   Historical balance at a point in time
 │   ├── get_wallet_history.rs                 #   Transaction history with deltas
 │   ├── get_wallet_transfers.rs               #   Token transfer activity
 │   └── get_wallet_funding_source.rs          #   Original funding source
@@ -375,6 +377,35 @@ let all_token_accounts = helius.rpc().get_all_token_accounts_by_owner(
 ).await?;
 ```
 
+#### getTransfersByAddress
+
+Fetch token and native SOL transfers for an address. This is a thin Helius-only RPC wrapper with cursor pagination.
+
+```rust
+use helius::types::{
+    GetTransfersByAddressConfig, GetTransfersByAddressDirection,
+};
+
+let transfers = helius.rpc().get_transfers_by_address(
+    "wallet_address".to_string(),
+    Some(GetTransfersByAddressConfig {
+        limit: Some(100),
+        direction: Some(GetTransfersByAddressDirection::Any),
+        ..Default::default()
+    }),
+).await?;
+
+if let Some(token) = transfers.pagination_token {
+    let next_page = helius.rpc().get_transfers_by_address(
+        "wallet_address".to_string(),
+        Some(GetTransfersByAddressConfig {
+            pagination_token: Some(token),
+            ..Default::default()
+        }),
+    ).await?;
+}
+```
+
 ### Enhanced Transactions
 
 Parse raw transactions into human-readable format.
@@ -480,6 +511,14 @@ let balances = helius.get_wallet_balances(
     Some(true),  // show_nfts
 ).await?;
 println!("Portfolio: ${}", balances.total_usd_value);
+
+// Historical balance at a past timestamp, datetime, or slot (provide exactly one)
+let balance_at = helius.get_wallet_balance_at(
+    "wallet_address",
+    "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v", // mint (SOL pseudo-mint for native)
+    BalanceAtQuery::Time(1736536800),               // or ::Datetime(s) / ::Slot(n)
+).await?;
+println!("Balance: {} ({} raw)", balance_at.balance, balance_at.balance_raw);
 
 // Transaction history with balance changes
 let history = helius.get_wallet_history(
@@ -672,11 +711,11 @@ tokio::spawn(async move {
 ```toml
 # Default: native TLS (OpenSSL)
 [dependencies]
-helius = "1.1"
+helius = "2.0"
 
 # Alternative: rustls (pure Rust, no OpenSSL dependency)
 [dependencies]
-helius = { version = "1.1", default-features = false, features = ["rustls"] }
+helius = { version = "2.0", default-features = false, features = ["rustls"] }
 ```
 
 ## Plans and Rate Limits

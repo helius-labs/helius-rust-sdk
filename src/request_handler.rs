@@ -94,7 +94,11 @@ impl RequestHandler {
     async fn handle_response<T: for<'de> Deserialize<'de> + Default>(&self, response: Response) -> Result<T> {
         let status: StatusCode = response.status();
         let path: String = response.url().path().to_string();
-        let body_text: String = response.text().await.unwrap_or_default();
+        // Propagate a body-read failure instead of silently substituting an empty body: an
+        // empty string would otherwise be deserialized as `T::default()` on a 2xx (a bogus
+        // "success") or produce an empty error message on a failure status. A genuinely empty
+        // body still returns `Ok("")` here and is handled below.
+        let body_text: String = response.text().await.map_err(HeliusError::Network)?;
 
         if status.is_success() {
             if body_text.is_empty() {

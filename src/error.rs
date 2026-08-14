@@ -75,6 +75,19 @@ pub enum HeliusError {
     #[error("Request error: {0}")]
     ReqwestError(ReqwestError),
 
+    /// Represents a JSON-RPC error returned by the server in the response body
+    ///
+    /// Solana and Helius RPC methods report method-level failures (invalid params, unknown
+    /// method, transaction preflight failures, etc.) as a JSON-RPC error object with an HTTP
+    /// 200 status rather than an HTTP error code. The `code` follows the JSON-RPC convention
+    /// (e.g. `-32602` for invalid params) and `message` carries the server's description,
+    /// including any structured `data` the server supplied
+    ///
+    /// A `code` of `0` is a client-side sentinel (not a server code) used when a response
+    /// contained neither a `result` nor an `error` object
+    #[error("RPC error (code {code}): {message}")]
+    RpcError { code: i64, message: String },
+
     /// Occurs during the serialization or deserialization of JSON data
     ///
     /// If the JSON data cannot be encoded or decoded, this error will be thrown, typically indicating an issue with the data structure

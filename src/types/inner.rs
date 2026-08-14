@@ -4,6 +4,7 @@ use super::{
     TransactionStatus, TransactionType, UiTransactionEncoding, WebhookType,
 };
 use crate::types::{DisplayOptions, Encoding, GetAssetOptions, GpaFilter, TokenAccountsOwnerFilter};
+use serde::ser::SerializeTuple;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::sync::Arc;
@@ -80,16 +81,43 @@ impl<T> RpcRequest<T> {
 
 /// A JSON-RPC 2.0 response envelope returned by DAS API and other Helius RPC calls.
 ///
-/// Contains the typed result of a successful RPC call. Error responses are handled
-/// separately by the SDK's error handling layer.
+/// On success the server populates `result`; on a method-level failure (e.g. invalid
+/// params or an unknown method) it instead populates `error` and omits `result`, while
+/// still returning an HTTP 200 status. Exactly one of `result` or `error` is present for
+/// a well-formed response, so both fields are optional.
 #[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq)]
 pub struct RpcResponse<T> {
     /// The JSON-RPC protocol version (always `"2.0"`)
     pub jsonrpc: String,
     /// The request identifier, matching the corresponding [`RpcRequest::id`]
-    pub id: String,
-    /// The method-specific result data
-    pub result: T,
+    ///
+    /// Optional because the JSON-RPC spec requires servers to return `"id": null` for
+    /// parse errors and invalid requests (codes `-32700` / `-32600`) — exactly the error
+    /// class this envelope surfaces
+    #[serde(default)]
+    pub id: Option<String>,
+    /// The method-specific result data, present when the call succeeds
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub result: Option<T>,
+    /// The JSON-RPC error object, present when the call fails server-side
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub error: Option<RpcError>,
+}
+
+/// A JSON-RPC 2.0 error object, returned in the `error` field of an [`RpcResponse`] when a
+/// method call fails server-side (for example invalid params or an unknown method).
+///
+/// Per the JSON-RPC spec these arrive with an HTTP 200 status and no `result`, so the SDK
+/// inspects `error` before returning `result`.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+pub struct RpcError {
+    /// The JSON-RPC error code (e.g. `-32601` for "method not found", `-32602` for "invalid params")
+    pub code: i64,
+    /// A human-readable description of the error
+    pub message: String,
+    /// Optional structured data supplied by the server for additional context
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub data: Option<Value>,
 }
 
 /// Request parameters for the `getAssetsByOwner` DAS API method.
@@ -104,19 +132,22 @@ pub struct GetAssetsByOwner {
     /// The 1-indexed page number for page-based pagination
     pub page: u32,
     /// Maximum number of assets to return per page
-    pub limit: Option<i32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub limit: Option<u32>,
     /// Retrieve assets listed before this cursor value
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub before: Option<String>,
     /// Retrieve assets listed after this cursor value
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub after: Option<String>,
     /// Controls which optional fields are included in the response
-    #[serde(rename = "displayOptions")]
+    #[serde(rename = "displayOptions", skip_serializing_if = "Option::is_none")]
     pub display_options: Option<DisplayOptions>,
     /// Sort criteria and direction for the returned assets
-    #[serde(rename = "sortBy")]
+    #[serde(rename = "sortBy", skip_serializing_if = "Option::is_none")]
     pub sort_by: Option<AssetSorting>,
     /// Opaque cursor for cursor-based pagination (faster than page-based for large sets)
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub cursor: Option<String>,
 }
 
@@ -132,19 +163,22 @@ pub struct GetAssetsByAuthority {
     /// The 1-indexed page number for page-based pagination
     pub page: u32,
     /// Maximum number of assets to return per page
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub limit: Option<u32>,
     /// Retrieve assets listed before this cursor value
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub before: Option<String>,
     /// Retrieve assets listed after this cursor value
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub after: Option<String>,
     /// Controls which optional fields are included in the response
-    #[serde(rename = "displayOptions")]
+    #[serde(rename = "displayOptions", skip_serializing_if = "Option::is_none")]
     pub display_options: Option<DisplayOptions>,
     /// Sort criteria and direction for the returned assets
-    #[serde(rename = "sortBy")]
+    #[serde(rename = "sortBy", skip_serializing_if = "Option::is_none")]
     pub sort_by: Option<AssetSorting>,
     /// Opaque cursor for cursor-based pagination
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub cursor: Option<String>,
 }
 
@@ -174,22 +208,28 @@ pub struct GetAssetsByCreator {
     /// The creator address to query (base-58 encoded public key)
     pub creator_address: String,
     /// If `true`, only return assets where this creator is verified on-chain
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub only_verified: Option<bool>,
     /// Sort criteria and direction for the returned assets
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub sort_by: Option<AssetSorting>,
     /// Maximum number of assets to return per page
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub limit: Option<u32>,
     /// The 1-indexed page number for page-based pagination
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub page: Option<u32>,
     /// Retrieve assets listed before this cursor value
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub before: Option<String>,
     /// Retrieve assets listed after this cursor value
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub after: Option<String>,
     /// Controls which optional fields are included in the response
-    #[serde(default, alias = "displayOptions")]
+    #[serde(default, alias = "displayOptions", skip_serializing_if = "Option::is_none")]
     pub options: Option<DisplayOptions>,
     /// Opaque cursor for cursor-based pagination
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub cursor: Option<String>,
 }
 
@@ -259,20 +299,25 @@ pub struct GetAssetsByGroup {
     /// The group value to match (e.g., the collection mint address)
     pub group_value: String,
     /// Sort criteria and direction for the returned assets
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub sort_by: Option<AssetSorting>,
     /// Maximum number of assets to return per page
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub limit: Option<u32>,
     /// The 1-indexed page number for page-based pagination
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub page: Option<u32>,
     /// Retrieve assets listed before this cursor value
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub before: Option<String>,
     /// Retrieve assets listed after this cursor value
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub after: Option<String>,
     /// Controls which optional fields are included in the response
-    #[serde(default, alias = "displayOptions")]
+    #[serde(default, alias = "displayOptions", skip_serializing_if = "Option::is_none")]
     pub options: Option<DisplayOptions>,
     /// Opaque cursor for cursor-based pagination
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub cursor: Option<String>,
 }
 
@@ -379,24 +424,31 @@ pub struct SearchAssets {
 #[serde(rename_all = "camelCase")]
 pub struct GetAssetSignatures {
     /// The asset ID of the compressed NFT
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub id: Option<String>,
     /// Maximum number of signatures to return per page
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub limit: Option<u32>,
     /// The 1-indexed page number for page-based pagination
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub page: Option<u32>,
     /// Retrieve signatures listed before this cursor value
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub before: Option<String>,
     /// Retrieve signatures listed after this cursor value
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub after: Option<String>,
     /// The Merkle tree address (alternative to `id` for looking up by tree + leaf)
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub tree: Option<String>,
     /// The leaf index within the Merkle tree (used with `tree`)
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub leaf_index: Option<i64>,
     /// Opaque cursor for cursor-based pagination
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub cursor: Option<String>,
     /// Sort direction for the returned signatures (`Asc` or `Desc`)
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub sort_direction: Option<AssetSortDirection>,
 }
 
@@ -409,22 +461,28 @@ pub struct GetAssetSignatures {
 #[serde(rename_all = "camelCase")]
 pub struct GetTokenAccounts {
     /// Filter by the wallet that owns the token accounts
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub owner: Option<String>,
     /// Filter by the token mint address
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub mint: Option<String>,
     /// Maximum number of token accounts to return per page
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub limit: Option<u32>,
     /// The 1-indexed page number for page-based pagination
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub page: Option<u32>,
     /// Retrieve accounts listed before this cursor value
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub before: Option<String>,
     /// Retrieve accounts listed after this cursor value
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub after: Option<String>,
     /// Controls which optional fields are included in the response
-    #[serde(default, alias = "displayOptions")]
+    #[serde(default, alias = "displayOptions", skip_serializing_if = "Option::is_none")]
     pub options: Option<DisplayOptions>,
     /// Opaque cursor for cursor-based pagination
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub cursor: Option<String>,
 }
 
@@ -436,10 +494,13 @@ pub struct GetTokenAccounts {
 #[serde(rename_all = "camelCase")]
 pub struct GetNftEditions {
     /// The mint address of the master edition NFT
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub mint: Option<String>,
     /// Maximum number of editions to return per page
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub limit: Option<u32>,
     /// The 1-indexed page number for page-based pagination
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub page: Option<u32>,
 }
 
@@ -1869,12 +1930,25 @@ impl CreateSmartTransactionSeedConfig {
 }
 
 /// Options for sending via Sender
+///
+/// This struct is `#[non_exhaustive]`: construct it via [`SenderSendOptions::default`]
+/// or [`SenderSendOptions::new`] and the `with_*` builder methods rather than a struct
+/// literal, so that adding future fields remains non-breaking.
 #[derive(Clone, Debug)]
+#[non_exhaustive]
 pub struct SenderSendOptions {
     /// Must match a key in SENDER_ENDPOINTS (e.g., "Default", "US_EAST")
     pub region: String,
-    /// If true, appends `?swqos_only=true` to `/fast`
+    /// If `false` (default), uses the **Sender Max** tier (multi-path routing +
+    /// priority auction, 0.001 SOL minimum tip). If `true`, uses SWQOS-only
+    /// (lower 0.000005 SOL minimum tip) and appends `?swqos_only=true` to `/fast`.
     pub swqos_only: bool,
+    /// Whether to skip Solana's preflight checks on the Sender side.
+    ///
+    /// Sender no longer *requires* `skip_preflight = true`; this is now a
+    /// caller-controlled passthrough. Defaults to `true` to preserve prior
+    /// behavior, but you may set it to `false` to have preflight run.
+    pub skip_preflight: bool,
     /// Poll settings
     pub poll_timeout_ms: u64,
     pub poll_interval_ms: u64,
@@ -1885,9 +1959,47 @@ impl Default for SenderSendOptions {
         Self {
             region: "Default".to_string(),
             swqos_only: false,
+            skip_preflight: true,
             poll_timeout_ms: 60_000,
             poll_interval_ms: 2_000,
         }
+    }
+}
+
+impl SenderSendOptions {
+    /// Creates a new `SenderSendOptions` with default values.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Sets the Sender region (must match a key in `SENDER_ENDPOINTS`).
+    pub fn with_region(mut self, region: impl Into<String>) -> Self {
+        self.region = region.into();
+        self
+    }
+
+    /// Sets the SWQOS-only flag.
+    pub fn with_swqos_only(mut self, swqos_only: bool) -> Self {
+        self.swqos_only = swqos_only;
+        self
+    }
+
+    /// Sets whether Sender skips Solana's preflight checks.
+    pub fn with_skip_preflight(mut self, skip_preflight: bool) -> Self {
+        self.skip_preflight = skip_preflight;
+        self
+    }
+
+    /// Sets the poll timeout in milliseconds.
+    pub fn with_poll_timeout_ms(mut self, poll_timeout_ms: u64) -> Self {
+        self.poll_timeout_ms = poll_timeout_ms;
+        self
+    }
+
+    /// Sets the poll interval in milliseconds.
+    pub fn with_poll_interval_ms(mut self, poll_interval_ms: u64) -> Self {
+        self.poll_interval_ms = poll_interval_ms;
+        self
     }
 }
 
@@ -1985,6 +2097,14 @@ pub struct GetProgramAccountsV2Config {
     /// Standard `getProgramAccounts` filters (`memcmp`, `dataSize`)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub filters: Option<Vec<GpaFilter>>,
+
+    /// Client-side only (never sent to the server): the maximum number of pages
+    /// [`get_all_program_accounts`](crate::rpc_client::RpcClient::get_all_program_accounts) will
+    /// fetch before stopping. `None` uses [`DEFAULT_MAX_AUTO_PAGINATION_PAGES`](crate::rpc_client::DEFAULT_MAX_AUTO_PAGINATION_PAGES).
+    /// Raise it to fetch a larger result set, or lower it to bound work. Ignored by the
+    /// single-page `get_program_accounts_v2`.
+    #[serde(skip)]
+    pub max_pages: Option<usize>,
 }
 
 /// Request type for `getProgramAccountsV2`: a tuple of `(program_id, config)`.
@@ -2125,6 +2245,14 @@ pub struct GetTokenAccountsByOwnerV2Config {
     /// Only return token accounts modified after this slot
     #[serde(rename = "changedSinceSlot", skip_serializing_if = "Option::is_none")]
     pub changed_since_slot: Option<u64>,
+
+    /// Client-side only (never sent to the server): the maximum number of pages
+    /// [`get_all_token_accounts_by_owner`](crate::rpc_client::RpcClient::get_all_token_accounts_by_owner)
+    /// will fetch before stopping. `None` uses [`DEFAULT_MAX_AUTO_PAGINATION_PAGES`](crate::rpc_client::DEFAULT_MAX_AUTO_PAGINATION_PAGES).
+    /// Raise it to fetch a larger result set, or lower it to bound work. Ignored by the
+    /// single-page `get_token_accounts_by_owner_v2`.
+    #[serde(skip)]
+    pub max_pages: Option<usize>,
 }
 
 /// Request type for `getTokenAccountsByOwnerV2`: a tuple of `(owner_pubkey, filter, config)`.
@@ -2616,6 +2744,203 @@ pub struct GetTransactionsForAddressResponse {
 /// Request type for `getTransactionsForAddress`: a tuple of `(address, options)`.
 pub type GetTransactionsForAddressRequest = (String, GetTransactionsForAddressOptions);
 
+/// Direction of transfers relative to the queried address.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum GetTransfersByAddressDirection {
+    /// Incoming transfers only
+    In,
+    /// Outgoing transfers only
+    Out,
+    /// Incoming and outgoing transfers
+    #[default]
+    Any,
+}
+
+/// Native SOL grouping mode for `getTransfersByAddress`.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum GetTransfersByAddressSolMode {
+    /// Merge native SOL and WSOL transfer activity
+    #[default]
+    Merged,
+    /// Return native SOL and WSOL transfer activity separately
+    Separate,
+}
+
+/// Filter transfers by raw amount.
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+pub struct TransferAmountFilter {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub gt: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub gte: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub lt: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub lte: Option<u64>,
+}
+
+/// Filter transfers by block timestamp (Unix seconds).
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+pub struct TransferBlockTimeFilter {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub gt: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub gte: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub lt: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub lte: Option<i64>,
+}
+
+/// Filter transfers by slot range.
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+pub struct TransferSlotFilter {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub gt: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub gte: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub lt: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub lte: Option<u64>,
+}
+
+/// Combined filters for `getTransfersByAddress`.
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct GetTransfersByAddressFilters {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub amount: Option<TransferAmountFilter>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub block_time: Option<TransferBlockTimeFilter>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub slot: Option<TransferSlotFilter>,
+}
+
+/// Request config for the `getTransfersByAddress` RPC method.
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct GetTransfersByAddressConfig {
+    /// Counterparty address to filter by
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub with: Option<String>,
+    /// Transfer direction relative to the queried address
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub direction: Option<GetTransfersByAddressDirection>,
+    /// Token mint address to filter by
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub mint: Option<String>,
+    /// Native SOL grouping mode
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sol_mode: Option<GetTransfersByAddressSolMode>,
+    /// Combined filters for amount, block time, and slot
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub filters: Option<GetTransfersByAddressFilters>,
+    /// Maximum number of transfers per page. The server accepts 1-100.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub limit: Option<u32>,
+    /// Cursor from a previous response for fetching the next page
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub pagination_token: Option<String>,
+    /// Commitment level for the query
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub commitment: Option<CommitmentLevel>,
+    /// Sort direction
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sort_order: Option<SortOrder>,
+}
+
+/// Request parameters for `getTransfersByAddress`.
+///
+/// Serializes to `[address]` when `config` is `None`, and `[address, config]` when
+/// a config is provided.
+#[derive(Debug, Clone, Default)]
+pub struct GetTransfersByAddressRequest {
+    pub address: String,
+    pub config: Option<GetTransfersByAddressConfig>,
+}
+
+impl GetTransfersByAddressRequest {
+    pub fn new(address: String, config: Option<GetTransfersByAddressConfig>) -> Self {
+        Self { address, config }
+    }
+}
+
+impl Serialize for GetTransfersByAddressRequest {
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let len = if self.config.is_some() { 2 } else { 1 };
+        let mut tuple = serializer.serialize_tuple(len)?;
+        tuple.serialize_element(&self.address)?;
+        if let Some(config) = &self.config {
+            tuple.serialize_element(config)?;
+        }
+        tuple.end()
+    }
+}
+
+/// Transfer event type returned by `getTransfersByAddress`.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub enum GetTransfersByAddressTransferType {
+    Transfer,
+    Mint,
+    Burn,
+    Wrap,
+    Unwrap,
+    ChangeOwner,
+    WithdrawWithheldFee,
+}
+
+/// Confirmation status returned by `getTransfersByAddress`.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[serde(rename_all = "lowercase")]
+pub enum TransferConfirmationStatus {
+    Finalized,
+    Confirmed,
+}
+
+/// A transfer returned by `getTransfersByAddress`.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct GetTransfersByAddressTransfer {
+    pub signature: String,
+    pub slot: u64,
+    pub block_time: i64,
+    #[serde(rename = "type")]
+    pub transfer_type: GetTransfersByAddressTransferType,
+    pub from_user_account: Option<String>,
+    pub to_user_account: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub from_token_account: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub to_token_account: Option<String>,
+    pub mint: String,
+    pub amount: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub fee_amount: Option<String>,
+    pub decimals: u8,
+    pub ui_amount: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub fee_ui_amount: Option<String>,
+    pub confirmation_status: TransferConfirmationStatus,
+    pub transaction_idx: u64,
+    pub instruction_idx: u64,
+    pub inner_instruction_idx: u64,
+}
+
+/// Response from `getTransfersByAddress`.
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct GetTransfersByAddressResponse {
+    pub data: Vec<GetTransfersByAddressTransfer>,
+    pub pagination_token: Option<String>,
+}
+
 /// Identity information for a known wallet address (exchanges, protocols, etc.)
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
 pub struct Identity {
@@ -2842,6 +3167,70 @@ pub struct FundingSource {
     pub slot: u64,
     /// Explorer URL for the transaction
     pub explorer_url: String,
+}
+
+/// Point in time at which to read a wallet's historical balance
+///
+/// Exactly one of these must be provided to the balance-at endpoint. Use
+/// [`BalanceAtQuery::Slot`] for exact, deterministic results, since block times
+/// reported by validators can drift by a few seconds.
+#[derive(Debug, Clone, PartialEq)]
+pub enum BalanceAtQuery {
+    /// Unix timestamp in seconds. Returns the balance as of this time.
+    Time(i64),
+    /// Datetime string (e.g. `2025-01-10`, `2025-01-10 19:20:00`, `2025-01-10T19:20:00Z`).
+    /// Interpreted as UTC unless an explicit timezone is included.
+    Datetime(String),
+    /// Slot number. Returns the balance as of this slot. Exact and deterministic.
+    Slot(u64),
+}
+
+/// Echo of the query parameters from the balance-at endpoint
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct BalanceAtRequested {
+    /// Requested time as epoch seconds (also set when `datetime` was used)
+    pub time: Option<i64>,
+    /// Requested slot, when `slot` was used
+    pub slot: Option<u64>,
+    /// The original datetime string, when `datetime` was used
+    pub datetime: Option<String>,
+}
+
+/// The transaction a historical balance was read from
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct BalanceAtAsOf {
+    /// Slot of the transaction
+    pub slot: u64,
+    /// Block time of the transaction in Unix seconds (may be null)
+    pub block_time: Option<i64>,
+    /// Transaction signature
+    pub signature: String,
+}
+
+/// Response from the historical balance (balance-at) endpoint
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct BalanceAtResponse {
+    /// Echo of the queried wallet address
+    pub wallet: String,
+    /// Echo of the queried mint (the SOL pseudo-mint when native)
+    pub mint: String,
+    /// Whether the result is native SOL
+    pub is_native: bool,
+    /// Human-readable amount as a decimal string. Trailing zeros are trimmed.
+    pub balance: String,
+    /// Exact amount in the smallest unit (lamports for SOL), as a string
+    pub balance_raw: String,
+    /// Token decimals (9 for SOL)
+    pub decimals: u8,
+    /// Echo of the query parameters
+    pub requested: BalanceAtRequested,
+    /// The transaction the balance was read from. `None` when the wallet had no
+    /// matching transaction at or before the requested point — the balance is
+    /// genuinely `0`, not an error.
+    pub as_of: Option<BalanceAtAsOf>,
 }
 
 /// Billing cycle dates for an Admin API project usage response.
