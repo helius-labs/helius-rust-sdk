@@ -138,6 +138,11 @@ To opt into a larger **Transaction v1** (Agave 4.2), set `version: TransactionVe
 not support `lookup_tables`). This is additive — the default (`TransactionVersion::Auto`) preserves
 the previous legacy/v0 behavior.
 
+On the receive side, the default `max_supported_transaction_version` on `TransactionSubscribeOptions`
+and `GetTransactionsForAddressOptions` changed from `0` to `1`, so v1 transactions are returned/
+streamed instead of triggering a version error. There is no compatibility risk — the RPC accepts any
+`u8` — but if you explicitly want v0-only behavior, set the field to `Some(0)`.
+
 ---
 
 ## 0.x → 1.0

@@ -1794,7 +1794,10 @@ pub struct CreateSmartTransactionConfig {
     pub lookup_tables: Option<Vec<AddressLookupTableAccount>>,
     /// An optional separate fee payer (defaults to the first signer)
     pub fee_payer: Option<Arc<dyn Signer>>,
-    /// Maximum priority fee in micro-lamports (prevents overpaying during fee spikes)
+    /// Maximum priority fee **rate** in micro-lamports per compute unit (prevents overpaying during
+    /// fee spikes). Applies to every version. On [`TransactionVersion::V1`] this caps the per-CU
+    /// rate that is then converted to the total-lamport fee, and `priority_fee_lamports_cap` caps
+    /// that resulting total — both apply.
     pub priority_fee_cap: Option<u64>,
     /// Multiplier applied to simulated compute units as a safety buffer (default: `1.25`)
     pub cu_buffer_multiplier: Option<f32>,
@@ -1803,7 +1806,9 @@ pub struct CreateSmartTransactionConfig {
     /// incompatible with `lookup_tables`.
     pub version: TransactionVersion,
     /// Maximum **total** priority fee in lamports, applied to [`TransactionVersion::V1`]
-    /// transactions (whose fee is a flat lamport amount, not a per-CU rate). Caps absolute spend.
+    /// transactions (whose fee is a flat lamport amount, not a per-CU rate) to cap absolute spend.
+    /// Applied after `priority_fee_cap`: the per-CU rate is capped by `priority_fee_cap`, converted
+    /// to a total-lamport fee, then capped by this — both apply on V1.
     pub priority_fee_lamports_cap: Option<u64>,
 }
 

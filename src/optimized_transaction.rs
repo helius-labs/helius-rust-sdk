@@ -87,18 +87,49 @@ pub const MIN_TIP_LAMPORTS_SWQOS: u64 = 5_000; // 0.000005 SOL
 /// crate definition.
 pub const MAX_TRANSACTION_V1_SIZE: usize = solana_sdk::message::v1::MAX_TRANSACTION_SIZE;
 
+/// Default loaded-accounts data-size limit (64 MiB), matching Agave's
+/// `MAX_LOADED_ACCOUNTS_DATA_SIZE_BYTES`.
+///
+/// Unlike legacy/v0 — where an unset limit defaults to 64 MiB — a Transaction v1 whose config bit
+/// for this limit is unset resolves to **0** (SIMD-0385), which fails on the first byte of account
+/// data loaded. So the v1 builder always sets this, defaulting to the Agave maximum.
+pub const MAX_LOADED_ACCOUNTS_DATA_SIZE_BYTES: u32 = 64 * 1024 * 1024;
+
+/// Builds a v1 [`TransactionConfig`](solana_sdk::message::v1::TransactionConfig) from the given
+/// priority fee, compute-unit limit, and loaded-accounts data-size limit.
+///
+/// The data-size limit is always set (defaulting to [`MAX_LOADED_ACCOUNTS_DATA_SIZE_BYTES`]) because
+/// v1 treats an unset limit as 0.
+fn build_v1_config(
+    priority_fee_lamports: Option<u64>,
+    compute_unit_limit: Option<u32>,
+    loaded_accounts_data_size_limit: Option<u32>,
+) -> v1::TransactionConfig {
+    let mut config: v1::TransactionConfig = v1::TransactionConfig::empty().with_loaded_accounts_data_size_limit(
+        loaded_accounts_data_size_limit.unwrap_or(MAX_LOADED_ACCOUNTS_DATA_SIZE_BYTES),
+    );
+    if let Some(fee) = priority_fee_lamports {
+        config = config.with_priority_fee(fee);
+    }
+    if let Some(cu) = compute_unit_limit {
+        config = config.with_compute_unit_limit(cu);
+    }
+    config
+}
+
 /// Builds and signs a Transaction v1 (SIMD-0385) — the format that unlocks larger transactions
 /// (up to [`MAX_TRANSACTION_V1_SIZE`] bytes, SIMD-0296).
 ///
-/// v1 differs structurally from legacy/v0: the compute-unit limit and the **total** priority fee
-/// (in lamports, not micro-lamports per CU) live in the message header config rather than in
-/// `ComputeBudget` instructions, and v1 does **not** support address lookup tables. Pass only the
-/// program instructions — do not add `set_compute_unit_limit` / `set_compute_unit_price`
-/// instructions (they are no-ops on v1 that still cost bytes and CUs), and do not pass
-/// ALT-dependent instructions.
+/// v1 differs structurally from legacy/v0: the compute-unit limit, the **total** priority fee (in
+/// lamports, not micro-lamports per CU), and the loaded-accounts data-size limit live in the
+/// message header config rather than in `ComputeBudget` instructions, and v1 does **not** support
+/// address lookup tables. Pass only the program instructions — do not add `set_compute_unit_limit`
+/// / `set_compute_unit_price` instructions (they are no-ops on v1 that still cost bytes and CUs),
+/// and do not pass ALT-dependent instructions.
 ///
-/// The signed transaction is validated against the 4,096-byte v1 size cap before returning, so an
-/// oversized transaction fails here rather than at submission.
+/// The signed transaction is validated (v1 instruction/address/signature limits) and checked
+/// against the 4,096-byte v1 size cap before returning, so an oversized or malformed transaction
+/// fails here rather than at submission.
 ///
 /// # Arguments
 /// * `payer` - The fee payer's public key
@@ -107,11 +138,13 @@ pub const MAX_TRANSACTION_V1_SIZE: usize = solana_sdk::message::v1::MAX_TRANSACT
 /// * `recent_blockhash` - A recent blockhash as the transaction's lifetime specifier
 /// * `priority_fee_lamports` - Optional total priority fee, in lamports
 /// * `compute_unit_limit` - Optional compute-unit limit
+/// * `loaded_accounts_data_size_limit` - Optional loaded-accounts data-size limit; defaults to
+///   [`MAX_LOADED_ACCOUNTS_DATA_SIZE_BYTES`] because v1 treats an unset limit as 0 (immediate failure)
 ///
 /// # Errors
-/// Returns [`HeliusError::InvalidInput`] if the message cannot be compiled or the signed
-/// transaction exceeds [`MAX_TRANSACTION_V1_SIZE`], or [`HeliusError::SignerError`] if signing
-/// fails.
+/// Returns [`HeliusError::InvalidInput`] if the message cannot be compiled, fails v1 validation, or
+/// the signed transaction exceeds [`MAX_TRANSACTION_V1_SIZE`], or [`HeliusError::SignerError`] if
+/// signing fails.
 pub fn build_v1_transaction(
     payer: &Pubkey,
     instructions: &[Instruction],
@@ -119,17 +152,21 @@ pub fn build_v1_transaction(
     recent_blockhash: Hash,
     priority_fee_lamports: Option<u64>,
     compute_unit_limit: Option<u32>,
+    loaded_accounts_data_size_limit: Option<u32>,
 ) -> Result<VersionedTransaction> {
-    let mut config: v1::TransactionConfig = v1::TransactionConfig::empty();
-    if let Some(fee) = priority_fee_lamports {
-        config = config.with_priority_fee(fee);
-    }
-    if let Some(cu) = compute_unit_limit {
-        config = config.with_compute_unit_limit(cu);
-    }
+    let config: v1::TransactionConfig = build_v1_config(
+        priority_fee_lamports,
+        compute_unit_limit,
+        loaded_accounts_data_size_limit,
+    );
 
     let message: v1::Message = v1::Message::try_compile_with_config(payer, instructions, recent_blockhash, config)
         .map_err(|e| HeliusError::InvalidInput(format!("Failed to compile v1 message: {e}")))?;
+
+    // Enforce the v1 instruction/address/signature limits the compiler does not.
+    message
+        .validate()
+        .map_err(|e| HeliusError::InvalidInput(format!("Invalid v1 transaction: {e:?}")))?;
 
     let transaction: VersionedTransaction = VersionedTransaction::try_new(VersionedMessage::V1(message), signers)?;
 
@@ -156,7 +193,8 @@ pub fn build_v1_transaction(
 /// is at least what the per-CU transaction would have paid.
 fn v1_priority_fee_lamports(micro_lamports_per_cu: u64, compute_unit_limit: u32) -> u64 {
     let total_micro_lamports: u128 = (micro_lamports_per_cu as u128) * (compute_unit_limit as u128);
-    total_micro_lamports.div_ceil(1_000_000) as u64
+    // Saturate rather than silently truncate on the (unreachable in practice) u64 overflow.
+    u64::try_from(total_micro_lamports.div_ceil(1_000_000)).unwrap_or(u64::MAX)
 }
 
 fn collect_unique_signers(signers: &[Arc<dyn Signer>], fee_payer: Option<&Arc<dyn Signer>>) -> Vec<Arc<dyn Signer>> {
@@ -384,13 +422,36 @@ async fn post_to_sender(tx64: &str, opts: &SenderSendOptions) -> Result<Signatur
 }
 
 impl Helius {
-    // Builds a minimal, unsigned transaction for fee estimation: v0 if LUTs included, legacy otherwise
+    // Builds a minimal, unsigned transaction for fee estimation: v1 when requested, else v0 if LUTs
+    // are included, or legacy otherwise. A v1 draft is required so that large v1 transactions (over
+    // the ~1,232-byte v0 limit) are not size-rejected by the priority-fee API.
     fn build_unsigned_preflight_tx(
         payer: &Pubkey,
         instructions: &[Instruction],
         lookup_tables: Option<&[AddressLookupTableAccount]>,
         recent_blockhash: Hash,
+        version: TransactionVersion,
     ) -> Result<Vec<u8>> {
+        if version == TransactionVersion::V1 {
+            // Compile a v1 message so the draft reflects the real (larger) transaction. Placeholder
+            // signatures make the wincode wire format well-formed; the estimate does not verify them.
+            let message: v1::Message = v1::Message::try_compile_with_config(
+                payer,
+                instructions,
+                recent_blockhash,
+                build_v1_config(None, None, None),
+            )
+            .map_err(|e| HeliusError::InvalidInput(format!("Failed to compile v1 preflight message: {e}")))?;
+            let signatures: Vec<Signature> =
+                vec![Signature::default(); message.header.num_required_signatures as usize];
+            let versioned_tx: VersionedTransaction = VersionedTransaction {
+                signatures,
+                message: VersionedMessage::V1(message),
+            };
+            return wincode::serialize(&versioned_tx)
+                .map_err(|e| HeliusError::InvalidInput(format!("Failed to serialize v1 preflight: {e:?}")));
+        }
+
         if let Some(luts) = lookup_tables {
             // Versioned v0 with LUT compression
             let v0_message: v0::Message = v0::Message::try_compile(payer, instructions, luts, recent_blockhash)?;
@@ -423,28 +484,48 @@ impl Helius {
         payer: Pubkey,
         lookup_tables: Vec<AddressLookupTableAccount>,
         signers: Option<&[Arc<dyn Signer>]>,
+        version: TransactionVersion,
     ) -> Result<Option<u64>> {
-        // Set the compute budget limit
-        let test_instructions: Vec<Instruction> = vec![ComputeBudgetInstruction::set_compute_unit_limit(1_400_000)]
-            .into_iter()
-            .chain(instructions)
-            .collect::<Vec<_>>();
-
         // Fetch the latest blockhash
         let recent_blockhash: Hash = self.connection().get_latest_blockhash()?;
 
-        // Create a v0::Message
-        let v0_message: v0::Message =
-            v0::Message::try_compile(&payer, &test_instructions, &lookup_tables, recent_blockhash)?;
-        let versioned_message: VersionedMessage = VersionedMessage::V0(v0_message);
+        // Build a message matching the target version so simulation is not capped at the v0 size
+        // limit for a large v1 transaction.
+        let versioned_message: VersionedMessage = match version {
+            TransactionVersion::V1 => {
+                // v1 raises the CU limit via the header config, not a ComputeBudget instruction (a
+                // no-op on v1). Simulate against the max limit.
+                let config = build_v1_config(None, Some(1_400_000), None);
+                let message = v1::Message::try_compile_with_config(&payer, &instructions, recent_blockhash, config)
+                    .map_err(|e| HeliusError::InvalidInput(format!("Failed to compile v1 message: {e}")))?;
+                VersionedMessage::V1(message)
+            }
+            TransactionVersion::Auto => {
+                let test_instructions: Vec<Instruction> =
+                    vec![ComputeBudgetInstruction::set_compute_unit_limit(1_400_000)]
+                        .into_iter()
+                        .chain(instructions)
+                        .collect::<Vec<_>>();
+                let v0_message =
+                    v0::Message::try_compile(&payer, &test_instructions, &lookup_tables, recent_blockhash)?;
+                VersionedMessage::V0(v0_message)
+            }
+        };
 
-        // Create a VersionedTransaction (signed or unsigned)
+        // Create a VersionedTransaction (signed or unsigned). Unsigned v1 needs placeholder
+        // signatures so its wincode wire format is well-formed for simulation.
         let transaction: VersionedTransaction = if let Some(signers) = signers {
             VersionedTransaction::try_new(versioned_message, signers)
                 .map_err(|e| HeliusError::InvalidInput(format!("Signing error: {:?}", e)))?
         } else {
+            let signatures: Vec<Signature> = match version {
+                TransactionVersion::V1 => {
+                    vec![Signature::default(); versioned_message.header().num_required_signatures as usize]
+                }
+                TransactionVersion::Auto => vec![],
+            };
             VersionedTransaction {
-                signatures: vec![],
+                signatures,
                 message: versioned_message,
             }
         };
@@ -555,14 +636,14 @@ impl Helius {
         // explicitly via `config.version` and handled in its own branch below.
         let is_versioned: bool = config.lookup_tables.is_some();
 
-        // Build an unsigned preflight for the priority-fee estimate. For v1 this is a legacy
-        // preflight (v1 rejects lookup tables), which the priority-fee API can parse today — the
-        // estimate depends on the accounts a transaction writes, not its final version.
+        // Build an unsigned preflight for the priority-fee estimate, matching the final transaction
+        // version so a large v1 draft is not size-rejected by the priority-fee API.
         let preflight_bytes: Vec<u8> = Helius::build_unsigned_preflight_tx(
             &payer_pubkey,
             &config.instructions,
             config.lookup_tables.as_deref(),
             recent_blockhash,
+            config.version,
         )?;
 
         // Encode the transaction
@@ -616,6 +697,7 @@ impl Helius {
                 payer_pubkey,
                 config.lookup_tables.clone().unwrap_or_default(),
                 Some(&all_signers),
+                config.version,
             )
             .await?;
 
@@ -651,6 +733,7 @@ impl Helius {
                     recent_blockhash,
                     Some(priority_fee_lamports),
                     Some(customers_cu),
+                    None,
                 )?;
 
                 Ok((SmartTransaction::Versioned(transaction), last_valid_block_hash))
@@ -789,23 +872,43 @@ impl Helius {
         payer: Pubkey,
         lookup_tables: Vec<AddressLookupTableAccount>,
         keypairs: Option<&[&Keypair]>,
+        version: TransactionVersion,
     ) -> Result<Option<u64>> {
-        let test_instructions: Vec<Instruction> = vec![ComputeBudgetInstruction::set_compute_unit_limit(1_400_000)]
-            .into_iter()
-            .chain(instructions)
-            .collect::<Vec<_>>();
-
         let recent_blockhash: Hash = self.connection().get_latest_blockhash()?;
-        let v0_message: v0::Message =
-            v0::Message::try_compile(&payer, &test_instructions, &lookup_tables, recent_blockhash)?;
-        let versioned_message: VersionedMessage = VersionedMessage::V0(v0_message);
+
+        // Build a message matching the target version so a large v1 transaction is not simulated
+        // against the v0 size limit.
+        let versioned_message: VersionedMessage = match version {
+            TransactionVersion::V1 => {
+                let config = build_v1_config(None, Some(1_400_000), None);
+                let message = v1::Message::try_compile_with_config(&payer, &instructions, recent_blockhash, config)
+                    .map_err(|e| HeliusError::InvalidInput(format!("Failed to compile v1 message: {e}")))?;
+                VersionedMessage::V1(message)
+            }
+            TransactionVersion::Auto => {
+                let test_instructions: Vec<Instruction> =
+                    vec![ComputeBudgetInstruction::set_compute_unit_limit(1_400_000)]
+                        .into_iter()
+                        .chain(instructions)
+                        .collect::<Vec<_>>();
+                let v0_message =
+                    v0::Message::try_compile(&payer, &test_instructions, &lookup_tables, recent_blockhash)?;
+                VersionedMessage::V0(v0_message)
+            }
+        };
 
         let transaction: VersionedTransaction = if let Some(keypairs) = keypairs {
             VersionedTransaction::try_new(versioned_message, keypairs)
                 .map_err(|e| HeliusError::InvalidInput(format!("Signing error: {:?}", e)))?
         } else {
+            let signatures: Vec<Signature> = match version {
+                TransactionVersion::V1 => {
+                    vec![Signature::default(); versioned_message.header().num_required_signatures as usize]
+                }
+                TransactionVersion::Auto => vec![],
+            };
             VersionedTransaction {
-                signatures: vec![],
+                signatures,
                 message: versioned_message,
             }
         };
@@ -890,6 +993,7 @@ impl Helius {
             &create_config.instructions,
             create_config.lookup_tables.as_deref(),
             recent_blockhash,
+            create_config.version,
         )?;
         let transaction_base58: String = encode(&preflight_bytes).into_string();
 
@@ -936,6 +1040,7 @@ impl Helius {
                 fee_payer.pubkey(),
                 create_config.lookup_tables.clone().unwrap_or_default(),
                 Some(&all_signers),
+                create_config.version,
             )
             .await?;
 
@@ -971,6 +1076,7 @@ impl Helius {
                     recent_blockhash,
                     Some(priority_fee_lamports),
                     Some(customers_cu),
+                    None,
                 )?;
                 SmartTransaction::Versioned(tx)
             }
@@ -1124,12 +1230,13 @@ impl Helius {
         // Determine if we need to build a versioned tx based on lookup tables
         let is_versioned: bool = config.lookup_tables.is_some();
 
-        // Build the initial unsigned tx
+        // Build the initial unsigned tx (v1 is rejected above, so this is always v0/legacy)
         let preflight_bytes: Vec<u8> = Self::build_unsigned_preflight_tx(
             &payer_pubkey,
             &config.instructions,
             config.lookup_tables.as_deref(),
             recent_blockhash,
+            config.version,
         )?;
         let transaction_base58: String = encode(&preflight_bytes).into_string();
 
@@ -1167,6 +1274,7 @@ impl Helius {
                 payer_pubkey,
                 config.lookup_tables.clone().unwrap_or_default(),
                 None,
+                config.version,
             )
             .await?;
 
@@ -1568,6 +1676,7 @@ mod tests {
             Hash::new_unique(),
             Some(10_000),
             Some(200_000),
+            None,
         )
         .expect("v1 transaction should build");
 
@@ -1577,6 +1686,12 @@ mod tests {
             VersionedMessage::V1(m) => {
                 assert_eq!(m.config.priority_fee, Some(10_000), "priority fee not in v1 config");
                 assert_eq!(m.config.compute_unit_limit, Some(200_000), "CU limit not in v1 config");
+                // v1 must set the loaded-accounts data-size limit; an unset limit resolves to 0.
+                assert_eq!(
+                    m.config.loaded_accounts_data_size_limit,
+                    Some(super::MAX_LOADED_ACCOUNTS_DATA_SIZE_BYTES),
+                    "v1 must set the loaded-accounts data-size limit (unset resolves to 0)"
+                );
                 assert_eq!(
                     m.instructions.len(),
                     1,
