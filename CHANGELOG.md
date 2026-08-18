@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+## [2.0.0] - 2026-08-18
+
 ### Added
 - **Transaction v1 (larger transactions) support** for Agave 4.2. Transaction v1 (SIMD-0385) unlocks larger transactions — up to the new `MAX_TRANSACTION_V1_SIZE` (4,096 bytes, SIMD-0296), vs. the ~1,232-byte legacy/v0 limit. v1 carries its compute-unit limit and **total** priority fee (in lamports) in the message header config rather than in `ComputeBudget` instructions, and does not support address lookup tables.
   - `TransactionVersion` enum (`Auto` | `V1`) and a `version` field on `CreateSmartTransactionConfig` / `CreateSmartTransactionSeedConfig` (defaults to `Auto`, preserving legacy/v0 behavior). Set `TransactionVersion::V1` to build a v1 smart transaction; it flows through `create_smart_transaction`, `create_smart_transaction_with_seeds`, `send_smart_transaction`, and the Helius Sender path. A new `priority_fee_lamports_cap` field caps the absolute v1 priority fee.
@@ -17,10 +19,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - `create_smart_transaction_without_signers` (the unsigned/offline-signing path) does not yet support v1 and returns `HeliusError::InvalidInput` when `V1` is requested.
   - **Receive side**: `max_supported_transaction_version` now defaults to `1` (was `0` / unset) on `TransactionSubscribeOptions` (enhanced WebSocket) and `GetTransactionsForAddressOptions`, so v1 transactions are returned/streamed rather than triggering a version error. Requesting a transaction newer than this value still fails fast.
   - Requires the Agave 4.2 (`solana-*` 4.x) crates. Example: `examples/transactions/create_smart_transaction_v1.rs`.
-
-## [2.0.0] - 2026-08-13
-
-### Added
 - **Pre Confirmations** (`preconfSubscribe`): new standalone `preconf::PreconfClient` for Helius's lowest-latency transaction stream, delivering scheduled transactions over WebSocket before they are shredded. Yields a stream of `PreconfNotification { version, slot, transaction_index, status, transaction, transaction_bytes }`, deserializing the bincode `VersionedTransaction` and exposing the raw bytes. Served from the Gatekeeper endpoint (`wss://beta.helius-rpc.com`). Notifications are **binary** frames (the subscribe ack is a JSON text frame); the little-endian layout is `version:u8 | slot:u64_le | transaction_index:u64_le | status:u8 | bincode(VersionedTransaction)`. The `version` byte is checked first (currently `1`; unknown versions are dropped) and `status` is exposed as the `PreconfStatus` enum (`Failed = 0`, `Success = 1`, `Unknown = 2`). Credit-based pricing (10 credits per notification). Includes `PreconfClient::connect`/`connect_with_api_key`/`shutdown`, `PreconfStream`, `CURRENT_VERSION`, and `examples/websockets/preconf_subscribe.rs`. A pre-confirmation is an early signal, not a guarantee; coverage is not continuous (scales with stake forwarding to Helius — expect gaps).
 - **Sender Max bundles**: new `send_bundle_with_sender` submits up to 5 transactions to Sender Max via `sendBundle` (`params: [[base64Tx, ...], { encoding: "base64" }]`). The caller includes only the 0.001 SOL Sender tip in ≥1 transaction; Helius adds any pathway tips — callers must not add a separate pathway-specific tip. Landing is tracked per-transaction by signature (not bundle IDs / `getBundleStatuses`).
 - `get_wallet_balance_at` Wallet API method for querying a wallet's balance of a specific token or native SOL at a past timestamp, datetime, or slot
