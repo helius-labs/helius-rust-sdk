@@ -26,6 +26,7 @@ async fn test_create_smart_transaction_rejects_empty_signers() {
         fee_payer: None,
         priority_fee_cap: None,
         cu_buffer_multiplier: None,
+        ..Default::default()
     };
 
     let result = helius.create_smart_transaction(&config).await;
@@ -62,6 +63,7 @@ async fn test_create_smart_transaction_rejects_compute_budget_instructions() {
         fee_payer: None,
         priority_fee_cap: None,
         cu_buffer_multiplier: None,
+        ..Default::default()
     };
 
     let result = helius.create_smart_transaction(&config).await;
@@ -96,6 +98,7 @@ async fn test_create_smart_transaction_rejects_compute_unit_limit_instruction() 
         fee_payer: None,
         priority_fee_cap: None,
         cu_buffer_multiplier: None,
+        ..Default::default()
     };
 
     let result = helius.create_smart_transaction(&config).await;
@@ -127,6 +130,7 @@ async fn test_create_smart_transaction_with_seeds_rejects_empty_seeds() {
         lookup_tables: None,
         priority_fee_cap: None,
         cu_buffer_multiplier: None,
+        ..Default::default()
     };
 
     let result = helius.create_smart_transaction_with_seeds(&config).await;
@@ -154,6 +158,7 @@ async fn test_create_smart_transaction_without_signers_rejects_missing_fee_payer
         fee_payer: None,
         priority_fee_cap: None,
         cu_buffer_multiplier: None,
+        ..Default::default()
     };
 
     let result = helius.create_smart_transaction_without_signers(&config).await;

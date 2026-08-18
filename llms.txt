@@ -255,6 +255,24 @@ if let Some(token) = page1.pagination_token {
 }
 ```
 
+### Transaction v1 (Larger Transactions, Agave 4.2)
+
+Transaction v1 (SIMD-0385) raises the maximum transaction size to 4,096 bytes. Opt in per transaction with `version: TransactionVersion::V1`:
+
+```rust
+use helius::types::{CreateSmartTransactionConfig, TransactionVersion};
+
+let config = CreateSmartTransactionConfig {
+    instructions,
+    signers,
+    version: TransactionVersion::V1,
+    ..Default::default()
+};
+let (tx, _last_valid_block_height) = helius.create_smart_transaction(&config).await?;
+```
+
+v1 carries its compute-unit limit and total priority fee (in lamports) in the message header config, adds no `ComputeBudget` instructions, and does not support address lookup tables. Works across `create_smart_transaction`, `create_smart_transaction_with_seeds`, `send_smart_transaction`, and Helius Sender. Requires the Agave 4.2 (`solana-*` 4.x) crates.
+
 ### Helius Sender
 
 Send transactions with ultra-low latency via Helius Sender. Automatically optimizes compute units and priority fees.

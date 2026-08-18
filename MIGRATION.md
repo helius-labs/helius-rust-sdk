@@ -21,6 +21,8 @@ codebases need no changes, or only trivial ones. Each change below includes what
 - **`GetAssetsByOwner.limit` is now `Option<u32>`** (was `Option<i32>`).
 - **`EnhancedTransaction.fee` and `.slot` are now `u64`** (were `i32`).
 - **Sender tip defaults changed**: the non-SWQOS tier ("Sender Max") now floors tips at 0.001 SOL.
+- **Solana crates upgraded to the Agave 4.2 line (`solana-*` 4.x)**: align your own `solana-*` dependencies to 4.x if you share Solana types with the SDK.
+- **Smart-transaction configs gained fields**: `CreateSmartTransactionConfig` and `CreateSmartTransactionSeedConfig` have new `version` and `priority_fee_lamports_cap` fields (for Transaction v1). Struct-literal construction now needs them — add `..Default::default()`.
 
 ### `RpcResponse<T>`
 
@@ -102,6 +104,53 @@ The non-SWQOS Sender tier is now branded **Sender Max** and floors tips at **0.0
 (`MIN_TIP_LAMPORTS_MAX = 1_000_000`), up from the removed 0.0002 SOL tier. SWQOS-only
 (`swqos_only = true`) is unchanged at 0.000005 SOL. `MIN_TIP_LAMPORTS_DUAL` is deprecated; use
 `MIN_TIP_LAMPORTS_MAX`. If you relied on the old lower non-SWQOS floor, budget for the higher tip.
+
+### Solana 4.x and smart-transaction configs
+
+The SDK now targets the Agave 4.2 (`solana-*` 4.x) crates. If your code shares Solana types with
+the SDK (e.g. `Instruction`, `Pubkey`, `VersionedTransaction`), align your own `solana-*`
+dependencies to the 4.x line.
+
+`CreateSmartTransactionConfig` and `CreateSmartTransactionSeedConfig` gained `version` and
+`priority_fee_lamports_cap` fields. If you build them with a struct literal, add
+`..Default::default()`:
+
+```rust
+// Before
+let config = CreateSmartTransactionConfig {
+    instructions,
+    signers,
+    lookup_tables: None,
+    fee_payer: None,
+    priority_fee_cap: None,
+    cu_buffer_multiplier: None,
+};
+
+// After
+let config = CreateSmartTransactionConfig {
+    instructions,
+    signers,
+    ..Default::default()
+};
+```
+
+To opt into a larger **Transaction v1** (Agave 4.2), set `version: TransactionVersion::V1` (v1 does
+not support `lookup_tables`). This is additive — the default (`TransactionVersion::Auto`) preserves
+the previous legacy/v0 behavior.
+
+On the receive side, the default `max_supported_transaction_version` on `TransactionSubscribeOptions`
+and `GetTransactionsForAddressOptions` changed from `0` to `1`, so v1 transactions are returned/
+streamed instead of triggering a version error. There is no compatibility risk — the RPC accepts any
+`u8` — but if you explicitly want v0-only behavior, set the field to `Some(0)`.
+
+The public `get_compute_units` and `get_compute_units_thread_safe` methods gained a required
+`version: TransactionVersion` argument (pass `TransactionVersion::Auto` to preserve the previous
+legacy/v0 simulation behavior). They now also return an error when the simulation fails rather than
+reporting zero compute units.
+
+Note: Transaction v1 is not active on any cluster yet — `simulateTransaction` returns
+`UnsupportedVersion`, so building or sending a v1 smart transaction errors until the feature gate
+activates.
 
 ---
 

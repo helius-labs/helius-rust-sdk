@@ -293,6 +293,26 @@ Admin API access is feature-gated per project and served from `https://admin-api
 - [`send_bundle_with_sender`](https://github.com/helius-labs/helius-rust-sdk/blob/dev/src/optimized_transaction.rs) - Submits a bundle of up to 5 transactions to Sender Max via `sendBundle`. The caller includes only the 0.001 SOL Sender tip in ≥1 transaction; Helius adds any pathway tips. Landing is tracked per-transaction by signature (not bundle IDs)
 - [`warm_sender_connection`](https://github.com/helius-labs/helius-rust-sdk/blob/47d68afcf644938bc474f609368b214170423bba/src/optimized_transaction.rs#L1009-L1021) - Warms Sender connection by hitting `/ping`
 
+### Transaction v1 (Larger Transactions)
+
+Agave 4.2 introduces **Transaction v1** (SIMD-0385), which raises the maximum transaction size from ~1,232 bytes to **4,096 bytes** (SIMD-0296). Opt in per transaction by setting `version: TransactionVersion::V1` on `CreateSmartTransactionConfig` (or `.with_v1()` on the seed config):
+
+```rust
+use helius::types::{CreateSmartTransactionConfig, TransactionVersion};
+
+let config = CreateSmartTransactionConfig {
+    instructions,
+    signers,
+    version: TransactionVersion::V1,
+    ..Default::default()
+};
+let (tx, _last_valid_block_height) = helius.create_smart_transaction(&config).await?;
+```
+
+v1 differs from legacy/v0: the compute-unit limit and **total** priority fee (in lamports) live in the message header config instead of `ComputeBudget` instructions, and address lookup tables are not supported (providing `lookup_tables` with `V1` is rejected). v1 works across `create_smart_transaction`, `create_smart_transaction_with_seeds`, `send_smart_transaction`, and the Helius Sender path. Requires the Agave 4.2 (`solana-*` 4.x) release. See `examples/transactions/create_smart_transaction_v1.rs`.
+
+> **Not yet active:** Transaction v1 is not activated on any cluster as of this release. Until the SIMD-0296/0385 feature gate activates, `simulateTransaction` returns `UnsupportedVersion`, so building or sending a v1 smart transaction returns an error.
+
 ### Smart Transactions
 - [`create_smart_transaction`](https://github.com/helius-labs/helius-rust-sdk/blob/bd9e0b10c81ab9ea56dfcd286336b086f6737b64/src/optimized_transaction.rs#L131-L331) - Creates an optimized transaction based on the provided configuration 
 - [`create_smart_transaction_with_seeds`](https://github.com/helius-labs/helius-rust-sdk/blob/8102d87c6551c7645389a813e60a832a2eaf98c7/src/optimized_transaction.rs#L478-L633) - Creates a thread-safe, optimized transaction using seed bytes

@@ -74,3 +74,17 @@ pub fn mock_simulate_transaction(server: &mut Server, units_consumed: u64) {
         ))
         .create();
 }
+
+/// Mocks `simulateTransaction` returning a **failed** simulation (`err` set, `unitsConsumed: 0`),
+/// mirroring what the RPC returns for e.g. an unsupported transaction version.
+pub fn mock_simulate_transaction_failed(server: &mut Server) {
+    server
+        .mock("POST", mockito::Matcher::Any)
+        .match_body(mockito::Matcher::Regex("simulateTransaction".to_string()))
+        .with_status(200)
+        .with_header("Content-Type", "application/json")
+        .with_body(
+            r#"{"jsonrpc":"2.0","result":{"context":{"slot":1},"value":{"err":"UnsupportedVersion","logs":[],"accounts":null,"unitsConsumed":0,"returnData":null}},"id":1}"#,
+        )
+        .create();
+}
