@@ -311,6 +311,8 @@ let (tx, _last_valid_block_height) = helius.create_smart_transaction(&config).aw
 
 v1 differs from legacy/v0: the compute-unit limit and **total** priority fee (in lamports) live in the message header config instead of `ComputeBudget` instructions, and address lookup tables are not supported (providing `lookup_tables` with `V1` is rejected). v1 works across `create_smart_transaction`, `create_smart_transaction_with_seeds`, `send_smart_transaction`, and the Helius Sender path. Requires the Agave 4.2 (`solana-*` 4.x) release. See `examples/transactions/create_smart_transaction_v1.rs`.
 
+> **Not yet active:** Transaction v1 is not activated on any cluster as of this release. Until the SIMD-0296/0385 feature gate activates, `simulateTransaction` returns `UnsupportedVersion`, so building or sending a v1 smart transaction returns an error.
+
 ### Smart Transactions
 - [`create_smart_transaction`](https://github.com/helius-labs/helius-rust-sdk/blob/bd9e0b10c81ab9ea56dfcd286336b086f6737b64/src/optimized_transaction.rs#L131-L331) - Creates an optimized transaction based on the provided configuration 
 - [`create_smart_transaction_with_seeds`](https://github.com/helius-labs/helius-rust-sdk/blob/8102d87c6551c7645389a813e60a832a2eaf98c7/src/optimized_transaction.rs#L478-L633) - Creates a thread-safe, optimized transaction using seed bytes

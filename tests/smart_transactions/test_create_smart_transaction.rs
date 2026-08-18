@@ -1,13 +1,18 @@
-use helius::types::{CreateSmartTransactionConfig, SmartTransaction, TransactionVersion};
+use helius::types::{
+    CreateSmartTransactionConfig, CreateSmartTransactionSeedConfig, SmartTransaction, TransactionVersion,
+};
 use solana_sdk::{
     message::VersionedMessage,
     pubkey::Pubkey,
-    signature::{Keypair, Signer},
+    signature::{keypair_from_seed, Keypair, Signer},
 };
 use solana_system_interface::instruction as system_instruction;
 use std::sync::Arc;
 
-use super::helpers::{mock_latest_blockhash, mock_priority_fee_estimate, mock_simulate_transaction, setup_mock};
+use super::helpers::{
+    mock_latest_blockhash, mock_priority_fee_estimate, mock_simulate_transaction, mock_simulate_transaction_failed,
+    setup_mock,
+};
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_create_smart_transaction_legacy_success() {
@@ -258,5 +263,89 @@ async fn test_create_smart_transaction_v1_rejects_lookup_tables() {
     assert!(
         result.is_err(),
         "v1 with lookup tables should be rejected, got {result:?}"
+    );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_create_smart_transaction_with_seeds_v1_success() {
+    let (mut server, helius) = setup_mock().await;
+
+    mock_latest_blockhash(&mut server);
+    mock_priority_fee_estimate(&mut server);
+    mock_simulate_transaction(&mut server, 50_000);
+
+    let seed = [7u8; 32];
+    let signer = keypair_from_seed(&seed).unwrap();
+
+    let config = CreateSmartTransactionSeedConfig::new(
+        vec![system_instruction::transfer(
+            &signer.pubkey(),
+            &Pubkey::new_unique(),
+            1000,
+        )],
+        vec![seed],
+    )
+    .with_v1();
+
+    let (transaction, _) = helius
+        .create_smart_transaction_with_seeds(&config)
+        .await
+        .expect("v1 seed smart tx should build");
+
+    match transaction {
+        SmartTransaction::Versioned(vtx) => assert!(
+            matches!(vtx.message, VersionedMessage::V1(_)),
+            "expected a V1 message from the seed path"
+        ),
+        other => panic!("expected a versioned transaction, got {other:?}"),
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_create_smart_transaction_without_signers_rejects_v1() {
+    let (mut server, helius) = setup_mock().await;
+    mock_latest_blockhash(&mut server);
+
+    let fee_payer = Keypair::new();
+    let config = CreateSmartTransactionConfig {
+        instructions: vec![system_instruction::transfer(
+            &fee_payer.pubkey(),
+            &Pubkey::new_unique(),
+            1000,
+        )],
+        fee_payer: Some(Arc::new(fee_payer.insecure_clone())),
+        version: TransactionVersion::V1,
+        ..Default::default()
+    };
+
+    let result = helius.create_smart_transaction_without_signers(&config).await;
+    assert!(result.is_err(), "the unsigned path must reject v1, got {result:?}");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_create_smart_transaction_errors_on_failed_simulation() {
+    let (mut server, helius) = setup_mock().await;
+
+    mock_latest_blockhash(&mut server);
+    mock_priority_fee_estimate(&mut server);
+    // The simulation fails (err set, unitsConsumed: 0) — the SDK must not proceed with bogus units.
+    mock_simulate_transaction_failed(&mut server);
+
+    let payer = Keypair::new();
+    let payer_signer: Arc<dyn Signer> = Arc::new(payer.insecure_clone());
+    let config = CreateSmartTransactionConfig {
+        instructions: vec![system_instruction::transfer(
+            &payer.pubkey(),
+            &Pubkey::new_unique(),
+            1000,
+        )],
+        signers: vec![payer_signer],
+        ..Default::default()
+    };
+
+    let result = helius.create_smart_transaction(&config).await;
+    assert!(
+        result.is_err(),
+        "a failed simulation must surface as an error, got {result:?}"
     );
 }

@@ -197,6 +197,28 @@ fn v1_priority_fee_lamports(micro_lamports_per_cu: u64, compute_unit_limit: u32)
     u64::try_from(total_micro_lamports.div_ceil(1_000_000)).unwrap_or(u64::MAX)
 }
 
+/// Collects the unique **writable** account keys a transaction touches — the fee payer plus every
+/// writable account across the instructions — as base58 strings.
+///
+/// Used to request a priority-fee estimate via `account_keys` (rather than a serialized
+/// transaction), which the priority-fee API accepts today with no size cap and no need to parse a
+/// Transaction v1 draft server-side.
+fn writable_account_keys(payer: &Pubkey, instructions: &[Instruction]) -> Vec<String> {
+    let mut seen: std::collections::HashSet<Pubkey> = std::collections::HashSet::new();
+    let mut keys: Vec<String> = Vec::new();
+    if seen.insert(*payer) {
+        keys.push(payer.to_string());
+    }
+    for instruction in instructions {
+        for account in &instruction.accounts {
+            if account.is_writable && seen.insert(account.pubkey) {
+                keys.push(account.pubkey.to_string());
+            }
+        }
+    }
+    keys
+}
+
 fn collect_unique_signers(signers: &[Arc<dyn Signer>], fee_payer: Option<&Arc<dyn Signer>>) -> Vec<Arc<dyn Signer>> {
     let mut all_signers: Vec<Arc<dyn Signer>> = Vec::with_capacity(signers.len() + usize::from(fee_payer.is_some()));
     let mut seen: HashSet<Pubkey> = HashSet::with_capacity(all_signers.capacity());
@@ -422,36 +444,16 @@ async fn post_to_sender(tx64: &str, opts: &SenderSendOptions) -> Result<Signatur
 }
 
 impl Helius {
-    // Builds a minimal, unsigned transaction for fee estimation: v1 when requested, else v0 if LUTs
-    // are included, or legacy otherwise. A v1 draft is required so that large v1 transactions (over
-    // the ~1,232-byte v0 limit) are not size-rejected by the priority-fee API.
+    // Builds a minimal, unsigned transaction for fee estimation: v0 if LUTs are included, legacy
+    // otherwise. Transaction v1 does not use this path — it requests the estimate via `account_keys`
+    // (see `writable_account_keys`), which avoids the ~1,232-byte draft size cap and needs no
+    // server-side v1 parsing.
     fn build_unsigned_preflight_tx(
         payer: &Pubkey,
         instructions: &[Instruction],
         lookup_tables: Option<&[AddressLookupTableAccount]>,
         recent_blockhash: Hash,
-        version: TransactionVersion,
     ) -> Result<Vec<u8>> {
-        if version == TransactionVersion::V1 {
-            // Compile a v1 message so the draft reflects the real (larger) transaction. Placeholder
-            // signatures make the wincode wire format well-formed; the estimate does not verify them.
-            let message: v1::Message = v1::Message::try_compile_with_config(
-                payer,
-                instructions,
-                recent_blockhash,
-                build_v1_config(None, None, None),
-            )
-            .map_err(|e| HeliusError::InvalidInput(format!("Failed to compile v1 preflight message: {e}")))?;
-            let signatures: Vec<Signature> =
-                vec![Signature::default(); message.header.num_required_signatures as usize];
-            let versioned_tx: VersionedTransaction = VersionedTransaction {
-                signatures,
-                message: VersionedMessage::V1(message),
-            };
-            return wincode::serialize(&versioned_tx)
-                .map_err(|e| HeliusError::InvalidInput(format!("Failed to serialize v1 preflight: {e:?}")));
-        }
-
         if let Some(luts) = lookup_tables {
             // Versioned v0 with LUT compression
             let v0_message: v0::Message = v0::Message::try_compile(payer, instructions, luts, recent_blockhash)?;
@@ -475,6 +477,9 @@ impl Helius {
     /// * `payer` - The public key of the payer
     /// * `lookup_tables` - The address lookup tables
     /// * `signers` - The signers for the transaction
+    /// * `version` - The target transaction format. [`TransactionVersion::V1`] compiles a v1
+    ///   message for simulation (so a large transaction is not capped at the v0 size limit);
+    ///   [`TransactionVersion::Auto`] simulates a legacy/v0 message
     ///
     /// # Returns
     /// The compute units consumed, or None if unsuccessful
@@ -538,6 +543,15 @@ impl Helius {
         let result: Response<RpcSimulateTransactionResult> = self
             .connection()
             .simulate_transaction_with_config(&transaction, config)?;
+
+        // A failed simulation still returns `units_consumed: Some(0)`; surface the error instead of
+        // proceeding with a bogus compute-unit count (e.g. `UnsupportedVersion` for v1 before the
+        // feature gate activates, or an on-chain error from the instructions themselves).
+        if let Some(err) = &result.value.err {
+            return Err(HeliusError::InvalidInput(format!(
+                "Transaction simulation failed: {err:?}"
+            )));
+        }
 
         // Return the units consumed or None if not available
         Ok(result.value.units_consumed)
@@ -636,27 +650,34 @@ impl Helius {
         // explicitly via `config.version` and handled in its own branch below.
         let is_versioned: bool = config.lookup_tables.is_some();
 
-        // Build an unsigned preflight for the priority-fee estimate, matching the final transaction
-        // version so a large v1 draft is not size-rejected by the priority-fee API.
-        let preflight_bytes: Vec<u8> = Helius::build_unsigned_preflight_tx(
-            &payer_pubkey,
-            &config.instructions,
-            config.lookup_tables.as_deref(),
-            recent_blockhash,
-            config.version,
-        )?;
-
-        // Encode the transaction
-        let transaction_base58: String = encode(&preflight_bytes).into_string();
-
-        // Get the priority fee estimate based on the serialized transaction
-        let priority_fee_request: GetPriorityFeeEstimateRequest = GetPriorityFeeEstimateRequest {
-            transaction: Some(transaction_base58),
-            account_keys: None,
-            options: Some(GetPriorityFeeEstimateOptions {
-                priority_level: Some(PriorityLevel::High),
-                ..Default::default()
-            }),
+        // Request the priority-fee estimate. v1 uses `account_keys` (no serialized transaction) so a
+        // large v1 draft is neither size-capped nor blocked on server-side v1 parsing; legacy/v0
+        // sends the serialized preflight draft.
+        let priority_fee_request: GetPriorityFeeEstimateRequest = match config.version {
+            TransactionVersion::V1 => GetPriorityFeeEstimateRequest {
+                transaction: None,
+                account_keys: Some(writable_account_keys(&payer_pubkey, &config.instructions)),
+                options: Some(GetPriorityFeeEstimateOptions {
+                    priority_level: Some(PriorityLevel::High),
+                    ..Default::default()
+                }),
+            },
+            TransactionVersion::Auto => {
+                let preflight_bytes: Vec<u8> = Helius::build_unsigned_preflight_tx(
+                    &payer_pubkey,
+                    &config.instructions,
+                    config.lookup_tables.as_deref(),
+                    recent_blockhash,
+                )?;
+                GetPriorityFeeEstimateRequest {
+                    transaction: Some(encode(&preflight_bytes).into_string()),
+                    account_keys: None,
+                    options: Some(GetPriorityFeeEstimateOptions {
+                        priority_level: Some(PriorityLevel::High),
+                        ..Default::default()
+                    }),
+                }
+            }
         };
 
         let priority_fee_estimate: GetPriorityFeeEstimateResponse =
@@ -863,6 +884,9 @@ impl Helius {
     /// * `payer` - The public key of the payer
     /// * `lookup_tables` - The address lookup tables
     /// * `keypairs` - The keypairs for the transaction
+    /// * `version` - The target transaction format. [`TransactionVersion::V1`] compiles a v1
+    ///   message for simulation (so a large transaction is not capped at the v0 size limit);
+    ///   [`TransactionVersion::Auto`] simulates a legacy/v0 message
     ///
     /// # Returns
     /// The compute units consumed, or None if unsuccessful
@@ -987,23 +1011,33 @@ impl Helius {
             ));
         }
 
-        // Get priority fee estimate (unsigned v0 if LUTs, legacy otherwise)
-        let preflight_bytes = Self::build_unsigned_preflight_tx(
-            &fee_payer.pubkey(),
-            &create_config.instructions,
-            create_config.lookup_tables.as_deref(),
-            recent_blockhash,
-            create_config.version,
-        )?;
-        let transaction_base58: String = encode(&preflight_bytes).into_string();
-
-        let priority_fee_request: GetPriorityFeeEstimateRequest = GetPriorityFeeEstimateRequest {
-            transaction: Some(transaction_base58),
-            account_keys: None,
-            options: Some(GetPriorityFeeEstimateOptions {
-                priority_level: Some(PriorityLevel::High),
-                ..Default::default()
-            }),
+        // Priority-fee estimate: v1 via `account_keys` (no serialized draft — no size cap, no
+        // server-side v1 parsing); legacy/v0 via the serialized preflight draft.
+        let priority_fee_request: GetPriorityFeeEstimateRequest = match create_config.version {
+            TransactionVersion::V1 => GetPriorityFeeEstimateRequest {
+                transaction: None,
+                account_keys: Some(writable_account_keys(&fee_payer.pubkey(), &create_config.instructions)),
+                options: Some(GetPriorityFeeEstimateOptions {
+                    priority_level: Some(PriorityLevel::High),
+                    ..Default::default()
+                }),
+            },
+            TransactionVersion::Auto => {
+                let preflight_bytes = Self::build_unsigned_preflight_tx(
+                    &fee_payer.pubkey(),
+                    &create_config.instructions,
+                    create_config.lookup_tables.as_deref(),
+                    recent_blockhash,
+                )?;
+                GetPriorityFeeEstimateRequest {
+                    transaction: Some(encode(&preflight_bytes).into_string()),
+                    account_keys: None,
+                    options: Some(GetPriorityFeeEstimateOptions {
+                        priority_level: Some(PriorityLevel::High),
+                        ..Default::default()
+                    }),
+                }
+            }
         };
 
         let priority_fee_estimate: GetPriorityFeeEstimateResponse =
@@ -1236,7 +1270,6 @@ impl Helius {
             &config.instructions,
             config.lookup_tables.as_deref(),
             recent_blockhash,
-            config.version,
         )?;
         let transaction_base58: String = encode(&preflight_bytes).into_string();
 
@@ -1415,7 +1448,7 @@ impl Helius {
         opts: SenderSendOptions,
     ) -> Result<Signature>
     where
-        T: SerializableTransaction + serde::Serialize + ?Sized,
+        T: SerializableTransaction + ?Sized,
     {
         // Serialize with wincode (the RPC/validator wire format). This is required for Transaction
         // v1 (SIMD-0385) — bincode would produce an invalid wire format — and is byte-identical to
@@ -1527,7 +1560,7 @@ impl Helius {
         opts: SenderSendOptions,
     ) -> Result<Vec<Signature>>
     where
-        T: SerializableTransaction + serde::Serialize,
+        T: SerializableTransaction,
     {
         if transactions.is_empty() {
             return Err(HeliusError::InvalidInput(
@@ -1720,6 +1753,36 @@ mod tests {
         let decoded: VersionedTransaction = wincode::deserialize(&bytes)
             .expect("v1 transaction should deserialize via wincode (validator-compatible wire format)");
         assert_eq!(decoded, tx, "v1 transaction did not round-trip through wincode");
+    }
+
+    #[test]
+    fn test_build_v1_transaction_rejects_oversized() {
+        let payer = Keypair::new();
+        // A single instruction with a large data payload pushes the transaction over the 4,096-byte
+        // v1 cap while staying within the instruction/address/signature limits.
+        let oversized_ix = Instruction {
+            program_id: Pubkey::new_unique(),
+            accounts: vec![],
+            data: vec![0u8; MAX_TRANSACTION_V1_SIZE + 100],
+        };
+
+        let result = build_v1_transaction(
+            &payer.pubkey(),
+            &[oversized_ix],
+            &[&payer],
+            Hash::new_unique(),
+            None,
+            None,
+            None,
+        );
+
+        match result {
+            Err(HeliusError::InvalidInput(msg)) => assert!(
+                msg.contains("exceeding") && msg.contains("limit"),
+                "expected a size-cap error, got: {msg}"
+            ),
+            other => panic!("expected an oversized-v1 error, got {other:?}"),
+        }
     }
 
     fn build_versioned_message(

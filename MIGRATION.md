@@ -143,6 +143,15 @@ and `GetTransactionsForAddressOptions` changed from `0` to `1`, so v1 transactio
 streamed instead of triggering a version error. There is no compatibility risk — the RPC accepts any
 `u8` — but if you explicitly want v0-only behavior, set the field to `Some(0)`.
 
+The public `get_compute_units` and `get_compute_units_thread_safe` methods gained a required
+`version: TransactionVersion` argument (pass `TransactionVersion::Auto` to preserve the previous
+legacy/v0 simulation behavior). They now also return an error when the simulation fails rather than
+reporting zero compute units.
+
+Note: Transaction v1 is not active on any cluster yet — `simulateTransaction` returns
+`UnsupportedVersion`, so building or sending a v1 smart transaction errors until the feature gate
+activates.
+
 ---
 
 ## 0.x → 1.0
