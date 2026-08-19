@@ -5,6 +5,8 @@ mod utils {
 }
 
 mod rpc {
+    mod test_get_all_program_accounts;
+    mod test_get_all_token_accounts_by_owner;
     mod test_get_asset;
     mod test_get_asset_batch;
     mod test_get_asset_proof;
@@ -19,10 +21,13 @@ mod rpc {
     mod test_get_signatures_for_asset;
     mod test_get_token_accounts;
     mod test_get_transactions_for_address;
+    mod test_get_transfers_by_address;
+    mod test_rpc_error;
     mod test_search_assets;
 }
 mod wallet {
     mod test_get_batch_wallet_identity;
+    mod test_get_wallet_balance_at;
     mod test_get_wallet_balances;
     mod test_get_wallet_funding_source;
     mod test_get_wallet_history;
@@ -47,6 +52,8 @@ mod smart_transactions {
     mod helpers;
     mod test_create_smart_transaction;
     mod test_input_validation;
+    mod test_poll_confirmation;
+    mod test_send_and_confirm;
     mod test_sender_urls;
 }
 mod websocket {
@@ -59,8 +66,10 @@ mod staking {
     mod test_create_stake_transaction;
     mod test_create_unstake_transaction;
     mod test_create_withdraw_transaction;
+    mod test_get_stake_accounts;
     mod test_get_unstake_instruction;
     mod test_get_withdraw_instruction;
+    mod test_get_withdrawable_amount;
 }
 mod zk_compression {
     mod helpers;
@@ -89,4 +98,7 @@ mod zk_compression {
     mod test_get_multiple_new_address_proofs_v2;
     mod test_get_transaction_with_compression_info;
     mod test_get_validity_proof;
+}
+mod types {
+    mod test_serialization;
 }

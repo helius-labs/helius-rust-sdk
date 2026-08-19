@@ -20,7 +20,7 @@ use std::fmt::Debug;
 use std::sync::Arc;
 
 use crate::config::Config;
-use crate::error::Result;
+use crate::error::{HeliusError, Result};
 use crate::request_handler::RequestHandler;
 use crate::types::inner::{RpcRequest, RpcResponse};
 use crate::types::{
@@ -29,15 +29,27 @@ use crate::types::{
     GetPriorityFeeEstimateRequest, GetPriorityFeeEstimateResponse, GetProgramAccountsV2Config,
     GetProgramAccountsV2Request, GetProgramAccountsV2Response, GetTokenAccounts, GetTokenAccountsByOwnerV2Config,
     GetTokenAccountsByOwnerV2Request, GetTokenAccountsByOwnerV2Response, GetTransactionsForAddressOptions,
-    GetTransactionsForAddressRequest, GetTransactionsForAddressResponse, GpaAccount, SearchAssets, TokenAccountRecord,
+    GetTransactionsForAddressRequest, GetTransactionsForAddressResponse, GetTransfersByAddressConfig,
+    GetTransfersByAddressRequest, GetTransfersByAddressResponse, GpaAccount, SearchAssets, TokenAccountRecord,
     TokenAccountsList, TokenAccountsOwnerFilter, TransactionSignatureList,
 };
 
 use reqwest::{Client, Method, Url};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
+use serde_json::Value;
 use solana_client::rpc_client::RpcClient as SolanaRpcClient;
 use solana_commitment_config::CommitmentConfig;
+
+/// Default upper bound on the number of pages the auto-paginating helpers
+/// (`get_all_program_accounts`, `get_all_token_accounts_by_owner`) will fetch. Acts as a
+/// backstop so a misbehaving server that never returns a terminal (`None`) cursor cannot loop
+/// indefinitely. At the default page size of 10,000 this allows up to 100M records before the
+/// cap trips; when it does, a warning is logged rather than silently truncating.
+///
+/// Callers with a legitimately larger result set can raise (or lower) this per call by setting
+/// `max_pages` on the request config.
+pub const DEFAULT_MAX_AUTO_PAGINATION_PAGES: usize = 10_000;
 
 /// Helius RPC client with an embedded Solana RPC client.
 ///
@@ -122,12 +134,36 @@ impl RpcClient {
         T: Debug + DeserializeOwned + Default,
     {
         let base_url: String = self.config.build_rpc_url();
-        let url: Url = Url::parse(&base_url).expect("Failed to parse URL");
+        let url: Url = Url::parse(&base_url)?;
 
         let rpc_request: RpcRequest<R> = RpcRequest::new(method.to_string(), request);
         let rpc_response: RpcResponse<T> = self.handler.send(Method::POST, url, Some(&rpc_request)).await?;
 
-        Ok(rpc_response.result)
+        // Solana/Helius report method-level failures as a JSON-RPC error object with an HTTP 200
+        // status, so surface `error` before returning `result`.
+        if let Some(error) = rpc_response.error {
+            let message: String = match error.data {
+                Some(data) => format!("{} ({})", error.message, data),
+                None => error.message,
+            };
+
+            return Err(HeliusError::RpcError {
+                code: error.code,
+                message,
+            });
+        }
+
+        match rpc_response.result {
+            Some(result) => Ok(result),
+            // A `"result": null` response deserializes the outer `Option` to `None`, not
+            // `Some(None)`, so recover the null case for methods whose `T` can represent it
+            // (e.g. `Option<Asset>`). If `T` cannot deserialize from null, the response
+            // genuinely carried neither a result nor an error, so surface that.
+            None => serde_json::from_value::<T>(Value::Null).map_err(|_| HeliusError::RpcError {
+                code: 0,
+                message: format!("RPC method '{}' returned neither a result nor an error", method),
+            }),
+        }
     }
 
     /// Gets an asset by its ID
@@ -373,18 +409,40 @@ impl RpcClient {
             config.limit = Some(10000);
         }
 
+        // Client-side page cap: caller override, else the default backstop.
+        let max_pages: usize = config.max_pages.unwrap_or(DEFAULT_MAX_AUTO_PAGINATION_PAGES);
+
         let mut all_accounts: Vec<GpaAccount> = Vec::new();
+        let mut pages: usize = 0;
         loop {
             let response: GetProgramAccountsV2Response =
                 self.get_program_accounts_v2(program_id.clone(), config.clone()).await?;
             all_accounts.extend(response.accounts);
+            pages += 1;
 
             log::info!("Fetched {} accounts so far", all_accounts.len());
 
-            if let Some(key) = response.pagination_key {
-                config.pagination_key = Some(key);
-            } else {
-                break;
+            match response.pagination_key {
+                // Stop if the server stops advancing the cursor (returns the same key) or if we
+                // hit the page cap, so a misbehaving server can't paginate forever.
+                Some(key) if config.pagination_key.as_ref() == Some(&key) => {
+                    log::warn!(
+                        "get_all_program_accounts stopping: server returned a non-advancing pagination cursor after {} pages ({} accounts)",
+                        pages,
+                        all_accounts.len()
+                    );
+                    break;
+                }
+                Some(_) if pages >= max_pages => {
+                    log::warn!(
+                        "get_all_program_accounts hit the {}-page cap ({} accounts); results may be truncated. Raise `max_pages` on the config to fetch more.",
+                        max_pages,
+                        all_accounts.len()
+                    );
+                    break;
+                }
+                Some(key) => config.pagination_key = Some(key),
+                None => break,
             }
         }
 
@@ -415,17 +473,39 @@ impl RpcClient {
             config.limit = Some(10000);
         }
 
+        // Client-side page cap: caller override, else the default backstop.
+        let max_pages: usize = config.max_pages.unwrap_or(DEFAULT_MAX_AUTO_PAGINATION_PAGES);
+
         let mut all_accounts: Vec<TokenAccountRecord> = Vec::new();
+        let mut pages: usize = 0;
         loop {
             let response: GetTokenAccountsByOwnerV2Response = self
                 .get_token_accounts_by_owner_v2(owner.clone(), filter.clone(), config.clone())
                 .await?;
             all_accounts.extend(response.value.accounts);
+            pages += 1;
 
-            if let Some(key) = response.value.pagination_key {
-                config.pagination_key = Some(key);
-            } else {
-                break;
+            match response.value.pagination_key {
+                // Stop if the server stops advancing the cursor (returns the same key) or if we
+                // hit the page cap, so a misbehaving server can't paginate forever.
+                Some(key) if config.pagination_key.as_ref() == Some(&key) => {
+                    log::warn!(
+                        "get_all_token_accounts_by_owner stopping: server returned a non-advancing pagination cursor after {} pages ({} accounts)",
+                        pages,
+                        all_accounts.len()
+                    );
+                    break;
+                }
+                Some(_) if pages >= max_pages => {
+                    log::warn!(
+                        "get_all_token_accounts_by_owner hit the {}-page cap ({} accounts); results may be truncated. Raise `max_pages` on the config to fetch more.",
+                        max_pages,
+                        all_accounts.len()
+                    );
+                    break;
+                }
+                Some(key) => config.pagination_key = Some(key),
+                None => break,
             }
         }
 
@@ -447,5 +527,26 @@ impl RpcClient {
     ) -> Result<GetTransactionsForAddressResponse> {
         let params: GetTransactionsForAddressRequest = (address, options);
         self.post_rpc_request("getTransactionsForAddress", params).await
+    }
+
+    /// Gets token and native SOL transfers for a specific address.
+    ///
+    /// This is a thin wrapper around the Helius-only `getTransfersByAddress`
+    /// JSON-RPC method. The config is optional; when omitted, the request params
+    /// serialize as `[address]`.
+    ///
+    /// # Arguments
+    /// * `address` - The base58 encoded public key of the account
+    /// * `config` - Optional filters, pagination, commitment, and sorting config
+    ///
+    /// # Returns
+    /// A `Result` containing transfer data and an optional pagination token.
+    pub async fn get_transfers_by_address(
+        &self,
+        address: String,
+        config: Option<GetTransfersByAddressConfig>,
+    ) -> Result<GetTransfersByAddressResponse> {
+        let params: GetTransfersByAddressRequest = GetTransfersByAddressRequest::new(address, config);
+        self.post_rpc_request("getTransfersByAddress", params).await
     }
 }

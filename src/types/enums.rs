@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use serde_enum_str::{Deserialize_enum_str, Serialize_enum_str};
-use solana_program::pubkey::Pubkey;
 use solana_sdk::pubkey;
+use solana_sdk::pubkey::Pubkey;
 use solana_sdk::transaction::{Transaction, VersionedTransaction};
 
 use super::*;
@@ -687,7 +687,7 @@ pub enum TransactionContext {
 #[derive(Clone, Debug, Eq, PartialEq, Serialize_enum_str, Deserialize_enum_str)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum ProgramName {
-    Unkown,
+    Unknown,
     JupiterV1,
     JupiterV2,
     JupiterV3,
@@ -792,6 +792,22 @@ pub enum CollectionIdentifier {
 pub enum SmartTransaction {
     Legacy(Transaction),
     Versioned(VersionedTransaction),
+}
+
+/// Selects the transaction format when building a smart transaction.
+///
+/// Defaults to [`Auto`](TransactionVersion::Auto), preserving the pre-v1 behavior.
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum TransactionVersion {
+    /// Legacy when no address lookup tables are provided, versioned (v0) when they are.
+    /// This is the default and matches the SDK's historical behavior.
+    #[default]
+    Auto,
+    /// Transaction v1 (SIMD-0385), which unlocks larger transactions (up to 4,096 bytes,
+    /// SIMD-0296). v1 carries its compute-unit limit and total priority fee (in lamports) in the
+    /// message header config instead of `ComputeBudget` instructions, and does **not** support
+    /// address lookup tables — providing `lookup_tables` with `V1` is rejected. Requires Agave 4.2.
+    V1,
 }
 
 /// The encoding format for account data in RPC V2 responses.

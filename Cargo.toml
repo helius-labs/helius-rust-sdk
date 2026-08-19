@@ -1,6 +1,6 @@
 [package]
 name = "helius"
-version = "1.1.0"
+version = "2.0.0"
 rust-version = "1.85.1"
 edition = "2021"
 description = "An asynchronous Helius Rust SDK for building the future of Solana"
@@ -27,21 +27,25 @@ serde = "1.0.198"
 serde-enum-str = "0.4.0"
 serde_json = "1.0.116"
 simd-json = "0.15.1"
-solana-account-decoder = "3.0.5"
-solana-client = "3.0.5"
-solana-commitment-config = "3.0.0"
+solana-account-decoder = "4.2.1"
+solana-client = "4.2.1"
+solana-commitment-config = "3.1.1"
 solana-compute-budget-interface = "3.0.0"
-solana-program = "3.0.0"
-solana-rpc-client-api = "3.0.5"
-solana-sdk = "3.0.0"
-solana-stake-interface = "2.0.1"
+solana-rpc-client-api = "4.2.1"
+solana-sdk = "4.0.1"
+solana-stake-interface = "4.3.0"
 solana-system-interface = "2.0.0"
-solana-transaction-status = "3.0.5"
+# The parent `solana-transaction-status` crate is gated behind the `agave-unstable-api` feature
+# in 4.x; the wire/status types we use live in this ungated companion crate.
+solana-transaction-status-client-types = "4.2.1"
 thiserror = "2.0.17"
 tokio = { version = "1.37.0", features = ["macros", "rt-multi-thread", "net", "time"] }
 tokio-stream = "0.1.15"
 tokio-tungstenite = "0.28.0"
 url = "2.5.0"
+# Transaction v1 (SIMD-0385) uses the wincode wire format, not bincode. Pinned to the version the
+# solana 4.x crates use so the `SchemaWrite` impl resolves to the same type.
+wincode = "0.5.5"
 
 [dev-dependencies]
 mockito = "1.4.0"
@@ -108,6 +112,10 @@ path = "examples/helius/get_priority_fee_estimate.rs"
 name = "get_token_accounts_by_owner_v2"
 path = "examples/helius/get_token_accounts_by_owner_v2.rs"
 
+[[example]]
+name = "get_transfers_by_address"
+path = "examples/helius/get_transfers_by_address.rs"
+
 # Solana RPC examples
 [[example]]
 name = "get_latest_blockhash"
@@ -122,6 +130,10 @@ path = "examples/solana/get_latest_blockhash_async.rs"
 name = "send_smart_transaction_with_seeds"
 path = "examples/transactions/send_smart_transaction_with_seeds.rs"
 
+[[example]]
+name = "create_smart_transaction_v1"
+path = "examples/transactions/create_smart_transaction_v1.rs"
+
 # Admin API examples
 [[example]]
 name = "get_project_usage"
@@ -131,6 +143,10 @@ path = "examples/admin/get_project_usage.rs"
 [[example]]
 name = "get_batch_wallet_identity"
 path = "examples/wallet/get_batch_wallet_identity.rs"
+
+[[example]]
+name = "get_wallet_balance_at"
+path = "examples/wallet/get_wallet_balance_at.rs"
 
 [[example]]
 name = "get_wallet_balances"
@@ -189,6 +205,10 @@ path = "examples/websockets/enhanced_websocket_accounts.rs"
 [[example]]
 name = "enhanced_websocket_transactions"
 path = "examples/websockets/enhanced_websocket_transactions.rs"
+
+[[example]]
+name = "preconf_subscribe"
+path = "examples/websockets/preconf_subscribe.rs"
 
 # ZK Compression examples
 [[example]]

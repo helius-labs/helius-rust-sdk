@@ -2,7 +2,7 @@ use super::inner::TransactionSignatureEntry;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use solana_sdk::pubkey::Pubkey;
-use solana_transaction_status::EncodedTransactionWithStatusMeta;
+use solana_transaction_status_client_types::EncodedTransactionWithStatusMeta;
 
 /// Filters for the `transactionSubscribe` enhanced WebSocket method.
 ///
@@ -109,8 +109,9 @@ pub struct TransactionSubscribeOptions {
     /// Whether reward data should be included in the notifications
     #[serde(skip_serializing_if = "Option::is_none")]
     pub show_rewards: Option<bool>,
-    /// The highest transaction version to receive. Set to `0` for both legacy and v0 transactions.
-    /// Required when `transaction_details` is `Full` or `Accounts`.
+    /// The highest transaction version to receive. Set to `1` for Transaction v1 (Agave 4.2), `0`
+    /// for legacy and v0. Required when `transaction_details` is `Full` or `Accounts`. Receiving a
+    /// transaction newer than this value fails fast rather than silently degrading.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub max_supported_transaction_version: Option<u8>,
 }
@@ -122,7 +123,9 @@ impl Default for TransactionSubscribeOptions {
             encoding: Some(UiEnhancedTransactionEncoding::JsonParsed),
             transaction_details: Some(TransactionDetails::Full),
             show_rewards: Some(true),
-            max_supported_transaction_version: Some(0),
+            // Accept up to Transaction v1 (Agave 4.2). The SDK's 4.x Solana crates can parse v1,
+            // so defaulting to `1` avoids failing when a stream includes v1 transactions.
+            max_supported_transaction_version: Some(1),
         }
     }
 }

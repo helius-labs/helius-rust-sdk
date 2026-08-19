@@ -24,13 +24,13 @@ pub struct EnhancedTransaction {
     /// The protocol or marketplace that originated the transaction
     pub source: Source,
     /// The transaction fee paid in lamports
-    pub fee: i32,
+    pub fee: u64,
     /// The public key of the account that paid the transaction fee
     pub fee_payer: String,
     /// The transaction signature (base-58 encoded)
     pub signature: String,
     /// The slot in which the transaction was confirmed
-    pub slot: i32,
+    pub slot: u64,
     /// Native SOL transfers that occurred within the transaction, if any
     pub native_transfers: Option<Vec<NativeTransfer>>,
     /// SPL token transfers that occurred within the transaction, if any
