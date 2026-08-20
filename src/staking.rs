@@ -31,6 +31,18 @@ use solana_stake_interface::{
 pub static HELIUS_VALIDATOR_PUBKEY: Lazy<Pubkey> =
     Lazy::new(|| Pubkey::from_str("he1iusunGwqrNtafDtLdhsUQDFvo13z9sUa36PauBtk").expect("Invalid Pubkey"));
 
+/// Byte offset of `Meta::authorized.staker` within the bincode encoding of [`StakeStateV2`].
+///
+/// Layout: a 4-byte bincode enum discriminant, then `Meta::rent_exempt_reserve` (`u64`, 8 bytes),
+/// putting the staker at 12 and the withdrawer at 44. Verified by
+/// `tests/staking/test_stake_account_layout.rs`.
+pub const STAKER_AUTHORITY_OFFSET: usize = 12;
+
+/// Byte offset of `Meta::authorized.withdrawer` within the bincode encoding of [`StakeStateV2`].
+///
+/// See [`STAKER_AUTHORITY_OFFSET`] for the full layout.
+pub const WITHDRAWER_AUTHORITY_OFFSET: usize = 44;
+
 impl Helius {
     /// Generate an unsigned, base58-encoded transaction that creates and delegates a new stake account
     ///
@@ -360,16 +372,24 @@ impl Helius {
         Ok(lamports.saturating_sub(rent_exempt))
     }
 
-    /// Return every stake-program account whose `Authorized::staker` (offset 44)
-    /// matches `wallet`. It uses the plain `get_program_accounts_with_config` call
-    /// because the *parsed* variant is not available in Solana-client v2.2.x
+    /// Return every stake-program account whose `Authorized::staker` (offset 12)
+    /// matches `wallet`.
+    ///
+    /// The filter is a `memcmp` against the bincode encoding of [`StakeStateV2`],
+    /// whose `Meta` prefix lays out as:
     ///
     /// ```text
-    /// offset 0  –   meta (8 bytes)
-    /// offset 8  –   rent-exempt reserve (8)
-    /// offset 16 –   credits observed etc. ...
-    /// offset 44 –   Authorized::staker (Pubkey, 32 bytes)
+    /// offset 0  –   enum discriminant (bincode u32, 4 bytes)
+    /// offset 4  –   Meta::rent_exempt_reserve (u64, 8 bytes)
+    /// offset 12 –   Meta::authorized.staker (Pubkey, 32 bytes)
+    /// offset 44 –   Meta::authorized.withdrawer (Pubkey, 32 bytes)
+    /// offset 76 –   Meta::lockup ...
     /// ```
+    ///
+    /// Note this filters on the **staker** authority (the one that can delegate and
+    /// deactivate), not the withdrawer. For accounts where the two differ — custodial
+    /// and liquid-staking setups, delegated management — these are different sets.
+    ///
     /// # Arguments
     /// * `wallet` – the Pubkey we filter for
     ///
@@ -379,7 +399,7 @@ impl Helius {
     /// `StakeStateV2::deserialize()` if you need to
     pub async fn get_stake_accounts(&self, wallet: Pubkey) -> Result<Vec<(Pubkey, Account)>> {
         let filters: Option<Vec<RpcFilterType>> = Some(vec![RpcFilterType::Memcmp(Memcmp::new(
-            44,
+            STAKER_AUTHORITY_OFFSET,
             MemcmpEncodedBytes::Base58(wallet.to_string()),
         ))]);
 
