@@ -365,14 +365,24 @@ impl EnhancedWebsocket {
                   Message::Frame(_frame) => continue,
                 };
 
-                let mut json: Map<String, Value> = serde_json::from_str(&text)?;
+                let mut json: Map<String, Value> = match serde_json::from_str(&text) {
+                    Ok(j) => j,
+                    Err(e) => {
+                        log::warn!("Failed to parse websocket message: {}: {}", e, text);
+                        continue;
+                    }
+                };
 
                 // Subscribe/Unsubscribe response, example:
                 // `{"jsonrpc":"2.0","result":5308752,"id":1}`
                 if let Some(id) = json.get("id") {
-                  let id = id.as_u64().ok_or_else(|| {
-                      HeliusError::EnhancedWebsocket { reason: "invalid `id` field".into(), message: text.as_str().to_string() }
-                  })?;
+                  let id = match id.as_u64() {
+                      Some(v) => v,
+                      None => {
+                          log::warn!("Invalid id field: {}", text);
+                          continue;
+                      }
+                  };
 
                   let err = json.get("error").map(|error_object| {
                       match serde_json::from_value::<RpcErrorObject>(error_object.clone()) {
@@ -393,11 +403,16 @@ impl EnhancedWebsocket {
                         let _ = response_sender.send(Err(HeliusError::EnhancedWebsocket { reason, message: text.as_str().to_string()}));
                       },
                       None => {
-                        let json_result = json.get("result").ok_or_else(|| {
-                            HeliusError::EnhancedWebsocket { reason: "missing `result` field".into(), message: text.as_str().to_string() }
-                        })?;
+                        let json_result = match json.get("result") {
+                            Some(v) => v,
+                            None => {
+                                let _ = response_sender.send(Err(HeliusError::EnhancedWebsocket { reason: "missing `result` field".into(), message: text.clone() }));
+                                continue;
+                            }
+                        };
                         if response_sender.send(Ok(json_result.clone())).is_err() {
-                            break;
+                            log::warn!("Response receiver dropped for id {}", id);
+                            continue;
                         }
                       }
                     }
@@ -410,9 +425,13 @@ impl EnhancedWebsocket {
                       },
                       None => {
                         // Subscribe Id
-                        let sid = json.get("result").and_then(Value::as_u64).ok_or_else(|| {
-                          HeliusError::EnhancedWebsocket { reason: "invalid `result` field".into(), message: text.as_str().to_string() }
-                        })?;
+                        let sid = match json.get("result").and_then(Value::as_u64) {
+                            Some(v) => v,
+                            None => {
+                                let _ = response_sender.send(Err(HeliusError::EnhancedWebsocket { reason: "invalid `result` field".into(), message: text.clone() }));
+                                continue;
+                            }
+                        };
 
                         // Create notifications channel and unsubscribe function
                         let (notifications_sender, notifications_receiver) = mpsc::unbounded_channel();
@@ -426,14 +445,15 @@ impl EnhancedWebsocket {
                         }.boxed());
 
                         if response_sender.send(Ok((notifications_receiver, unsubscribe))).is_err() {
-                            break;
+                            log::warn!("Subscribe receiver dropped for id {}", id);
+                            continue;
                         }
                         subscriptions.insert(sid, notifications_sender);
                       }
                     }
                   } else {
-                      log::warn!("Unknown request id: {}", id);
-                      break;
+                      log::warn!("Unknown request id: {} (ignored)", id);
+                      continue;
                   }
                   continue;
                 }
