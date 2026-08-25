@@ -255,6 +255,13 @@ fn collect_unique_keypair_refs<'a>(signers: &'a [Keypair], fee_payer: &'a Keypai
     all_signers
 }
 
+/// How long [`Helius::poll_transaction_confirmation`] polls before giving up.
+///
+/// Callers with their own deadline should use
+/// [`Helius::poll_transaction_confirmation_with_timeout`] and pass the time remaining, so a poll
+/// cannot overrun the budget the caller was given.
+pub const DEFAULT_CONFIRMATION_POLL_TIMEOUT: Duration = Duration::from_secs(15);
+
 fn is_retryable_confirmation_error(err: &HeliusError) -> bool {
     matches!(err, HeliusError::Timeout { .. })
 }
@@ -557,15 +564,33 @@ impl Helius {
         Ok(result.value.units_consumed)
     }
 
-    /// Poll a transaction to check whether it has been confirmed
+    /// Poll a transaction to check whether it has been confirmed, for up to
+    /// [`DEFAULT_CONFIRMATION_POLL_TIMEOUT`].
     ///
     /// * `txt-sig` - The transaction signature to check
     ///
     /// # Returns
     /// The confirmed transaction signature or an error if the confirmation times out
     pub async fn poll_transaction_confirmation(&self, txt_sig: Signature) -> Result<Signature> {
-        // 15 second timeout
-        let timeout: Duration = Duration::from_secs(15);
+        self.poll_transaction_confirmation_with_timeout(txt_sig, DEFAULT_CONFIRMATION_POLL_TIMEOUT)
+            .await
+    }
+
+    /// Poll a transaction to check whether it has been confirmed, giving up after `timeout`.
+    ///
+    /// Callers that own an overall deadline should pass the time remaining in it, so the poll
+    /// cannot overrun the budget the caller was given.
+    ///
+    /// * `txt_sig` - The transaction signature to check
+    /// * `timeout` - How long to keep polling before returning [`HeliusError::Timeout`]
+    ///
+    /// # Returns
+    /// The confirmed transaction signature or an error if the confirmation times out
+    pub async fn poll_transaction_confirmation_with_timeout(
+        &self,
+        txt_sig: Signature,
+        timeout: Duration,
+    ) -> Result<Signature> {
         // Poll on an exponential backoff rather than a fixed interval. A transaction typically
         // confirms within a slot or two, so starting near the slot time keeps the common case
         // fast; backing off to `MAX_POLL_INTERVAL` keeps a transaction that never lands from
@@ -882,8 +907,17 @@ impl Helius {
                     // timeout below.
                     last_send_err = None;
 
-                    // Poll for transaction confirmation
-                    match self.poll_transaction_confirmation(signature).await {
+                    // Poll for transaction confirmation, bounded by whatever is left of the
+                    // caller's deadline — the poll's own default would otherwise run past it,
+                    // making the `timeout` argument advisory rather than binding.
+                    let remaining: Duration = timeout.saturating_sub(start_time.elapsed());
+                    match self
+                        .poll_transaction_confirmation_with_timeout(
+                            signature,
+                            remaining.min(DEFAULT_CONFIRMATION_POLL_TIMEOUT),
+                        )
+                        .await
+                    {
                         Ok(sig) => return Ok(sig),
                         Err(err) if is_retryable_confirmation_error(&err) => continue,
                         Err(err) => return Err(err),
@@ -1523,7 +1557,12 @@ impl Helius {
                 });
             }
 
-            match self.poll_transaction_confirmation(sig).await {
+            // Bounded by the remaining Sender poll budget so `poll_timeout_ms` is binding.
+            let remaining: Duration = timeout.saturating_sub(start.elapsed());
+            match self
+                .poll_transaction_confirmation_with_timeout(sig, remaining.min(DEFAULT_CONFIRMATION_POLL_TIMEOUT))
+                .await
+            {
                 Ok(confirmed) => return Ok(confirmed),
                 Err(err) if is_retryable_confirmation_error(&err) => sleep(interval).await,
                 Err(err) => return Err(err),
@@ -1692,7 +1731,12 @@ impl Helius {
                     });
                 }
 
-                match self.poll_transaction_confirmation(*sig).await {
+                // Bounded by the remaining Sender poll budget so `poll_timeout_ms` is binding.
+                let remaining: Duration = timeout.saturating_sub(start.elapsed());
+                match self
+                    .poll_transaction_confirmation_with_timeout(*sig, remaining.min(DEFAULT_CONFIRMATION_POLL_TIMEOUT))
+                    .await
+                {
                     Ok(_) => break,
                     Err(err) if is_retryable_confirmation_error(&err) => sleep(interval).await,
                     Err(err) => return Err(err),

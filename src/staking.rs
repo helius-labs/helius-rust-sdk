@@ -34,14 +34,16 @@ pub static HELIUS_VALIDATOR_PUBKEY: Lazy<Pubkey> =
 /// Byte offset of `Meta::authorized.staker` within the bincode encoding of [`StakeStateV2`].
 ///
 /// Layout: a 4-byte bincode enum discriminant, then `Meta::rent_exempt_reserve` (`u64`, 8 bytes),
-/// putting the staker at 12 and the withdrawer at 44. Verified by
-/// `tests/staking/test_stake_account_layout.rs`.
-pub const STAKER_AUTHORITY_OFFSET: usize = 12;
+/// putting the staker at 12 and the withdrawer at 44. Pinned by `stake_state_authority_offsets`
+/// in the unit tests below.
+const STAKER_AUTHORITY_OFFSET: usize = 12;
 
 /// Byte offset of `Meta::authorized.withdrawer` within the bincode encoding of [`StakeStateV2`].
 ///
-/// See [`STAKER_AUTHORITY_OFFSET`] for the full layout.
-pub const WITHDRAWER_AUTHORITY_OFFSET: usize = 44;
+/// Not used to build a filter today; it exists so the layout test can prove offset 12 is the
+/// staker rather than merely that *something* sits there. See [`STAKER_AUTHORITY_OFFSET`].
+#[cfg(test)]
+const WITHDRAWER_AUTHORITY_OFFSET: usize = 44;
 
 impl Helius {
     /// Generate an unsigned, base58-encoded transaction that creates and delegates a new stake account
@@ -431,5 +433,61 @@ impl Helius {
             .collect::<Result<Vec<_>>>()?;
 
         Ok(accounts)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Pubkey, STAKER_AUTHORITY_OFFSET, WITHDRAWER_AUTHORITY_OFFSET};
+
+    use solana_stake_interface::stake_flags::StakeFlags;
+    use solana_stake_interface::state::{Authorized, Delegation, Lockup, Meta, Stake, StakeStateV2};
+
+    /// Pins the byte offsets of both authorities within the bincode encoding of `StakeStateV2`.
+    ///
+    /// `get_stake_accounts` filters with a `memcmp` at a hard-coded offset, so a layout change
+    /// upstream (or a transposed constant) would otherwise silently return the wrong accounts
+    /// rather than fail. Serializing a value whose staker and withdrawer differ is the only way
+    /// to tell the two apart: with equal keys, offset 44 looks just as correct as offset 12.
+    #[test]
+    #[allow(deprecated)] // `Meta::rent_exempt_reserve` is deprecated but still occupies the bytes
+    fn stake_state_authority_offsets() {
+        let staker = Pubkey::new_from_array([0x11; 32]);
+        let withdrawer = Pubkey::new_from_array([0x22; 32]);
+
+        let meta = Meta {
+            rent_exempt_reserve: 42,
+            authorized: Authorized { staker, withdrawer },
+            lockup: Lockup::default(),
+        };
+        let state = StakeStateV2::Stake(
+            meta,
+            Stake {
+                delegation: Delegation::default(),
+                credits_observed: 7,
+            },
+            StakeFlags::empty(),
+        );
+
+        let bytes = bincode::serialize(&state).expect("StakeStateV2 should serialize");
+
+        // 4-byte bincode enum discriminant, then `Meta::rent_exempt_reserve` (u64).
+        assert_eq!(&bytes[0..4], &[2, 0, 0, 0], "expected the `Stake` variant discriminant");
+        assert_eq!(
+            &bytes[4..12],
+            &42u64.to_le_bytes(),
+            "rent_exempt_reserve should directly follow the discriminant"
+        );
+
+        assert_eq!(
+            &bytes[STAKER_AUTHORITY_OFFSET..STAKER_AUTHORITY_OFFSET + 32],
+            staker.as_ref(),
+            "STAKER_AUTHORITY_OFFSET does not point at Authorized::staker"
+        );
+        assert_eq!(
+            &bytes[WITHDRAWER_AUTHORITY_OFFSET..WITHDRAWER_AUTHORITY_OFFSET + 32],
+            withdrawer.as_ref(),
+            "WITHDRAWER_AUTHORITY_OFFSET does not point at Authorized::withdrawer"
+        );
     }
 }

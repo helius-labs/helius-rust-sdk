@@ -84,7 +84,9 @@ async fn test_surfaces_send_error_instead_of_timeout() {
     // Blockhash is still valid, so the loop runs and the send is actually attempted.
     mock_block_height(&mut server, 50);
 
-    server
+    // A 2s budget with a 500ms pause between attempts fits roughly four sends. Without the
+    // pause the loop re-sends as fast as the network allows and blows straight through this.
+    let send_mock = server
         .mock("POST", Matcher::Any)
         .match_body(Matcher::Regex("sendTransaction".to_string()))
         .with_status(200)
@@ -92,6 +94,7 @@ async fn test_surfaces_send_error_instead_of_timeout() {
         .with_body(
             r#"{"jsonrpc":"2.0","error":{"code":-32602,"message":"Transaction signature verification failure"},"id":1}"#,
         )
+        .expect_at_most(6)
         .create();
 
     let tx = dummy_transaction();
@@ -113,6 +116,8 @@ async fn test_surfaces_send_error_instead_of_timeout() {
         err.to_string().contains("signature verification failure"),
         "the underlying send error should be preserved, got {err:?}"
     );
+    // Also guards the backoff: a hot retry loop trips the request cap above.
+    send_mock.assert();
 }
 
 /// The retained send error must not outlive the attempt it came from. If an early send fails but
