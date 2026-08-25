@@ -70,6 +70,7 @@ mod staking {
     mod test_get_unstake_instruction;
     mod test_get_withdraw_instruction;
     mod test_get_withdrawable_amount;
+    mod test_stake_account_layout;
 }
 mod zk_compression {
     mod helpers;

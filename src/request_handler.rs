@@ -106,19 +106,24 @@ impl RequestHandler {
             }
 
             // simd-json parses faster than serde_json on large payloads (DAS, getProgramAccountsV2,
-            // parsed transaction history) but mutates its input buffer in place, so we hand it
-            // owned bytes via `String::into_bytes`. Falls through to a `serde_json` retry on
-            // error to surface the more descriptive parser diagnostics for debugging.
-            let mut body_bytes: Vec<u8> = body_text.into_bytes();
-            match simd_json::serde::from_slice::<T>(&mut body_bytes) {
+            // parsed transaction history), but it unescapes strings *in place*, so the buffer it
+            // was handed is already rewritten by the time it reports an error. Parsing that buffer
+            // again — as the `serde_json` retry and the raw-JSON log below do — reads corrupted
+            // bytes and produces a spurious error that then masks simd-json's accurate one.
+            //
+            // simd-json therefore gets a scratch copy and `body_text` stays pristine for both. The
+            // copy costs one allocation and memcpy per response, which is small next to the parse
+            // it feeds and is the price of a fallback that can actually recover (and of a debug log
+            // that shows the real payload).
+            let mut scratch: Vec<u8> = body_text.clone().into_bytes();
+            match simd_json::serde::from_slice::<T>(&mut scratch) {
                 Ok(data) => Ok(data),
-                Err(simd_err) => match serde_json::from_slice::<T>(&body_bytes) {
+                Err(simd_err) => match serde_json::from_str::<T>(&body_text) {
                     Ok(data) => Ok(data),
                     Err(serde_err) => {
-                        let raw: String = String::from_utf8_lossy(&body_bytes).into_owned();
                         log::error!("Deserialization error (simd-json): {}", simd_err);
                         log::error!("Deserialization error (serde_json): {}", serde_err);
-                        log::debug!("Raw JSON: {}", raw);
+                        log::debug!("Raw JSON: {}", body_text);
                         Err(HeliusError::from(serde_err))
                     }
                 },
