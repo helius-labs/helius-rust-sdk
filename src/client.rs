@@ -7,6 +7,8 @@ use crate::types::{validate_rpc_url, ApiKey, Cluster, HeliusEndpoints};
 use crate::websocket::EnhancedWebsocket;
 
 use reqwest::Client;
+use reqwest::StatusCode;
+use solana_client::client_error::Result as ClientResult;
 use solana_client::nonblocking::rpc_client::RpcClient as AsyncSolanaRpcClient;
 use solana_client::rpc_client::RpcClient as SolanaRpcClient;
 use solana_commitment_config::CommitmentConfig;
@@ -203,6 +205,46 @@ impl Helius {
         self.rpc_client.solana_client.clone()
     }
 
+    /// Runs a call against the synchronous Solana client on tokio's blocking pool.
+    ///
+    /// [`Helius::connection`] hands back the *blocking* client, which is itself a `block_on`
+    /// wrapper around a nonblocking client and its own runtime. Calling it directly from an
+    /// `async fn` parks a tokio worker thread for the whole round trip — with enough concurrent
+    /// callers that starves the runtime, since a worker sitting in a blocking syscall cannot be
+    /// stolen or yielded. Handing the call to the blocking pool keeps the async workers free.
+    ///
+    /// The closure receives the client and returns its `ClientResult` unchanged, so callers keep
+    /// whatever error mapping they already had:
+    ///
+    /// ```ignore
+    /// // Default conversion into `HeliusError::ClientError`
+    /// let height = self.run_blocking_rpc(|client| client.get_block_height()).await??;
+    ///
+    /// // Or map the RPC error yourself
+    /// let accounts = self
+    ///     .run_blocking_rpc(move |client| client.get_program_ui_accounts_with_config(&program, cfg))
+    ///     .await?
+    ///     .map_err(|e| HeliusError::InvalidInput(e.to_string()))?;
+    /// ```
+    ///
+    /// # Returns
+    /// The closure's `ClientResult`, or [`HeliusError::Unknown`] if the blocking task itself
+    /// failed to complete (a panic inside the closure, or runtime shutdown).
+    pub(crate) async fn run_blocking_rpc<T, F>(&self, op: F) -> Result<ClientResult<T>>
+    where
+        F: FnOnce(&SolanaRpcClient) -> ClientResult<T> + Send + 'static,
+        T: Send + 'static,
+    {
+        let connection: Arc<SolanaRpcClient> = self.connection();
+
+        tokio::task::spawn_blocking(move || op(&connection))
+            .await
+            .map_err(|e| HeliusError::Unknown {
+                code: StatusCode::INTERNAL_SERVER_ERROR,
+                text: format!("Blocking RPC task failed to complete: {e}"),
+            })
+    }
+
     /// Returns the enhanced (Geyser) WebSocket client, if one was initialized.
     ///
     /// The WebSocket client is only available when the `Helius` instance was created with
@@ -247,5 +289,72 @@ impl Deref for HeliusAsyncSolanaClient {
     /// Dereferences the wrapper to provide access to the underlying asynchronous Solana RPC client
     fn deref(&self) -> &Self::Target {
         &self.client
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::time::Duration;
+
+    /// The whole point of [`Helius::run_blocking_rpc`] is that a blocking RPC call must not park
+    /// an async worker thread. Pinned to a `current_thread` runtime, where the effect is
+    /// unambiguous: the test body and the canary share one thread, so the canary can only keep
+    /// ticking if that thread stayed free. (A `multi_thread` runtime hides the bug — the test
+    /// body blocks the main thread while the canary runs on a worker, and it passes either way.)
+    ///
+    /// The closure blocks its thread for real, so running it inline — the pattern this helper
+    /// replaced — starves the canary and fails the assertion.
+    #[tokio::test(flavor = "current_thread")]
+    async fn run_blocking_rpc_keeps_the_async_worker_free() {
+        let helius: Helius = Helius::new("fake-api-key", Cluster::MainnetBeta).expect("client should build");
+
+        let ticks: Arc<AtomicUsize> = Arc::new(AtomicUsize::new(0));
+        let canary_ticks: Arc<AtomicUsize> = Arc::clone(&ticks);
+
+        // Ticks every 20ms for as long as the runtime will schedule it.
+        let canary = tokio::spawn(async move {
+            loop {
+                tokio::time::sleep(Duration::from_millis(20)).await;
+                canary_ticks.fetch_add(1, Ordering::SeqCst);
+            }
+        });
+
+        // Yield once so the canary is actually scheduled before the blocking work starts.
+        tokio::task::yield_now().await;
+
+        helius
+            .run_blocking_rpc(|_client| {
+                std::thread::sleep(Duration::from_millis(300));
+                Ok(())
+            })
+            .await
+            .expect("blocking task should complete")
+            .expect("closure should succeed");
+
+        let observed: usize = ticks.load(Ordering::SeqCst);
+        canary.abort();
+
+        // ~15 ticks fit in 300ms; assert well under that so a loaded CI box does not flake.
+        assert!(
+            observed >= 5,
+            "async worker was starved during the blocking call: canary ticked {observed} times, expected >= 5"
+        );
+    }
+
+    /// A panic inside the closure surfaces as an error rather than unwinding into the caller or
+    /// silently hanging.
+    #[tokio::test(flavor = "current_thread")]
+    async fn run_blocking_rpc_reports_a_panicking_closure() {
+        let helius: Helius = Helius::new("fake-api-key", Cluster::MainnetBeta).expect("client should build");
+
+        let result: Result<ClientResult<()>> = helius.run_blocking_rpc(|_client| panic!("closure blew up")).await;
+
+        assert!(
+            matches!(result, Err(HeliusError::Unknown { .. })),
+            "a panicking closure should surface as HeliusError::Unknown"
+        );
     }
 }

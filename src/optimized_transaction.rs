@@ -499,7 +499,7 @@ impl Helius {
         version: TransactionVersion,
     ) -> Result<Option<u64>> {
         // Fetch the latest blockhash
-        let recent_blockhash: Hash = self.connection().get_latest_blockhash()?;
+        let recent_blockhash: Hash = self.run_blocking_rpc(|client| client.get_latest_blockhash()).await??;
 
         // Build a message matching the target version so simulation is not capped at the v0 size
         // limit for a large v1 transaction.
@@ -548,8 +548,8 @@ impl Helius {
             ..Default::default()
         };
         let result: Response<RpcSimulateTransactionResult> = self
-            .connection()
-            .simulate_transaction_with_config(&transaction, config)?;
+            .run_blocking_rpc(move |client| client.simulate_transaction_with_config(&transaction, config))
+            .await??;
 
         // A failed simulation still returns `units_consumed: Some(0)`; surface the error instead of
         // proceeding with a bogus compute-unit count (e.g. `UnsupportedVersion` for v1 before the
@@ -608,16 +608,9 @@ impl Helius {
                 });
             }
 
-            // `get_signature_statuses` is the *blocking* Solana client, so calling it directly
-            // would hold a tokio worker thread for the whole round trip. Hand it to the blocking
-            // pool and await the handle instead.
-            let connection = self.connection();
-            let status = tokio::task::spawn_blocking(move || connection.get_signature_statuses(&[txt_sig]))
-                .await
-                .map_err(|e| HeliusError::Unknown {
-                    code: StatusCode::INTERNAL_SERVER_ERROR,
-                    text: format!("Signature status task failed to complete: {e}"),
-                })??;
+            let status = self
+                .run_blocking_rpc(move |client| client.get_signature_statuses(&[txt_sig]))
+                .await??;
 
             // `value` should hold exactly one entry for the single signature queried, but guard
             // against an empty/short response by treating a missing entry as "not yet available"
@@ -667,8 +660,8 @@ impl Helius {
             .as_ref()
             .map_or(config.signers[0].pubkey(), |signer| signer.pubkey());
         let (recent_blockhash, last_valid_block_hash) = self
-            .connection()
-            .get_latest_blockhash_with_commitment(CommitmentConfig::confirmed())?;
+            .run_blocking_rpc(|client| client.get_latest_blockhash_with_commitment(CommitmentConfig::confirmed()))
+            .await??;
         // Check if any of the instructions provided set the compute unit price and/or limit, and throw an error if `true`
         let existing_compute_budget_instructions: bool = config.instructions.iter().any(|instruction| {
             instruction.program_id == ComputeBudgetInstruction::set_compute_unit_limit(0).program_id
@@ -868,20 +861,25 @@ impl Helius {
     /// Sends a transaction and handles its confirmation status
     ///
     /// # Arguments
-    /// * `transaction` - The transaction to be sent, which implements `SerializableTransaction`
+    /// * `transaction` - The transaction to be sent, which implements `SerializableTransaction`.
+    ///   Each send attempt runs on tokio's blocking pool and so needs an owned copy; the bound is
+    ///   satisfied by `Transaction` and `VersionedTransaction`
     /// * `send_transaction_config` - Configuration options for sending the transaction
     /// * `last_valid_block_height` - The last block height at which the transaction is valid
     /// * `timeout` - Optional duration for polling transaction confirmation, defaults to 60 seconds
     ///
     /// # Returns
     /// The transaction signature, if successful
-    pub async fn send_and_confirm_transaction(
+    pub async fn send_and_confirm_transaction<T>(
         &self,
-        transaction: &impl SerializableTransaction,
+        transaction: &T,
         send_transaction_config: RpcSendTransactionConfig,
         last_valid_block_height: u64,
         timeout: Option<Duration>,
-    ) -> Result<Signature> {
+    ) -> Result<Signature>
+    where
+        T: SerializableTransaction + Clone + Send + 'static,
+    {
         // Retry logic with a timeout
         let timeout: Duration = timeout.unwrap_or(Duration::from_secs(60));
         let start_time: Instant = Instant::now();
@@ -891,14 +889,22 @@ impl Helius {
         let mut last_send_err: Option<HeliusError> = None;
 
         // Keep retrying only while both conditions hold: there is time left in the timeout
-        // budget AND the blockhash is still valid. Using `&&` stops as soon as either expires;
-        // `||` would keep looping until both elapsed, defeating the timeout.
-        while Instant::now().duration_since(start_time) < timeout
-            && self.connection().get_block_height()? <= last_valid_block_height
-        {
+        // budget AND the blockhash is still valid. The height check is a `break` rather than a
+        // second `while` clause only because it is now an `await`; stopping as soon as either
+        // expires is the same behaviour (looping until both elapsed would defeat the timeout).
+        while Instant::now().duration_since(start_time) < timeout {
+            let block_height: u64 = self.run_blocking_rpc(|client| client.get_block_height()).await??;
+            if block_height > last_valid_block_height {
+                break;
+            }
+
+            // `send_transaction_with_config` borrows the transaction, but the blocking pool needs
+            // an owned value that outlives this frame. Cloning per attempt is cheap next to the
+            // round trip it precedes, and keeps the serialization identical to before.
+            let attempt: T = transaction.clone();
             let result = self
-                .connection()
-                .send_transaction_with_config(transaction, send_transaction_config);
+                .run_blocking_rpc(move |client| client.send_transaction_with_config(&attempt, send_transaction_config))
+                .await?;
 
             match result {
                 Ok(signature) => {
@@ -970,7 +976,7 @@ impl Helius {
         keypairs: Option<&[&Keypair]>,
         version: TransactionVersion,
     ) -> Result<Option<u64>> {
-        let recent_blockhash: Hash = self.connection().get_latest_blockhash()?;
+        let recent_blockhash: Hash = self.run_blocking_rpc(|client| client.get_latest_blockhash()).await??;
 
         // Build a message matching the target version so a large v1 transaction is not simulated
         // against the v0 size limit.
@@ -1015,8 +1021,8 @@ impl Helius {
         };
 
         let result: Response<RpcSimulateTransactionResult> = self
-            .connection()
-            .simulate_transaction_with_config(&transaction, config)?;
+            .run_blocking_rpc(move |client| client.simulate_transaction_with_config(&transaction, config))
+            .await??;
 
         Ok(result.value.units_consumed)
     }
@@ -1073,8 +1079,8 @@ impl Helius {
         };
 
         let (recent_blockhash, last_valid_block_hash) = self
-            .connection()
-            .get_latest_blockhash_with_commitment(CommitmentConfig::confirmed())?;
+            .run_blocking_rpc(|client| client.get_latest_blockhash_with_commitment(CommitmentConfig::confirmed()))
+            .await??;
 
         // Transaction v1 does not support address lookup tables (SIMD-0385).
         if create_config.version == TransactionVersion::V1 && create_config.lookup_tables.is_some() {
@@ -1305,8 +1311,8 @@ impl Helius {
         let payer_pubkey: Pubkey = fee_payer.pubkey();
 
         let (recent_blockhash, last_valid_block_hash) = self
-            .connection()
-            .get_latest_blockhash_with_commitment(CommitmentConfig::confirmed())?;
+            .run_blocking_rpc(|client| client.get_latest_blockhash_with_commitment(CommitmentConfig::confirmed()))
+            .await??;
 
         let mut final_instructions: Vec<Instruction> = vec![];
 
@@ -1547,7 +1553,7 @@ impl Helius {
                 });
             }
 
-            if self.connection().get_block_height()? > last_valid_block_height {
+            if self.run_blocking_rpc(|client| client.get_block_height()).await?? > last_valid_block_height {
                 return Err(HeliusError::Timeout {
                     code: StatusCode::REQUEST_TIMEOUT,
                     text: format!(
@@ -1722,7 +1728,7 @@ impl Helius {
                     });
                 }
 
-                if self.connection().get_block_height()? > last_valid_block_height {
+                if self.run_blocking_rpc(|client| client.get_block_height()).await?? > last_valid_block_height {
                     return Err(HeliusError::Timeout {
                         code: StatusCode::REQUEST_TIMEOUT,
                         text: format!(
