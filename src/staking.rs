@@ -69,8 +69,8 @@ impl Helius {
     /// fails
     pub async fn create_stake_transaction(&self, owner: Pubkey, amount_sol: f64) -> Result<(String, Pubkey)> {
         let rent_exempt: u64 = self
-            .connection()
-            .get_minimum_balance_for_rent_exemption(StakeStateV2::size_of())?;
+            .run_blocking_rpc(|client| client.get_minimum_balance_for_rent_exemption(StakeStateV2::size_of()))
+            .await??;
         if !amount_sol.is_finite() || amount_sol <= 0.0 {
             return Err(HeliusError::InvalidInput(
                 "Stake amount must be a positive finite number".into(),
@@ -107,7 +107,7 @@ impl Helius {
         let delegate_ix: Instruction =
             stake_instruction::delegate_stake(&stake_account.pubkey(), &owner, &HELIUS_VALIDATOR_PUBKEY);
 
-        let blockhash: Hash = self.connection().get_latest_blockhash()?;
+        let blockhash: Hash = self.run_blocking_rpc(|client| client.get_latest_blockhash()).await??;
         let mut instructions: Vec<Instruction> = create_ix;
         instructions.push(delegate_ix);
 
@@ -142,7 +142,7 @@ impl Helius {
     pub async fn create_unstake_transaction(&self, owner: Pubkey, stake_account: Pubkey) -> Result<String> {
         let deactivate_ix: Instruction = stake_instruction::deactivate_stake(&stake_account, &owner);
 
-        let blockhash: Hash = self.connection().get_latest_blockhash()?;
+        let blockhash: Hash = self.run_blocking_rpc(|client| client.get_latest_blockhash()).await??;
 
         let mut tx: Transaction = Transaction::new_with_payer(&[deactivate_ix], Some(&owner));
 
@@ -189,7 +189,7 @@ impl Helius {
             None, // Custodian
         );
 
-        let blockhash: Hash = self.connection().get_latest_blockhash()?;
+        let blockhash: Hash = self.run_blocking_rpc(|client| client.get_latest_blockhash()).await??;
 
         let mut tx: Transaction = Transaction::new_with_payer(&[withdraw_ix], Some(&owner));
         tx.message.recent_blockhash = blockhash;
@@ -224,8 +224,8 @@ impl Helius {
     /// Returns an error if fetching the rent-exempt minimum balance fails
     pub async fn get_stake_instructions(&self, owner: Pubkey, amount_sol: f64) -> Result<(Vec<Instruction>, Keypair)> {
         let rent_exempt: u64 = self
-            .connection()
-            .get_minimum_balance_for_rent_exemption(StakeStateV2::size_of())?;
+            .run_blocking_rpc(|client| client.get_minimum_balance_for_rent_exemption(StakeStateV2::size_of()))
+            .await??;
 
         if !amount_sol.is_finite() || amount_sol <= 0.0 {
             return Err(HeliusError::InvalidInput(
@@ -332,8 +332,10 @@ impl Helius {
     /// Returns an error if the account cannot be found or isn't a valid stake account
     pub async fn get_withdrawable_amount(&self, stake_account: Pubkey, include_rent_exempt: bool) -> Result<u64> {
         let account = self
-            .connection()
-            .get_account_with_commitment(&stake_account, CommitmentConfig::confirmed())?
+            .run_blocking_rpc(move |client| {
+                client.get_account_with_commitment(&stake_account, CommitmentConfig::confirmed())
+            })
+            .await??
             .value
             .ok_or_else(|| HeliusError::NotFound {
                 text: format!("Stake account {} not found", stake_account),
@@ -353,7 +355,7 @@ impl Helius {
             }
         };
 
-        let current_epoch = self.connection().get_epoch_info()?.epoch;
+        let current_epoch = self.run_blocking_rpc(|client| client.get_epoch_info()).await??.epoch;
 
         // A stake deactivated in epoch N is only withdrawable once epoch N has fully passed
         // (i.e. current_epoch > deactivation_epoch). During the deactivation epoch itself it is
@@ -368,8 +370,8 @@ impl Helius {
         }
 
         let rent_exempt = self
-            .connection()
-            .get_minimum_balance_for_rent_exemption(StakeStateV2::size_of())?;
+            .run_blocking_rpc(|client| client.get_minimum_balance_for_rent_exemption(StakeStateV2::size_of()))
+            .await??;
 
         Ok(lamports.saturating_sub(rent_exempt))
     }
@@ -420,8 +422,10 @@ impl Helius {
         // `get_program_accounts_with_config` was removed in solana-client 4.x; its replacement
         // returns UI-encoded accounts, so decode each back into an `Account`.
         let accounts: Vec<(Pubkey, Account)> = self
-            .connection()
-            .get_program_ui_accounts_with_config(&solana_stake_interface::program::id(), cfg)
+            .run_blocking_rpc(move |client| {
+                client.get_program_ui_accounts_with_config(&solana_stake_interface::program::id(), cfg)
+            })
+            .await?
             .map_err(|e| HeliusError::InvalidInput(e.to_string()))?
             .into_iter()
             .map(|(pubkey, ui_account)| {
