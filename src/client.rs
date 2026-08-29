@@ -1,4 +1,4 @@
-use std::{ops::Deref, sync::Arc};
+use std::{ops::Deref, sync::Arc, time::Duration};
 
 use crate::config::Config;
 use crate::error::{HeliusError, Result};
@@ -26,6 +26,23 @@ pub struct Helius {
     pub async_rpc_client: Option<Arc<AsyncSolanaRpcClient>>,
     /// A reference-counted enhanced (geyser) websocket client
     pub ws_client: Option<Arc<EnhancedWebsocket>>,
+}
+
+/// Default request timeout applied to every HTTP client the SDK builds.
+///
+/// Without this, a stalled upstream (accepts the TCP connection but never responds) makes every
+/// SDK request hang indefinitely — there is no recovery short of killing the process. A finite
+/// default bounds that failure mode to a clear, typed error instead.
+const DEFAULT_HTTP_TIMEOUT: Duration = Duration::from_secs(30);
+
+/// Builds the shared `reqwest::Client` used for all HTTP requests made by the SDK.
+///
+/// A sane default timeout is set so a stalled connection cannot hang the caller forever.
+pub(crate) fn build_http_client() -> Result<Client> {
+    Client::builder()
+        .timeout(DEFAULT_HTTP_TIMEOUT)
+        .build()
+        .map_err(HeliusError::ReqwestError)
 }
 
 impl Helius {
@@ -60,7 +77,7 @@ impl Helius {
             custom_url: None,
         });
 
-        let client = Client::builder().build().map_err(HeliusError::ReqwestError)?;
+        let client = build_http_client()?;
         let rpc_client = Arc::new(RpcClient::new(Arc::new(client.clone()), config.clone())?);
 
         Ok(Helius {
@@ -161,7 +178,7 @@ impl Helius {
             custom_url: Some(url_string),
         });
 
-        let client = Client::builder().build().map_err(HeliusError::ReqwestError)?;
+        let client = build_http_client()?;
         let rpc_client = Arc::new(RpcClient::new(Arc::new(client.clone()), config.clone())?);
 
         Ok(Helius {
@@ -247,5 +264,19 @@ impl Deref for HeliusAsyncSolanaClient {
     /// Dereferences the wrapper to provide access to the underlying asynchronous Solana RPC client
     fn deref(&self) -> &Self::Target {
         &self.client
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn default_http_client_has_timeout() {
+        let client = build_http_client().unwrap();
+        assert!(
+            client.timeout().is_some(),
+            "HTTP client must be built with a default request timeout so a stalled upstream cannot hang the caller forever"
+        );
     }
 }

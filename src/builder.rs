@@ -296,7 +296,10 @@ impl HeliusBuilder {
         let commitment = self.commitment;
         let enable_async = self.enable_async;
         let http_client = self.http_client;
-        let client = http_client.unwrap_or_else(|| Client::builder().build().expect("Failed to build HTTP client"));
+        let client = match http_client {
+            Some(c) => c,
+            None => crate::client::build_http_client()?,
+        };
 
         // Build RPC client
         let rpc_client = if let Some(commitment) = commitment {

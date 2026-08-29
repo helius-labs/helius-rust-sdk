@@ -109,10 +109,11 @@ impl RequestHandler {
             // parsed transaction history) but mutates its input buffer in place, so we hand it
             // owned bytes via `String::into_bytes`. Falls through to a `serde_json` retry on
             // error to surface the more descriptive parser diagnostics for debugging.
+            let body_text_for_fallback = body_text.clone();
             let mut body_bytes: Vec<u8> = body_text.into_bytes();
             match simd_json::serde::from_slice::<T>(&mut body_bytes) {
                 Ok(data) => Ok(data),
-                Err(simd_err) => match serde_json::from_slice::<T>(&body_bytes) {
+                Err(simd_err) => match serde_json::from_slice::<T>(body_text_for_fallback.as_bytes()) {
                     Ok(data) => Ok(data),
                     Err(serde_err) => {
                         let raw: String = String::from_utf8_lossy(&body_bytes).into_owned();

@@ -114,7 +114,7 @@ impl Config {
     /// # Returns
     /// A `Result` containing a Helius client with basic RPC capabilities
     pub fn create_client(self) -> Result<Helius> {
-        let client: Client = Client::builder().build().map_err(HeliusError::ReqwestError)?;
+        let client: Client = crate::client::build_http_client()?;
         let rpc_client: Arc<RpcClient> = Arc::new(self.rpc_client_with_reqwest_client(client.clone())?);
 
         Ok(Helius {
@@ -131,7 +131,7 @@ impl Config {
     /// # Returns
     /// A `Result` containing a Helius client with both RPC and async Solana capabilities
     pub fn create_client_with_async(self) -> Result<Helius> {
-        let client: Client = Client::builder().build().map_err(HeliusError::ReqwestError)?;
+        let client: Client = crate::client::build_http_client()?;
         let rpc_url = self.build_rpc_url();
 
         let async_solana_client: Arc<AsyncSolanaRpcClient> = Arc::new(AsyncSolanaRpcClient::new(rpc_url));
@@ -159,7 +159,7 @@ impl Config {
         ping_interval_secs: Option<u64>,
         pong_timeout_secs: Option<u64>,
     ) -> Result<Helius> {
-        let client: Client = Client::builder().build().map_err(HeliusError::ReqwestError)?;
+        let client: Client = crate::client::build_http_client()?;
         let rpc_client: Arc<RpcClient> = Arc::new(self.rpc_client_with_reqwest_client(client.clone())?);
 
         let api_key = self.require_api_key("WebSocket connections")?;
@@ -189,7 +189,7 @@ impl Config {
         ping_interval_secs: Option<u64>,
         pong_timeout_secs: Option<u64>,
     ) -> Result<Helius> {
-        let client: Client = Client::builder().build().map_err(HeliusError::ReqwestError)?;
+        let client: Client = crate::client::build_http_client()?;
         let rpc_client: Arc<RpcClient> = Arc::new(self.rpc_client_with_reqwest_client(client.clone())?);
 
         // Setup async client
