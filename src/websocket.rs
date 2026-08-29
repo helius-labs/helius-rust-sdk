@@ -406,7 +406,7 @@ impl EnhancedWebsocket {
                         let json_result = match json.get("result") {
                             Some(v) => v,
                             None => {
-                                let _ = response_sender.send(Err(HeliusError::EnhancedWebsocket { reason: "missing `result` field".into(), message: text.clone() }));
+                                let _ = response_sender.send(Err(HeliusError::EnhancedWebsocket { reason: "missing `result` field".into(), message: text.to_string() }));
                                 continue;
                             }
                         };
@@ -428,7 +428,7 @@ impl EnhancedWebsocket {
                         let sid = match json.get("result").and_then(Value::as_u64) {
                             Some(v) => v,
                             None => {
-                                let _ = response_sender.send(Err(HeliusError::EnhancedWebsocket { reason: "invalid `result` field".into(), message: text.clone() }));
+                                let _ = response_sender.send(Err(HeliusError::EnhancedWebsocket { reason: "invalid `result` field".into(), message: text.to_string() }));
                                 continue;
                             }
                         };
