@@ -448,7 +448,15 @@ async fn post_to_sender(tx64: &str, opts: &SenderSendOptions) -> Result<Signatur
             val.to_string().chars().take(200).collect::<String>()
         )))
     }
-}
+    }
+
+    /// Converts a SOL amount to lamports, rounding to the nearest integer lamport.
+    ///
+    /// Uses `round()` rather than truncation so fractional lamports are not silently
+    /// dropped (e.g. `0.3` SOL must yield `300_000_000` lamports, not `299_999_999`).
+    pub(crate) fn sol_to_lamports(sol: f64) -> u64 {
+        (sol * 1_000_000_000.0).round() as u64
+    }
 
 impl Helius {
     // Builds a minimal, unsigned transaction for fee estimation: v0 if LUTs are included, legacy
@@ -1456,7 +1464,7 @@ impl Helius {
             .and_then(|o| o.get("landed_tips_75th_percentile"))
             .and_then(|v| v.as_f64());
 
-        Ok(val_sol.map(|sol| (sol * 1_000_000_000.0) as u64))
+        Ok(val_sol.map(sol_to_lamports))
     }
 
     /// Determines the tip amount in lamports using the 75th percentile floor or falling back to the minimum.
@@ -1758,7 +1766,7 @@ impl Helius {
 mod tests {
     use super::{
         build_v1_transaction, collect_unique_keypair_refs, collect_unique_signers, is_retryable_confirmation_error,
-        v1_priority_fee_lamports, MAX_TRANSACTION_V1_SIZE,
+        sol_to_lamports, v1_priority_fee_lamports, MAX_TRANSACTION_V1_SIZE,
     };
 
     /// The v1 total-lamports fee conversion must stay the exact inverse of Atlas's
@@ -1772,6 +1780,18 @@ mod tests {
         assert_eq!(v1_priority_fee_lamports(1, 1), 1);
         assert_eq!(v1_priority_fee_lamports(0, 200_000), 0);
     }
+
+    #[test]
+    fn test_sol_to_lamports_rounds_nearest_lamport() {
+        // Fractional lamports must round, not truncate: 0.3 SOL is exactly 300_000_000 lamports.
+        assert_eq!(sol_to_lamports(0.3), 300_000_000);
+        assert_eq!(sol_to_lamports(1.0), 1_000_000_000);
+        // A single lamport.
+        assert_eq!(sol_to_lamports(0.000_000_001), 1);
+        // Regression guard: truncation would yield 299_999_999 for 0.3 SOL.
+        assert_ne!(sol_to_lamports(0.3), 299_999_999);
+    }
+
     use crate::error::HeliusError;
     use reqwest::StatusCode;
     use solana_sdk::{
