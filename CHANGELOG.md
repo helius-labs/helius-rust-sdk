@@ -7,6 +7,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Changed
+- Upgraded the Solana dependencies to Agave 4.3.0-beta.3 and wincode 0.6.1. The minimum supported Rust version is now 1.97.1, matching Agave.
 - **`send_and_confirm_transaction` gained `Clone + Send + 'static` bounds** on its transaction parameter (`transaction: &impl SerializableTransaction` became a named generic `T`). Each send attempt now runs on the blocking pool, which needs an owned value outliving the call frame, so the transaction is cloned per attempt. `Transaction` and `VersionedTransaction` both satisfy the bounds, so callers passing either are unaffected; a caller passing a custom `SerializableTransaction` type must add the bounds.
 
 ### Added
