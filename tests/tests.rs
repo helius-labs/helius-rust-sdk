@@ -54,6 +54,7 @@ mod smart_transactions {
     mod test_input_validation;
     mod test_poll_confirmation;
     mod test_send_and_confirm;
+    mod test_sender_tip;
     mod test_sender_urls;
 }
 mod websocket {
