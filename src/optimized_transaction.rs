@@ -79,6 +79,29 @@ pub const MIN_TIP_LAMPORTS_DUAL: u64 = MIN_TIP_LAMPORTS_MAX;
 /// Minimum tip: 0.000005 SOL (5,000 lamports).
 pub const MIN_TIP_LAMPORTS_SWQOS: u64 = 5_000; // 0.000005 SOL
 
+/// Default hard ceiling on the auto-derived Sender tip: 0.01 SOL, 10x the Sender Max minimum.
+///
+/// The tip is read from a third-party feed and paid as a real transfer out of the fee payer's
+/// account, so it needs an upper bound as well as a lower one. 10x leaves ample room for genuine
+/// congestion — the 75th-percentile landed tip normally sits three orders of magnitude below this
+/// — while bounding the loss if the feed spikes or is tampered with.
+///
+/// Override per-send with [`SenderSendOptions::with_max_tip_lamports`](crate::types::SenderSendOptions::with_max_tip_lamports).
+pub const DEFAULT_MAX_TIP_LAMPORTS: u64 = 10_000_000; // 0.01 SOL
+
+// Satisfiability only: a default below the tier minimum would fail every default-configured send.
+// The 10x headroom is deliberately not asserted, so tuning the default is not a build break.
+const _: () = assert!(
+    DEFAULT_MAX_TIP_LAMPORTS >= MIN_TIP_LAMPORTS_MAX,
+    "DEFAULT_MAX_TIP_LAMPORTS must be satisfiable on the Sender Max tier"
+);
+
+/// Largest tip-floor value, in SOL, accepted from the feed. Anything above is treated as malformed.
+///
+/// Guards the parse independently of the per-send ceiling, so a broken or compromised feed cannot
+/// propose an absurd tip in the first place.
+const MAX_PLAUSIBLE_TIP_FLOOR_SOL: f64 = 1.0;
+
 /// Maximum serialized size of a Transaction v1 (SIMD-0296), in bytes.
 ///
 /// Agave 4.2 activates larger transactions: v1 (SIMD-0385) raises the cap from the legacy/v0
@@ -261,6 +284,36 @@ fn collect_unique_keypair_refs<'a>(signers: &'a [Keypair], fee_payer: &'a Keypai
 /// [`Helius::poll_transaction_confirmation_with_timeout`] and pass the time remaining, so a poll
 /// cannot overrun the budget the caller was given.
 pub const DEFAULT_CONFIRMATION_POLL_TIMEOUT: Duration = Duration::from_secs(15);
+
+/// Converts a tip-floor reading in SOL to lamports. `None` for anything that cannot be a real tip
+/// floor, leaving the caller to fall back to the tier minimum.
+fn tip_floor_sol_to_lamports(sol: f64) -> Option<u64> {
+    // Catches NaN and both infinities too: every comparison against NaN is false, so `contains`
+    // is false for them.
+    if !(0.0..=MAX_PLAUSIBLE_TIP_FLOOR_SOL).contains(&sol) {
+        log::warn!("Ignoring implausible tip-floor value from feed: {sol} SOL");
+        return None;
+    }
+
+    Some((sol * 1_000_000_000.0) as u64)
+}
+
+/// Resolves the tip to pay: a missing or rejected feed reading falls back to the minimum, and the
+/// result is *clamped*, not merely floored.
+///
+/// Callers reject an unsatisfiable ceiling before calling, since only they can attribute it. The
+/// bounds are normalized anyway so this cannot panic the way a bare `clamp` would; the
+/// `debug_assert` keeps that misuse loud in tests.
+fn resolve_tip_lamports(feed_lamports: Option<u64>, min_lamports: u64, max_tip_lamports: u64) -> u64 {
+    debug_assert!(
+        max_tip_lamports >= min_lamports,
+        "tip ceiling must not sit below the tier minimum"
+    );
+
+    let ceiling: u64 = max_tip_lamports.max(min_lamports);
+
+    feed_lamports.unwrap_or(min_lamports).clamp(min_lamports, ceiling)
+}
 
 fn is_retryable_confirmation_error(err: &HeliusError) -> bool {
     matches!(err, HeliusError::Timeout { .. })
@@ -1456,19 +1509,56 @@ impl Helius {
             .and_then(|o| o.get("landed_tips_75th_percentile"))
             .and_then(|v| v.as_f64());
 
-        Ok(val_sol.map(|sol| (sol * 1_000_000_000.0) as u64))
+        Ok(val_sol.and_then(tip_floor_sol_to_lamports))
     }
 
-    /// Determines the tip amount in lamports using the 75th percentile floor or falling back to the minimum.
+    /// Determines the tip amount in lamports from the 75th-percentile tip floor, bounded below by
+    /// the tier minimum and above by [`DEFAULT_MAX_TIP_LAMPORTS`].
+    ///
+    /// To choose the ceiling yourself, use [`Helius::determine_tip_lamports_with_cap`].
+    ///
+    /// # Arguments
+    /// * `swqos_only` - Selects the tier, and with it the minimum tip
+    ///
+    /// # Returns
+    /// The tip in lamports, within `[tier minimum, DEFAULT_MAX_TIP_LAMPORTS]`
     pub async fn determine_tip_lamports(&self, swqos_only: bool) -> Result<u64> {
+        self.determine_tip_lamports_with_cap(swqos_only, DEFAULT_MAX_TIP_LAMPORTS)
+            .await
+    }
+
+    /// Determines the tip amount in lamports, bounded below by the tier minimum and above by
+    /// `max_tip_lamports`. See [`DEFAULT_MAX_TIP_LAMPORTS`] for why the ceiling exists.
+    ///
+    /// # Arguments
+    /// * `swqos_only` - Selects the tier, and with it the minimum tip
+    /// * `max_tip_lamports` - Hard ceiling on the derived tip
+    ///
+    /// # Returns
+    /// The tip in lamports, within `[tier minimum, max_tip_lamports]`
+    ///
+    /// # Errors
+    /// [`HeliusError::InvalidInput`] if `max_tip_lamports` is below the tier's minimum tip — no tip
+    /// satisfies both bounds, and paying above the caller's ceiling would defeat setting one.
+    /// Validated before the feed is contacted, so a misconfiguration costs no network call.
+    pub async fn determine_tip_lamports_with_cap(&self, swqos_only: bool, max_tip_lamports: u64) -> Result<u64> {
         let min_lamports: u64 = if swqos_only {
             MIN_TIP_LAMPORTS_SWQOS
         } else {
             MIN_TIP_LAMPORTS_MAX
         };
-        let floor_lamports: u64 = self.fetch_tip_floor_75th().await?.unwrap_or(min_lamports);
 
-        Ok(floor_lamports.max(min_lamports))
+        if max_tip_lamports < min_lamports {
+            return Err(HeliusError::InvalidInput(format!(
+                "max_tip_lamports ({max_tip_lamports}) is below the minimum tip for this tier \
+                 ({min_lamports} lamports, {tier}); raise the ceiling or switch tiers",
+                tier = if swqos_only { "SWQOS-only" } else { "Sender Max" },
+            )));
+        }
+
+        let feed_lamports: Option<u64> = self.fetch_tip_floor_75th().await?;
+
+        Ok(resolve_tip_lamports(feed_lamports, min_lamports, max_tip_lamports))
     }
 
     /// Creates an optimized smart transaction with an appended tip transfer instruction for Sender
@@ -1587,17 +1677,11 @@ impl Helius {
             return Err(HeliusError::InvalidInput("Sender region must be specified".to_string()));
         }
 
-        // Determine tip and enforce floor (all in lamports)
-        let mut tip_lamports = self.determine_tip_lamports(sender_opts.swqos_only).await?;
-        let floor = if sender_opts.swqos_only {
-            MIN_TIP_LAMPORTS_SWQOS
-        } else {
-            MIN_TIP_LAMPORTS_MAX
-        };
-
-        if tip_lamports < floor {
-            tip_lamports = floor;
-        }
+        // The clamp lives in `determine_tip_lamports_with_cap`; a separate floor pass here would
+        // only mask a ceiling that was set too low.
+        let tip_lamports: u64 = self
+            .determine_tip_lamports_with_cap(sender_opts.swqos_only, sender_opts.max_tip_lamports)
+            .await?;
 
         let create_cfg: CreateSmartTransactionConfig = config.create_config;
 
@@ -1758,7 +1842,8 @@ impl Helius {
 mod tests {
     use super::{
         build_v1_transaction, collect_unique_keypair_refs, collect_unique_signers, is_retryable_confirmation_error,
-        v1_priority_fee_lamports, MAX_TRANSACTION_V1_SIZE,
+        resolve_tip_lamports, tip_floor_sol_to_lamports, v1_priority_fee_lamports, DEFAULT_MAX_TIP_LAMPORTS,
+        MAX_PLAUSIBLE_TIP_FLOOR_SOL, MAX_TRANSACTION_V1_SIZE, MIN_TIP_LAMPORTS_MAX, MIN_TIP_LAMPORTS_SWQOS,
     };
 
     /// The v1 total-lamports fee conversion must stay the exact inverse of Atlas's
@@ -2059,5 +2144,84 @@ mod tests {
         assert!(is_retryable_confirmation_error(&timeout));
         assert!(!is_retryable_confirmation_error(&tx_error));
         assert!(!is_retryable_confirmation_error(&invalid_input));
+    }
+
+    /// The tip-floor feed is third-party input that turns directly into a signed transfer, so
+    /// anything that cannot be a real tip floor is rejected rather than cast.
+    #[test]
+    fn tip_floor_rejects_values_that_cannot_be_a_tip_floor() {
+        assert_eq!(tip_floor_sol_to_lamports(f64::NAN), None, "NaN");
+        assert_eq!(tip_floor_sol_to_lamports(f64::INFINITY), None, "infinity");
+        assert_eq!(tip_floor_sol_to_lamports(f64::NEG_INFINITY), None, "negative infinity");
+        assert_eq!(tip_floor_sol_to_lamports(-0.5), None, "negative");
+        assert_eq!(
+            tip_floor_sol_to_lamports(MAX_PLAUSIBLE_TIP_FLOOR_SOL + 0.1),
+            None,
+            "above the plausible bound"
+        );
+        assert_eq!(tip_floor_sol_to_lamports(1_000_000.0), None, "absurd");
+    }
+
+    /// Ordinary readings convert cleanly, including the boundary value itself.
+    #[test]
+    fn tip_floor_accepts_plausible_values() {
+        // A typical reading: 0.000024871 SOL.
+        assert_eq!(tip_floor_sol_to_lamports(0.000_024_871), Some(24_871));
+        assert_eq!(tip_floor_sol_to_lamports(0.0), Some(0), "zero is a valid floor");
+        assert_eq!(
+            tip_floor_sol_to_lamports(MAX_PLAUSIBLE_TIP_FLOOR_SOL),
+            Some(1_000_000_000),
+            "the bound itself is inclusive"
+        );
+    }
+
+    /// The clamp is the fix: previously the feed was only floored, so an arbitrarily large reading
+    /// became an arbitrarily large transfer.
+    #[test]
+    fn resolve_tip_clamps_to_both_bounds() {
+        let min = MIN_TIP_LAMPORTS_MAX;
+        let max = DEFAULT_MAX_TIP_LAMPORTS;
+
+        assert_eq!(
+            resolve_tip_lamports(None, min, max),
+            min,
+            "no reading falls back to the minimum"
+        );
+        assert_eq!(
+            resolve_tip_lamports(Some(0), min, max),
+            min,
+            "below the minimum is raised"
+        );
+        assert_eq!(
+            resolve_tip_lamports(Some(min + 1), min, max),
+            min + 1,
+            "a reading inside the bounds is used as-is"
+        );
+        assert_eq!(
+            resolve_tip_lamports(Some(max), min, max),
+            max,
+            "the ceiling is inclusive"
+        );
+        assert_eq!(
+            resolve_tip_lamports(Some(max + 1), min, max),
+            max,
+            "above the ceiling is capped — this is what used to be unbounded"
+        );
+        assert_eq!(
+            resolve_tip_lamports(Some(u64::MAX), min, max),
+            max,
+            "a hostile feed value cannot exceed the ceiling"
+        );
+    }
+
+    /// The SWQOS tier has a much lower minimum, and the same clamp applies against it.
+    #[test]
+    fn resolve_tip_respects_the_swqos_minimum() {
+        let min = MIN_TIP_LAMPORTS_SWQOS;
+        let max = DEFAULT_MAX_TIP_LAMPORTS;
+
+        assert_eq!(resolve_tip_lamports(None, min, max), MIN_TIP_LAMPORTS_SWQOS);
+        assert_eq!(resolve_tip_lamports(Some(1), min, max), MIN_TIP_LAMPORTS_SWQOS);
+        assert_eq!(resolve_tip_lamports(Some(u64::MAX), min, max), max);
     }
 }

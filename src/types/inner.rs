@@ -1988,6 +1988,18 @@ pub struct SenderSendOptions {
     /// Poll settings
     pub poll_timeout_ms: u64,
     pub poll_interval_ms: u64,
+    /// Hard ceiling, in lamports, on the tip the SDK derives automatically. Defaults to
+    /// [`DEFAULT_MAX_TIP_LAMPORTS`] (0.01 SOL).
+    ///
+    /// Bounds only the *derived* tip; a tip you build into the instructions yourself is untouched.
+    /// Must be at least the tier's minimum ([`MIN_TIP_LAMPORTS_MAX`], or [`MIN_TIP_LAMPORTS_SWQOS`]
+    /// when `swqos_only`) — a lower ceiling is unsatisfiable and fails the send rather than paying
+    /// above it.
+    ///
+    /// [`DEFAULT_MAX_TIP_LAMPORTS`]: crate::optimized_transaction::DEFAULT_MAX_TIP_LAMPORTS
+    /// [`MIN_TIP_LAMPORTS_MAX`]: crate::optimized_transaction::MIN_TIP_LAMPORTS_MAX
+    /// [`MIN_TIP_LAMPORTS_SWQOS`]: crate::optimized_transaction::MIN_TIP_LAMPORTS_SWQOS
+    pub max_tip_lamports: u64,
 }
 
 impl Default for SenderSendOptions {
@@ -1998,6 +2010,7 @@ impl Default for SenderSendOptions {
             skip_preflight: true,
             poll_timeout_ms: 60_000,
             poll_interval_ms: 2_000,
+            max_tip_lamports: crate::optimized_transaction::DEFAULT_MAX_TIP_LAMPORTS,
         }
     }
 }
@@ -2035,6 +2048,14 @@ impl SenderSendOptions {
     /// Sets the poll interval in milliseconds.
     pub fn with_poll_interval_ms(mut self, poll_interval_ms: u64) -> Self {
         self.poll_interval_ms = poll_interval_ms;
+        self
+    }
+
+    /// Sets the hard ceiling on the auto-derived tip, in lamports.
+    ///
+    /// See [`SenderSendOptions::max_tip_lamports`]. Must be at least the tier's minimum tip.
+    pub fn with_max_tip_lamports(mut self, max_tip_lamports: u64) -> Self {
+        self.max_tip_lamports = max_tip_lamports;
         self
     }
 }

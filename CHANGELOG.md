@@ -6,10 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+### Security
+- **The auto-derived Sender tip had no upper bound.** `determine_tip_lamports` read the 75th-percentile tip floor from a third-party feed (Jito's `bundles.jito.wtf` endpoint) and applied only `.max(minimum)` — a floor, never a ceiling — then paid the result as a real `system_instruction::transfer` out of the fee payer's account. `SenderSendOptions` gave the caller no way to bound it. Two consequences: an ordinary tip spike during congestion silently charged far more than the 0.001 SOL a caller expected, and a compromised or malfunctioning feed could propose an arbitrary amount, up to draining the payer into the tip account. The priority fee already had `priority_fee_cap`; the tip — larger and unconditional — had nothing.
+
+  The derived tip is now **clamped** between the tier minimum and a ceiling, and the feed value is validated before use (non-finite, negative, and implausibly large readings are rejected with a warning and fall back to the minimum, instead of being cast straight into a transfer).
+
+  Safe by default: `determine_tip_lamports` keeps its signature and now applies `DEFAULT_MAX_TIP_LAMPORTS` (0.01 SOL, 10x the Sender Max minimum), so existing callers are bounded without a code change. Set your own ceiling via `SenderSendOptions::with_max_tip_lamports` or `determine_tip_lamports_with_cap`. A ceiling below the tier's minimum tip is unsatisfiable and returns `HeliusError::InvalidInput` rather than silently paying above it. This bounds only the *derived* tip — a tip you build into the instructions yourself is untouched.
+
 ### Changed
 - **`send_and_confirm_transaction` gained `Clone + Send + 'static` bounds** on its transaction parameter (`transaction: &impl SerializableTransaction` became a named generic `T`). Each send attempt now runs on the blocking pool, which needs an owned value outliving the call frame, so the transaction is cloned per attempt. `Transaction` and `VersionedTransaction` both satisfy the bounds, so callers passing either are unaffected; a caller passing a custom `SerializableTransaction` type must add the bounds.
 
 ### Added
+- `SenderSendOptions::max_tip_lamports` (with a `with_max_tip_lamports` builder), `Helius::determine_tip_lamports_with_cap`, and the `DEFAULT_MAX_TIP_LAMPORTS` constant, for bounding the auto-derived Sender tip. `SenderSendOptions` is `#[non_exhaustive]` and constructed via `default()`/`new()` plus builders, so the new field is additive.
 - `Helius::poll_transaction_confirmation_with_timeout` and the `DEFAULT_CONFIRMATION_POLL_TIMEOUT` constant, so a caller holding an overall deadline can bound a confirmation poll by the time actually remaining rather than by the fixed default. `poll_transaction_confirmation` is unchanged and delegates to it with the default.
 
 ### Fixed
