@@ -45,6 +45,14 @@ pub const DEFAULT_PING_DURATION_SECONDS: u64 = 10;
 /// considered dead and closed.
 pub const DEFAULT_MAX_FAILED_PINGS: usize = 3;
 
+/// Maximum number of consecutive unusable frames tolerated before the connection is treated as
+/// broken.
+///
+/// Individual bad frames are skipped so one cannot kill every live subscription; this bound keeps
+/// that from becoming a silent spin against a peer that is persistently broken. The counter resets
+/// on any frame the client can act on, so only an unbroken run trips it.
+pub const MAX_CONSECUTIVE_UNUSABLE_FRAMES: usize = 10;
+
 // pub type Result<T = ()> = Result<T, HeliusError>;
 
 type UnsubscribeFn = Box<dyn FnOnce() -> BoxFuture<'static, ()> + Send>;
@@ -52,6 +60,11 @@ type SubscribeResponseMsg = Result<(mpsc::UnboundedReceiver<Value>, UnsubscribeF
 type SubscribeRequestMsg = (String, Value, oneshot::Sender<SubscribeResponseMsg>);
 type SubscribeResult<'a, T> = Result<(BoxStream<'a, T>, UnsubscribeFn)>;
 type RequestMsg = (String, Value, oneshot::Sender<Result<Value>>);
+type UnsubscribeRequest = (String, u64, oneshot::Sender<()>);
+
+/// Outcome of handling one incoming text frame: `None` if it was acted on, `Some(reason)` if it
+/// could not be.
+type FrameOutcome = Option<String>;
 
 /// A client for subscribing to transaction or account updates from a Helius (Geyser) enhanced websocket server.
 ///
@@ -61,6 +74,157 @@ pub struct EnhancedWebsocket {
     shutdown_sender: oneshot::Sender<()>,
     node_version: RwLock<Option<semver::Version>>,
     ws: JoinHandle<Result<()>>,
+}
+
+/// Handles one incoming JSON-RPC text frame, returning `Some(reason)` if it could not be acted on.
+///
+/// Every failure in here belongs to the frame, or at most to the single request waiting on it —
+/// never to the connection. `run_ws` owns the only stream and the whole subscription map, so a
+/// failure that propagates out of it drops every subscriber's channel at once.
+fn handle_frame(
+    text: &str,
+    other_requests: &mut BTreeMap<u64, oneshot::Sender<Result<Value>>>,
+    requests_unsubscribe: &mut BTreeMap<u64, oneshot::Sender<()>>,
+    requests_subscribe: &mut BTreeMap<u64, (String, oneshot::Sender<SubscribeResponseMsg>)>,
+    subscriptions: &mut BTreeMap<u64, mpsc::UnboundedSender<Value>>,
+    unsubscribe_sender: &mpsc::UnboundedSender<UnsubscribeRequest>,
+) -> FrameOutcome {
+    let mut json: Map<String, Value> = match serde_json::from_str(text) {
+        Ok(json) => json,
+        Err(err) => return Some(format!("not valid JSON-RPC: {err}")),
+    };
+
+    // Response to one of our requests, e.g. `{"jsonrpc":"2.0","result":5308752,"id":1}`
+    if let Some(id_value) = json.get("id") {
+        // Servers answer a parse or invalid-request error with `"id": null`, so a non-numeric id
+        // is an expected frame rather than grounds for a teardown.
+        let Some(id) = id_value.as_u64() else {
+            return Some(format!("unusable `id` field: {id_value}"));
+        };
+
+        let err = json.get("error").map(|error_object| {
+            match serde_json::from_value::<RpcErrorObject>(error_object.clone()) {
+                Ok(rpc_error_object) => format!("{} ({})", rpc_error_object.message, rpc_error_object.code),
+                Err(err) => format!(
+                    "Failed to deserialize RPC error response: {} [{}]",
+                    serde_json::to_string(error_object).unwrap_or_default(),
+                    err
+                ),
+            }
+        });
+
+        if let Some(response_sender) = other_requests.remove(&id) {
+            match err {
+                Some(reason) => {
+                    let _ = response_sender.send(Err(HeliusError::EnhancedWebsocket {
+                        reason,
+                        message: text.to_string(),
+                    }));
+                }
+                None => match json.get("result") {
+                    // A send error here only means the caller stopped waiting.
+                    Some(json_result) => {
+                        let _ = response_sender.send(Ok(json_result.clone()));
+                    }
+                    None => {
+                        // Fail the one request that is waiting, not every subscriber.
+                        let _ = response_sender.send(Err(HeliusError::EnhancedWebsocket {
+                            reason: "missing `result` field".into(),
+                            message: text.to_string(),
+                        }));
+                        return Some(format!("response to request {id} had neither `result` nor `error`"));
+                    }
+                },
+            }
+        } else if let Some(response_sender) = requests_unsubscribe.remove(&id) {
+            let _ = response_sender.send(()); // do not care if receiver is closed
+        } else if let Some((operation, response_sender)) = requests_subscribe.remove(&id) {
+            match err {
+                Some(reason) => {
+                    let _ = response_sender.send(Err(HeliusError::EnhancedWebsocket {
+                        reason,
+                        message: text.to_string(),
+                    }));
+                }
+                None => {
+                    let Some(sid) = json.get("result").and_then(Value::as_u64) else {
+                        let _ = response_sender.send(Err(HeliusError::EnhancedWebsocket {
+                            reason: "invalid `result` field".into(),
+                            message: text.to_string(),
+                        }));
+                        return Some(format!("subscribe ack {id} carried no subscription id"));
+                    };
+
+                    // Create notifications channel and unsubscribe function
+                    let (notifications_sender, notifications_receiver) = mpsc::unbounded_channel();
+                    let unsubscribe_operation = operation.clone();
+                    let unsubscribe_sender_for_fn = unsubscribe_sender.clone();
+                    let unsubscribe = Box::new(move || {
+                        async move {
+                            let (response_sender, response_receiver) = oneshot::channel();
+                            // do nothing if ws already closed
+                            if unsubscribe_sender_for_fn
+                                .send((unsubscribe_operation, sid, response_sender))
+                                .is_ok()
+                            {
+                                let _ = response_receiver.await; // channel can be closed only if ws is closed
+                            }
+                        }
+                        .boxed()
+                    });
+
+                    if response_sender.send(Ok((notifications_receiver, unsubscribe))).is_err() {
+                        // The subscriber gave up before its ack arrived. The server-side
+                        // subscription already exists, so release it rather than leak it.
+                        let (drop_sender, _drop_receiver) = oneshot::channel();
+                        let _ = unsubscribe_sender.send((operation, sid, drop_sender));
+                    } else {
+                        subscriptions.insert(sid, notifications_sender);
+                    }
+                }
+            }
+        } else {
+            // A duplicate or late ack for a request that is no longer pending.
+            return Some(format!("no pending request with id {id}"));
+        }
+
+        return None;
+    }
+
+    // Notification, example:
+    // `{"jsonrpc":"2.0","method":"logsNotification","params":{"result":{...},"subscription":3114862}}`
+    if let Some(Value::Object(params)) = json.get_mut("params") {
+        if let Some(sid) = params.get("subscription").and_then(Value::as_u64) {
+            let mut unsubscribe_required = false;
+
+            if let Some(notifications_sender) = subscriptions.get(&sid) {
+                if let Some(result) = params.remove("result") {
+                    if notifications_sender.send(result).is_err() {
+                        unsubscribe_required = true;
+                    }
+                }
+            } else {
+                unsubscribe_required = true;
+            }
+
+            if unsubscribe_required {
+                if let Some(Value::String(method)) = json.remove("method") {
+                    if let Some(operation) = method.strip_suffix("Notification") {
+                        let (response_sender, _response_receiver) = oneshot::channel();
+                        let _ = unsubscribe_sender.send((operation.to_string(), sid, response_sender));
+                    }
+                }
+            }
+        }
+
+        return None;
+    }
+
+    // Well-formed JSON that is neither a response nor a notification. Left uncounted: it may be
+    // benign server traffic, and ignoring it costs nothing.
+    log::debug!("Ignoring unrecognized websocket frame: {text}");
+
+    None
 }
 
 impl EnhancedWebsocket {
@@ -280,6 +444,7 @@ impl EnhancedWebsocket {
     ) -> Result<()> {
         let mut request_id: u64 = 0;
         let mut unmatched_pings: usize = 0;
+        let mut consecutive_unusable_frames: usize = 0;
 
         let mut requests_subscribe = BTreeMap::new();
         let mut requests_unsubscribe = BTreeMap::<u64, oneshot::Sender<()>>::new();
@@ -365,104 +530,41 @@ impl EnhancedWebsocket {
                   Message::Frame(_frame) => continue,
                 };
 
-                let mut json: Map<String, Value> = serde_json::from_str(&text)?;
+                let unusable: FrameOutcome = handle_frame(
+                    text.as_str(),
+                    &mut other_requests,
+                    &mut requests_unsubscribe,
+                    &mut requests_subscribe,
+                    &mut subscriptions,
+                    &unsubscribe_sender,
+                );
 
-                // Subscribe/Unsubscribe response, example:
-                // `{"jsonrpc":"2.0","result":5308752,"id":1}`
-                if let Some(id) = json.get("id") {
-                  let id = id.as_u64().ok_or_else(|| {
-                      HeliusError::EnhancedWebsocket { reason: "invalid `id` field".into(), message: text.as_str().to_string() }
-                  })?;
+                match unusable {
+                    Some(reason) => {
+                        consecutive_unusable_frames += 1;
+                        log::warn!(
+                            "Ignoring websocket frame ({reason}); {consecutive_unusable_frames} consecutive unusable frame(s)"
+                        );
 
-                  let err = json.get("error").map(|error_object| {
-                      match serde_json::from_value::<RpcErrorObject>(error_object.clone()) {
-                          Ok(rpc_error_object) => {
-                              format!("{} ({})",  rpc_error_object.message, rpc_error_object.code)
-                          }
-                          Err(err) => format!(
-                              "Failed to deserialize RPC error response: {} [{}]",
-                              serde_json::to_string(error_object).unwrap_or_default(),
-                              err
-                          )
-                      }
-                  });
+                        // A run this long means the peer is broken rather than glitching. Close and
+                        // fail loudly so the caller can reconnect, instead of spinning silently.
+                        if consecutive_unusable_frames >= MAX_CONSECUTIVE_UNUSABLE_FRAMES {
+                            let frame = CloseFrame {
+                                code: CloseCode::Protocol,
+                                reason: format!("{MAX_CONSECUTIVE_UNUSABLE_FRAMES} consecutive unusable frames").into(),
+                            };
+                            let _ = ws.send(Message::Close(Some(frame))).await;
+                            let _ = ws.flush().await;
 
-                  if let Some(response_sender) = other_requests.remove(&id) {
-                    match err {
-                      Some(reason) => {
-                        let _ = response_sender.send(Err(HeliusError::EnhancedWebsocket { reason, message: text.as_str().to_string()}));
-                      },
-                      None => {
-                        let json_result = json.get("result").ok_or_else(|| {
-                            HeliusError::EnhancedWebsocket { reason: "missing `result` field".into(), message: text.as_str().to_string() }
-                        })?;
-                        if response_sender.send(Ok(json_result.clone())).is_err() {
-                            break;
+                            return Err(HeliusError::EnhancedWebsocket {
+                                reason: format!(
+                                    "{MAX_CONSECUTIVE_UNUSABLE_FRAMES} consecutive unusable frames; last: {reason}"
+                                ),
+                                message: text.as_str().to_string(),
+                            });
                         }
-                      }
                     }
-                  } else if let Some(response_sender) = requests_unsubscribe.remove(&id) {
-                    let _ = response_sender.send(()); // do not care if receiver is closed
-                  } else if let Some((operation, response_sender)) = requests_subscribe.remove(&id) {
-                    match err {
-                      Some(reason) => {
-                        let _ = response_sender.send(Err(HeliusError::EnhancedWebsocket { reason, message: text.as_str().to_string() }));
-                      },
-                      None => {
-                        // Subscribe Id
-                        let sid = json.get("result").and_then(Value::as_u64).ok_or_else(|| {
-                          HeliusError::EnhancedWebsocket { reason: "invalid `result` field".into(), message: text.as_str().to_string() }
-                        })?;
-
-                        // Create notifications channel and unsubscribe function
-                        let (notifications_sender, notifications_receiver) = mpsc::unbounded_channel();
-                        let unsubscribe_sender = unsubscribe_sender.clone();
-                        let unsubscribe = Box::new(move || async move {
-                          let (response_sender, response_receiver) = oneshot::channel();
-                          // do nothing if ws already closed
-                          if unsubscribe_sender.send((operation, sid, response_sender)).is_ok() {
-                            let _ = response_receiver.await; // channel can be closed only if ws is closed
-                          }
-                        }.boxed());
-
-                        if response_sender.send(Ok((notifications_receiver, unsubscribe))).is_err() {
-                            break;
-                        }
-                        subscriptions.insert(sid, notifications_sender);
-                      }
-                    }
-                  } else {
-                      log::warn!("Unknown request id: {}", id);
-                      break;
-                  }
-                  continue;
-                }
-
-                // Notification, example:
-                // `{"jsonrpc":"2.0","method":"logsNotification","params":{"result":{...},"subscription":3114862}}`
-                if let Some(Value::Object(params)) = json.get_mut("params") {
-                  if let Some(sid) = params.get("subscription").and_then(Value::as_u64) {
-                    let mut unsubscribe_required = false;
-
-                    if let Some(notifications_sender) = subscriptions.get(&sid) {
-                      if let Some(result) = params.remove("result") {
-                        if notifications_sender.send(result).is_err() {
-                          unsubscribe_required = true;
-                        }
-                      }
-                    } else {
-                      unsubscribe_required = true;
-                    }
-
-                    if unsubscribe_required {
-                      if let Some(Value::String(method)) = json.remove("method") {
-                        if let Some(operation) = method.strip_suffix("Notification") {
-                          let (response_sender, _response_receiver) = oneshot::channel();
-                          let _ = unsubscribe_sender.send((operation.to_string(), sid, response_sender));
-                        }
-                      }
-                    }
-                  }
+                    None => consecutive_unusable_frames = 0,
                 }
               }
             }
