@@ -76,6 +76,46 @@ pub struct EnhancedWebsocket {
     ws: JoinHandle<Result<()>>,
 }
 
+/// Fails every in-flight request with `reason`, returning how many were waiting.
+///
+/// Used for a server error that carries no usable `id`: it answers *some* request of ours, but
+/// there is no way to tell which, and every waiter is parked on a oneshot with no timeout.
+/// Subscriptions that are already established are deliberately not touched.
+fn fail_pending_requests(
+    reason: &str,
+    text: &str,
+    other_requests: &mut BTreeMap<u64, oneshot::Sender<Result<Value>>>,
+    requests_unsubscribe: &mut BTreeMap<u64, oneshot::Sender<()>>,
+    requests_subscribe: &mut BTreeMap<u64, (String, oneshot::Sender<SubscribeResponseMsg>)>,
+) -> usize {
+    let mut failed = 0;
+
+    for (_, response_sender) in std::mem::take(other_requests) {
+        let _ = response_sender.send(Err(HeliusError::EnhancedWebsocket {
+            reason: reason.to_string(),
+            message: text.to_string(),
+        }));
+        failed += 1;
+    }
+
+    for (_, (_, response_sender)) in std::mem::take(requests_subscribe) {
+        let _ = response_sender.send(Err(HeliusError::EnhancedWebsocket {
+            reason: reason.to_string(),
+            message: text.to_string(),
+        }));
+        failed += 1;
+    }
+
+    // An unsubscribe waiter carries no error channel; completing it is the only way to release it,
+    // and the subscription is dropped locally either way.
+    for (_, response_sender) in std::mem::take(requests_unsubscribe) {
+        let _ = response_sender.send(());
+        failed += 1;
+    }
+
+    failed
+}
+
 /// Handles one incoming JSON-RPC text frame, returning `Some(reason)` if it could not be acted on.
 ///
 /// Every failure in here belongs to the frame, or at most to the single request waiting on it —
@@ -96,22 +136,36 @@ fn handle_frame(
 
     // Response to one of our requests, e.g. `{"jsonrpc":"2.0","result":5308752,"id":1}`
     if let Some(id_value) = json.get("id") {
+        let rpc_error = |error_object: &Value| match serde_json::from_value::<RpcErrorObject>(error_object.clone()) {
+            Ok(rpc_error_object) => format!("{} ({})", rpc_error_object.message, rpc_error_object.code),
+            Err(err) => format!(
+                "Failed to deserialize RPC error response: {} [{}]",
+                serde_json::to_string(error_object).unwrap_or_default(),
+                err
+            ),
+        };
+
         // Servers answer a parse or invalid-request error with `"id": null`, so a non-numeric id
         // is an expected frame rather than grounds for a teardown.
         let Some(id) = id_value.as_u64() else {
-            return Some(format!("unusable `id` field: {id_value}"));
+            let Some(reason) = json.get("error").map(&rpc_error) else {
+                return Some(format!("unusable `id` field: {id_value}"));
+            };
+
+            // The error answers a request we cannot identify. Callers wait on a oneshot with no
+            // timeout, and skipping the frame leaves nothing to ever complete it — before M-6 the
+            // teardown freed them by dropping the map. So fail every in-flight request instead.
+            // Established `subscriptions` are left alone: they are not what this error answers,
+            // and tearing them down is exactly what M-6 fixed.
+            let pending =
+                fail_pending_requests(&reason, text, other_requests, requests_unsubscribe, requests_subscribe);
+
+            return Some(format!(
+                "server error with unusable `id` ({id_value}): {reason}; failed {pending} in-flight request(s)"
+            ));
         };
 
-        let err = json.get("error").map(|error_object| {
-            match serde_json::from_value::<RpcErrorObject>(error_object.clone()) {
-                Ok(rpc_error_object) => format!("{} ({})", rpc_error_object.message, rpc_error_object.code),
-                Err(err) => format!(
-                    "Failed to deserialize RPC error response: {} [{}]",
-                    serde_json::to_string(error_object).unwrap_or_default(),
-                    err
-                ),
-            }
-        });
+        let err = json.get("error").map(&rpc_error);
 
         if let Some(response_sender) = other_requests.remove(&id) {
             match err {
