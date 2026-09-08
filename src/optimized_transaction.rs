@@ -52,6 +52,46 @@ use tokio::time::sleep;
 /// and minimizing wasted compute unit fees (too much buffer).
 const CU_BUFFER_MULTIPLIER_DEFAULT: f32 = 1.25;
 
+/// Largest compute-unit limit the runtime accepts on a single transaction.
+///
+/// Applies to both formats: legacy/v0 set it with `ComputeBudgetInstruction::set_compute_unit_limit`,
+/// Transaction v1 carries it in the message header config. Neither the message compiler nor
+/// `v1::Message::validate` rejects a larger value, so the SDK clamps to it rather than building a
+/// transaction the cluster will refuse.
+pub const MAX_COMPUTE_UNIT_LIMIT: u32 = 1_400_000;
+
+/// Smallest compute-unit limit the SDK will request.
+///
+/// A simulated estimate can come back at or near zero, and a literal `0` limit fails on-chain.
+/// Below this the flat minimum is used rather than a multiple of a near-zero estimate.
+pub const MIN_COMPUTE_UNIT_LIMIT: u32 = 1_000;
+
+/// Applies the caller's safety buffer to a simulated compute-unit count, bounded by
+/// [`MIN_COMPUTE_UNIT_LIMIT`] and [`MAX_COMPUTE_UNIT_LIMIT`].
+///
+/// The buffer is why the ceiling is needed: simulation is capped at [`MAX_COMPUTE_UNIT_LIMIT`], so
+/// any multiplier above 1.0 pushes an expensive transaction past the maximum. A non-finite or
+/// non-positive multiplier falls back to the default rather than producing a garbage limit.
+fn resolve_compute_unit_limit(units_consumed: u64, multiplier: f32) -> u32 {
+    let multiplier: f64 = if multiplier.is_finite() && multiplier > 0.0 {
+        multiplier as f64
+    } else {
+        log::warn!("Ignoring invalid cu_buffer_multiplier ({multiplier}); using {CU_BUFFER_MULTIPLIER_DEFAULT}");
+        CU_BUFFER_MULTIPLIER_DEFAULT as f64
+    };
+
+    // Below the floor the buffer is deliberately not applied, preserving long-standing behaviour:
+    // a trivial transaction gets the flat minimum rather than a multiple of a near-zero estimate.
+    let buffered: u32 = if units_consumed < MIN_COMPUTE_UNIT_LIMIT as u64 {
+        MIN_COMPUTE_UNIT_LIMIT
+    } else {
+        // `as u32` saturates, so an overflowing product lands on u32::MAX and is capped below.
+        (units_consumed as f64 * multiplier).ceil() as u32
+    };
+
+    buffered.min(MAX_COMPUTE_UNIT_LIMIT)
+}
+
 /// Minimum tip in lamports for **Sender Max** (`swqos_only = false`).
 ///
 /// Sender Max routes a transaction across multiple high-speed pathways and
@@ -118,11 +158,31 @@ pub const MAX_TRANSACTION_V1_SIZE: usize = solana_sdk::message::v1::MAX_TRANSACT
 /// data loaded. So the v1 builder always sets this, defaulting to the Agave maximum.
 pub const MAX_LOADED_ACCOUNTS_DATA_SIZE_BYTES: u32 = 64 * 1024 * 1024;
 
+/// Resolves and validates a v1 loaded-accounts data-size limit, defaulting to
+/// [`MAX_LOADED_ACCOUNTS_DATA_SIZE_BYTES`].
+///
+/// `Some(0)` is rejected rather than passed through: SIMD-0385 treats it as a zero-byte budget, and
+/// Agave charges a base cost per account against it, so every account load fails. Neither
+/// `try_compile_with_config` nor `v1::Message::validate` catches it, which would otherwise make a
+/// zero limit a signed, submitted, guaranteed-to-fail transaction.
+fn resolve_loaded_accounts_data_size_limit(limit: Option<u32>) -> Result<u32> {
+    let limit: u32 = limit.unwrap_or(MAX_LOADED_ACCOUNTS_DATA_SIZE_BYTES);
+
+    if limit == 0 || limit > MAX_LOADED_ACCOUNTS_DATA_SIZE_BYTES {
+        return Err(HeliusError::InvalidInput(format!(
+            "loaded_accounts_data_size_limit must be between 1 and {MAX_LOADED_ACCOUNTS_DATA_SIZE_BYTES} bytes, got {limit}"
+        )));
+    }
+
+    Ok(limit)
+}
+
 /// Builds a v1 [`TransactionConfig`](solana_sdk::message::v1::TransactionConfig) from the given
 /// priority fee, compute-unit limit, and loaded-accounts data-size limit.
 ///
 /// The data-size limit is always set (defaulting to [`MAX_LOADED_ACCOUNTS_DATA_SIZE_BYTES`]) because
-/// v1 treats an unset limit as 0.
+/// v1 treats an unset limit as 0. Callers that accept the limit from the outside should run it
+/// through [`resolve_loaded_accounts_data_size_limit`] first — this builder does not validate.
 fn build_v1_config(
     priority_fee_lamports: Option<u64>,
     compute_unit_limit: Option<u32>,
@@ -162,12 +222,13 @@ fn build_v1_config(
 /// * `priority_fee_lamports` - Optional total priority fee, in lamports
 /// * `compute_unit_limit` - Optional compute-unit limit
 /// * `loaded_accounts_data_size_limit` - Optional loaded-accounts data-size limit; defaults to
-///   [`MAX_LOADED_ACCOUNTS_DATA_SIZE_BYTES`] because v1 treats an unset limit as 0 (immediate failure)
+///   [`MAX_LOADED_ACCOUNTS_DATA_SIZE_BYTES`] because v1 treats an unset limit as 0 (immediate
+///   failure). Must be between 1 and that maximum
 ///
 /// # Errors
-/// Returns [`HeliusError::InvalidInput`] if the message cannot be compiled, fails v1 validation, or
-/// the signed transaction exceeds [`MAX_TRANSACTION_V1_SIZE`], or [`HeliusError::SignerError`] if
-/// signing fails.
+/// Returns [`HeliusError::InvalidInput`] if `loaded_accounts_data_size_limit` is out of range, the
+/// message cannot be compiled, fails v1 validation, or the signed transaction exceeds
+/// [`MAX_TRANSACTION_V1_SIZE`], or [`HeliusError::SignerError`] if signing fails.
 pub fn build_v1_transaction(
     payer: &Pubkey,
     instructions: &[Instruction],
@@ -180,7 +241,9 @@ pub fn build_v1_transaction(
     let config: v1::TransactionConfig = build_v1_config(
         priority_fee_lamports,
         compute_unit_limit,
-        loaded_accounts_data_size_limit,
+        Some(resolve_loaded_accounts_data_size_limit(
+            loaded_accounts_data_size_limit,
+        )?),
     );
 
     let message: v1::Message = v1::Message::try_compile_with_config(payer, instructions, recent_blockhash, config)
@@ -551,6 +614,32 @@ impl Helius {
         signers: Option<&[Arc<dyn Signer>]>,
         version: TransactionVersion,
     ) -> Result<Option<u64>> {
+        self.get_compute_units_with_data_size_limit(instructions, payer, lookup_tables, signers, version, None)
+            .await
+    }
+
+    /// Simulates the instructions to estimate compute units, loading accounts under
+    /// `loaded_accounts_data_size_limit` (Transaction v1 only).
+    ///
+    /// Simulation loads accounts too, so it has to run under the same budget the final transaction
+    /// will carry — simulating under the 64 MiB default while the transaction ships a smaller limit
+    /// produces an estimate that does not hold on-chain.
+    ///
+    /// # Arguments
+    /// * `loaded_accounts_data_size_limit` - The limit the final transaction will carry; `None`
+    ///   uses [`MAX_LOADED_ACCOUNTS_DATA_SIZE_BYTES`]
+    ///
+    /// # Returns
+    /// The compute units consumed, or `None` if unavailable
+    pub async fn get_compute_units_with_data_size_limit(
+        &self,
+        instructions: Vec<Instruction>,
+        payer: Pubkey,
+        lookup_tables: Vec<AddressLookupTableAccount>,
+        signers: Option<&[Arc<dyn Signer>]>,
+        version: TransactionVersion,
+        loaded_accounts_data_size_limit: Option<u32>,
+    ) -> Result<Option<u64>> {
         // Fetch the latest blockhash
         let recent_blockhash: Hash = self.run_blocking_rpc(|client| client.get_latest_blockhash()).await??;
 
@@ -560,14 +649,20 @@ impl Helius {
             TransactionVersion::V1 => {
                 // v1 raises the CU limit via the header config, not a ComputeBudget instruction (a
                 // no-op on v1). Simulate against the max limit.
-                let config = build_v1_config(None, Some(1_400_000), None);
+                let config = build_v1_config(
+                    None,
+                    Some(MAX_COMPUTE_UNIT_LIMIT),
+                    Some(resolve_loaded_accounts_data_size_limit(
+                        loaded_accounts_data_size_limit,
+                    )?),
+                );
                 let message = v1::Message::try_compile_with_config(&payer, &instructions, recent_blockhash, config)
                     .map_err(|e| HeliusError::InvalidInput(format!("Failed to compile v1 message: {e}")))?;
                 VersionedMessage::V1(message)
             }
             TransactionVersion::Auto => {
                 let test_instructions: Vec<Instruction> =
-                    vec![ComputeBudgetInstruction::set_compute_unit_limit(1_400_000)]
+                    vec![ComputeBudgetInstruction::set_compute_unit_limit(MAX_COMPUTE_UNIT_LIMIT)]
                         .into_iter()
                         .chain(instructions)
                         .collect::<Vec<_>>();
@@ -801,12 +896,13 @@ impl Helius {
         };
 
         let units: Option<u64> = self
-            .get_compute_units(
+            .get_compute_units_with_data_size_limit(
                 simulation_instructions,
                 payer_pubkey,
                 config.lookup_tables.clone().unwrap_or_default(),
                 Some(&all_signers),
                 config.version,
+                config.loaded_accounts_data_size_limit,
             )
             .await?;
 
@@ -816,11 +912,7 @@ impl Helius {
 
         let multiplier: f32 = config.cu_buffer_multiplier.unwrap_or(CU_BUFFER_MULTIPLIER_DEFAULT);
 
-        let customers_cu: u32 = if compute_units < 1000 {
-            1000
-        } else {
-            (compute_units as f64 * multiplier as f64).ceil() as u32
-        };
+        let customers_cu: u32 = resolve_compute_unit_limit(compute_units, multiplier);
 
         match config.version {
             TransactionVersion::V1 => {
@@ -842,7 +934,7 @@ impl Helius {
                     recent_blockhash,
                     Some(priority_fee_lamports),
                     Some(customers_cu),
-                    None,
+                    config.loaded_accounts_data_size_limit,
                 )?;
 
                 Ok((SmartTransaction::Versioned(transaction), last_valid_block_hash))
@@ -1029,20 +1121,47 @@ impl Helius {
         keypairs: Option<&[&Keypair]>,
         version: TransactionVersion,
     ) -> Result<Option<u64>> {
+        self.get_compute_units_thread_safe_with_data_size_limit(
+            instructions,
+            payer,
+            lookup_tables,
+            keypairs,
+            version,
+            None,
+        )
+        .await
+    }
+
+    /// Thread-safe [`Helius::get_compute_units_with_data_size_limit`], taking `Keypair`s.
+    pub async fn get_compute_units_thread_safe_with_data_size_limit(
+        &self,
+        instructions: Vec<Instruction>,
+        payer: Pubkey,
+        lookup_tables: Vec<AddressLookupTableAccount>,
+        keypairs: Option<&[&Keypair]>,
+        version: TransactionVersion,
+        loaded_accounts_data_size_limit: Option<u32>,
+    ) -> Result<Option<u64>> {
         let recent_blockhash: Hash = self.run_blocking_rpc(|client| client.get_latest_blockhash()).await??;
 
         // Build a message matching the target version so a large v1 transaction is not simulated
         // against the v0 size limit.
         let versioned_message: VersionedMessage = match version {
             TransactionVersion::V1 => {
-                let config = build_v1_config(None, Some(1_400_000), None);
+                let config = build_v1_config(
+                    None,
+                    Some(MAX_COMPUTE_UNIT_LIMIT),
+                    Some(resolve_loaded_accounts_data_size_limit(
+                        loaded_accounts_data_size_limit,
+                    )?),
+                );
                 let message = v1::Message::try_compile_with_config(&payer, &instructions, recent_blockhash, config)
                     .map_err(|e| HeliusError::InvalidInput(format!("Failed to compile v1 message: {e}")))?;
                 VersionedMessage::V1(message)
             }
             TransactionVersion::Auto => {
                 let test_instructions: Vec<Instruction> =
-                    vec![ComputeBudgetInstruction::set_compute_unit_limit(1_400_000)]
+                    vec![ComputeBudgetInstruction::set_compute_unit_limit(MAX_COMPUTE_UNIT_LIMIT)]
                         .into_iter()
                         .chain(instructions)
                         .collect::<Vec<_>>();
@@ -1200,12 +1319,13 @@ impl Helius {
         };
 
         let units: Option<u64> = self
-            .get_compute_units_thread_safe(
+            .get_compute_units_thread_safe_with_data_size_limit(
                 simulation_instructions,
                 fee_payer.pubkey(),
                 create_config.lookup_tables.clone().unwrap_or_default(),
                 Some(&all_signers),
                 create_config.version,
+                create_config.loaded_accounts_data_size_limit,
             )
             .await?;
 
@@ -1217,11 +1337,7 @@ impl Helius {
             .cu_buffer_multiplier
             .unwrap_or(CU_BUFFER_MULTIPLIER_DEFAULT);
 
-        let customers_cu: u32 = if compute_units < 1000 {
-            1000
-        } else {
-            (compute_units as f64 * multiplier as f64).ceil() as u32
-        };
+        let customers_cu: u32 = resolve_compute_unit_limit(compute_units, multiplier);
 
         // Create the final transaction
         let transaction: SmartTransaction = match create_config.version {
@@ -1241,7 +1357,7 @@ impl Helius {
                     recent_blockhash,
                     Some(priority_fee_lamports),
                     Some(customers_cu),
-                    None,
+                    create_config.loaded_accounts_data_size_limit,
                 )?;
                 SmartTransaction::Versioned(tx)
             }
@@ -1448,11 +1564,7 @@ impl Helius {
 
         let multiplier: f32 = config.cu_buffer_multiplier.unwrap_or(CU_BUFFER_MULTIPLIER_DEFAULT);
 
-        let customers_cu: u32 = if compute_units < 1000 {
-            1000
-        } else {
-            (compute_units as f64 * multiplier as f64).ceil() as u32
-        };
+        let customers_cu: u32 = resolve_compute_unit_limit(compute_units, multiplier);
 
         // Add the compute unit limit ix at the start
         let compute_units_ix = ComputeBudgetInstruction::set_compute_unit_limit(customers_cu);
@@ -1842,8 +1954,10 @@ impl Helius {
 mod tests {
     use super::{
         build_v1_transaction, collect_unique_keypair_refs, collect_unique_signers, is_retryable_confirmation_error,
-        resolve_tip_lamports, tip_floor_sol_to_lamports, v1_priority_fee_lamports, DEFAULT_MAX_TIP_LAMPORTS,
-        MAX_PLAUSIBLE_TIP_FLOOR_SOL, MAX_TRANSACTION_V1_SIZE, MIN_TIP_LAMPORTS_MAX, MIN_TIP_LAMPORTS_SWQOS,
+        resolve_compute_unit_limit, resolve_loaded_accounts_data_size_limit, resolve_tip_lamports,
+        tip_floor_sol_to_lamports, v1_priority_fee_lamports, CU_BUFFER_MULTIPLIER_DEFAULT, DEFAULT_MAX_TIP_LAMPORTS,
+        MAX_COMPUTE_UNIT_LIMIT, MAX_LOADED_ACCOUNTS_DATA_SIZE_BYTES, MAX_PLAUSIBLE_TIP_FLOOR_SOL,
+        MAX_TRANSACTION_V1_SIZE, MIN_COMPUTE_UNIT_LIMIT, MIN_TIP_LAMPORTS_MAX, MIN_TIP_LAMPORTS_SWQOS,
     };
 
     /// The v1 total-lamports fee conversion must stay the exact inverse of Atlas's
@@ -2223,5 +2337,147 @@ mod tests {
         assert_eq!(resolve_tip_lamports(None, min, max), MIN_TIP_LAMPORTS_SWQOS);
         assert_eq!(resolve_tip_lamports(Some(1), min, max), MIN_TIP_LAMPORTS_SWQOS);
         assert_eq!(resolve_tip_lamports(Some(u64::MAX), min, max), max);
+    }
+
+    /// Simulation is capped at [`MAX_COMPUTE_UNIT_LIMIT`], so any buffer above 1.0 pushes an
+    /// expensive transaction past the maximum the runtime accepts. Nothing downstream catches it:
+    /// `try_compile_with_config` and `v1::Message::validate` both accept an out-of-range limit, so
+    /// without this clamp the SDK signs and submits a transaction the cluster refuses.
+    #[test]
+    fn compute_unit_limit_is_clamped_to_the_protocol_maximum() {
+        // The worst case reachable from a real simulation: the cap itself, times the default buffer.
+        assert_eq!(
+            resolve_compute_unit_limit(MAX_COMPUTE_UNIT_LIMIT as u64, CU_BUFFER_MULTIPLIER_DEFAULT),
+            MAX_COMPUTE_UNIT_LIMIT,
+            "1,400,000 x 1.25 = 1,750,000 must not reach the transaction"
+        );
+
+        // The first estimate whose buffered value exceeds the maximum.
+        assert_eq!(
+            resolve_compute_unit_limit(1_120_001, CU_BUFFER_MULTIPLIER_DEFAULT),
+            MAX_COMPUTE_UNIT_LIMIT
+        );
+        // Just below it, the buffer still applies untouched.
+        assert_eq!(
+            resolve_compute_unit_limit(1_120_000, CU_BUFFER_MULTIPLIER_DEFAULT),
+            1_400_000
+        );
+
+        // A caller-supplied multiplier cannot escape the ceiling either.
+        assert_eq!(resolve_compute_unit_limit(1_000_000, 100.0), MAX_COMPUTE_UNIT_LIMIT);
+        assert_eq!(resolve_compute_unit_limit(u64::MAX, 1.0), MAX_COMPUTE_UNIT_LIMIT);
+    }
+
+    /// A near-zero estimate still has to produce a usable limit: a literal `0` fails on-chain.
+    ///
+    /// Below the floor the buffer is deliberately not applied — unchanged from before this PR,
+    /// which only adds a ceiling. Pinned because applying the buffer here instead would quietly
+    /// raise the requested limit, and with it the v0 priority fee, which is rate x limit.
+    #[test]
+    fn compute_unit_limit_is_floored_without_applying_the_buffer() {
+        assert_eq!(
+            resolve_compute_unit_limit(0, CU_BUFFER_MULTIPLIER_DEFAULT),
+            MIN_COMPUTE_UNIT_LIMIT
+        );
+        assert_eq!(
+            resolve_compute_unit_limit(1, CU_BUFFER_MULTIPLIER_DEFAULT),
+            MIN_COMPUTE_UNIT_LIMIT
+        );
+        assert_eq!(
+            resolve_compute_unit_limit(999, CU_BUFFER_MULTIPLIER_DEFAULT),
+            MIN_COMPUTE_UNIT_LIMIT,
+            "999 x 1.25 = 1249, but below the floor the flat minimum wins"
+        );
+        assert_eq!(
+            resolve_compute_unit_limit(MIN_COMPUTE_UNIT_LIMIT as u64, 1.0),
+            MIN_COMPUTE_UNIT_LIMIT,
+            "at the floor the buffer applies again"
+        );
+    }
+
+    /// An ordinary estimate is buffered and rounded up, not clamped.
+    #[test]
+    fn compute_unit_limit_applies_the_buffer_in_range() {
+        assert_eq!(resolve_compute_unit_limit(100_000, 1.25), 125_000);
+        assert_eq!(resolve_compute_unit_limit(10_001, 1.5), 15_002, "rounds up");
+        assert_eq!(resolve_compute_unit_limit(50_000, 1.0), 50_000);
+    }
+
+    /// A multiplier that is NaN, infinite, zero, or negative would otherwise produce a garbage
+    /// limit (or saturate to the floor) rather than the caller's intended buffer.
+    #[test]
+    fn invalid_multiplier_falls_back_to_the_default() {
+        let expected = resolve_compute_unit_limit(100_000, CU_BUFFER_MULTIPLIER_DEFAULT);
+        for bad in [f32::NAN, f32::INFINITY, f32::NEG_INFINITY, 0.0, -1.5] {
+            assert_eq!(resolve_compute_unit_limit(100_000, bad), expected, "multiplier {bad}");
+        }
+    }
+
+    /// `Some(0)` is the case this validation exists for: SIMD-0385 reads it as a zero-byte budget,
+    /// and neither the v1 compiler nor `validate()` rejects it, so it would be signed and sent.
+    #[test]
+    fn loaded_accounts_limit_rejects_out_of_range_values() {
+        assert!(resolve_loaded_accounts_data_size_limit(Some(0)).is_err(), "zero budget");
+        assert!(
+            resolve_loaded_accounts_data_size_limit(Some(MAX_LOADED_ACCOUNTS_DATA_SIZE_BYTES + 1)).is_err(),
+            "above the protocol maximum"
+        );
+        assert!(resolve_loaded_accounts_data_size_limit(Some(u32::MAX)).is_err());
+    }
+
+    /// Unset means the 64 MiB default, matching the implicit budget legacy and v0 transactions get.
+    #[test]
+    fn loaded_accounts_limit_defaults_and_accepts_valid_values() {
+        assert_eq!(
+            resolve_loaded_accounts_data_size_limit(None).unwrap(),
+            MAX_LOADED_ACCOUNTS_DATA_SIZE_BYTES
+        );
+        assert_eq!(resolve_loaded_accounts_data_size_limit(Some(1)).unwrap(), 1);
+        assert_eq!(
+            resolve_loaded_accounts_data_size_limit(Some(MAX_LOADED_ACCOUNTS_DATA_SIZE_BYTES)).unwrap(),
+            MAX_LOADED_ACCOUNTS_DATA_SIZE_BYTES
+        );
+    }
+
+    /// The public v1 builder must reject an unusable limit rather than sign it. Verified against
+    /// the crate: a zero limit compiles *and* passes `v1::Message::validate`, so without this guard
+    /// the SDK would happily produce a transaction that fails account loading on-chain.
+    #[test]
+    fn build_v1_transaction_rejects_an_unusable_loaded_accounts_limit() {
+        let payer = Keypair::new();
+        let ix = solana_system_interface::instruction::transfer(&payer.pubkey(), &Pubkey::new_unique(), 1);
+
+        for bad in [Some(0), Some(MAX_LOADED_ACCOUNTS_DATA_SIZE_BYTES + 1)] {
+            let result = build_v1_transaction(
+                &payer.pubkey(),
+                std::slice::from_ref(&ix),
+                &[&payer as &dyn Signer],
+                Hash::default(),
+                None,
+                None,
+                bad,
+            );
+            assert!(
+                matches!(result, Err(HeliusError::InvalidInput(_))),
+                "expected {bad:?} to be rejected"
+            );
+        }
+
+        // The default and an in-range value both build.
+        for good in [None, Some(1), Some(MAX_LOADED_ACCOUNTS_DATA_SIZE_BYTES)] {
+            assert!(
+                build_v1_transaction(
+                    &payer.pubkey(),
+                    std::slice::from_ref(&ix),
+                    &[&payer as &dyn Signer],
+                    Hash::default(),
+                    None,
+                    None,
+                    good,
+                )
+                .is_ok(),
+                "expected {good:?} to build"
+            );
+        }
     }
 }
