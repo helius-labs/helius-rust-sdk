@@ -58,6 +58,7 @@ mod smart_transactions {
     mod test_sender_urls;
 }
 mod websocket {
+    mod test_frame_resilience;
     mod test_get_url;
     mod test_transaction_subscribe;
     mod test_websocket_lifecycle;
