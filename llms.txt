@@ -1,6 +1,6 @@
 ---
 url: https://github.com/helius-labs/helius-rust-sdk
-last_updated: 2026-05-05
+last_updated: 2026-09-09
 ---
 
 # Helius Rust SDK
@@ -43,7 +43,7 @@ Use the Helius Rust SDK when you need to:
 Add to your `Cargo.toml`:
 ```toml
 [dependencies]
-helius = "2.0"
+helius = "3.0"
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 ```
 
@@ -729,11 +729,11 @@ tokio::spawn(async move {
 ```toml
 # Default: native TLS (OpenSSL)
 [dependencies]
-helius = "2.0"
+helius = "3.0"
 
 # Alternative: rustls (pure Rust, no OpenSSL dependency)
 [dependencies]
-helius = { version = "2.0", default-features = false, features = ["rustls"] }
+helius = { version = "3.0", default-features = false, features = ["rustls"] }
 ```
 
 ## Plans and Rate Limits
