@@ -534,6 +534,19 @@ pub fn sender_ping_url(region: &str) -> String {
     format!("{}/ping", sender_base_url(region))
 }
 
+/// Names a Sender endpoint for an error message: host and path, without the query string.
+///
+/// Elsewhere the SDK reports only `Url::path()`, because those URLs carry the API key in a query
+/// parameter and an error message is the wrong place for it. Sender endpoints are region-scoped
+/// and carry no key, so nothing here is secret, and the host is what identifies *which* region
+/// failed — the detail that matters when one is degraded and the others are fine.
+fn sender_error_target(url: &reqwest::Url) -> String {
+    match url.host_str() {
+        Some(host) => format!("{}{}", host, url.path()),
+        None => url.path().to_string(),
+    }
+}
+
 /// POST base64 wire-transaction to Sender via `/fast`.
 async fn post_to_sender(tx64: &str, opts: &SenderSendOptions) -> Result<Signature> {
     let mut endpoint: String = sender_fast_url(&opts.region);
@@ -558,23 +571,24 @@ async fn post_to_sender(tx64: &str, opts: &SenderSendOptions) -> Result<Signatur
         .json(&body)
         .send()
         .await
-        .map_err(|e| HeliusError::InvalidInput(format!("Sender request error: {e}")))?;
+        .map_err(HeliusError::Network)?;
 
     let status = res.status();
     if !status.is_success() {
-        // `text()` consumes `res` in this branch, and we return immediately.
+        // Borrowed before the `text()` below consumes `res`, which this branch can do because it
+        // returns immediately.
+        let target = sender_error_target(res.url());
         let text = res.text().await.unwrap_or_default();
-        Err(HeliusError::InvalidInput(format!(
-            "Sender HTTP {}: {}",
+        // Classified by status rather than lumped into `InvalidInput`, so a caller can tell a
+        // rate limit or an expired API key apart from a transaction it built wrong.
+        Err(HeliusError::from_response_status(
             status,
-            text.chars().take(200).collect::<String>()
-        )))
+            target,
+            text.chars().take(200).collect::<String>(),
+        ))
     } else {
         // Success path: `json()` consumes `res` *here*, not above.
-        let val: serde_json::Value = res
-            .json()
-            .await
-            .map_err(|e| HeliusError::InvalidInput(format!("Sender JSON parse error: {e}")))?;
+        let val: serde_json::Value = res.json().await.map_err(HeliusError::Network)?;
 
         if let Some(s) = val.as_str() {
             return Signature::from_str(s)
@@ -1649,16 +1663,13 @@ impl Helius {
             .header("User-Agent", SDK_USER_AGENT)
             .send()
             .await
-            .map_err(|e| HeliusError::InvalidInput(format!("Tip floor fetch error: {e}")))?;
+            .map_err(HeliusError::Network)?;
 
         if !res.status().is_success() {
             return Ok(None);
         }
 
-        let json: serde_json::Value = res
-            .json()
-            .await
-            .map_err(|e| HeliusError::InvalidInput(format!("Tip floor JSON parse error: {e}")))?;
+        let json: serde_json::Value = res.json().await.map_err(HeliusError::Network)?;
 
         let val_sol = json
             .get(0)
@@ -1756,9 +1767,16 @@ impl Helius {
             .header("User-Agent", SDK_USER_AGENT)
             .send()
             .await
-            .map_err(|e| HeliusError::InvalidInput(format!("Sender ping error: {e}")))?;
-        if !res.status().is_success() {
-            return Err(HeliusError::InvalidInput(format!("Sender ping HTTP {}", res.status())));
+            .map_err(HeliusError::Network)?;
+        let status = res.status();
+        if !status.is_success() {
+            let target = sender_error_target(res.url());
+            let text = res.text().await.unwrap_or_default();
+            return Err(HeliusError::from_response_status(
+                status,
+                target,
+                text.chars().take(200).collect::<String>(),
+            ));
         }
         Ok(())
     }
@@ -1999,11 +2017,22 @@ mod tests {
     use super::{
         build_v1_transaction, collect_unique_keypair_refs, collect_unique_signers, is_retryable_confirmation_error,
         resolve_compute_unit_limit, resolve_compute_unit_limit_for_v1, resolve_loaded_accounts_data_size_limit,
-        resolve_tip_lamports, tip_floor_sol_to_lamports, v1_priority_fee_lamports, CU_BUFFER_MULTIPLIER_DEFAULT,
-        DEFAULT_MAX_TIP_LAMPORTS, MAX_COMPUTE_UNIT_LIMIT, MAX_LOADED_ACCOUNTS_DATA_SIZE_BYTES,
-        MAX_PLAUSIBLE_TIP_FLOOR_SOL, MAX_TRANSACTION_V1_SIZE, MIN_COMPUTE_UNIT_LIMIT, MIN_TIP_LAMPORTS_MAX,
-        MIN_TIP_LAMPORTS_SWQOS,
+        resolve_tip_lamports, sender_error_target, tip_floor_sol_to_lamports, v1_priority_fee_lamports,
+        CU_BUFFER_MULTIPLIER_DEFAULT, DEFAULT_MAX_TIP_LAMPORTS, MAX_COMPUTE_UNIT_LIMIT,
+        MAX_LOADED_ACCOUNTS_DATA_SIZE_BYTES, MAX_PLAUSIBLE_TIP_FLOOR_SOL, MAX_TRANSACTION_V1_SIZE,
+        MIN_COMPUTE_UNIT_LIMIT, MIN_TIP_LAMPORTS_MAX, MIN_TIP_LAMPORTS_SWQOS,
     };
+
+    /// A Sender failure has to name the region that failed, and must not carry the query string
+    /// into the error message — that is the pattern that leaks an API key on every other endpoint.
+    #[test]
+    fn sender_error_target_is_host_and_path_only() {
+        let url = reqwest::Url::parse("https://slc-sender.helius-rpc.com/fast?swqos_only=true").unwrap();
+        assert_eq!(sender_error_target(&url), "slc-sender.helius-rpc.com/fast");
+
+        let ping = reqwest::Url::parse("https://sender.helius-rpc.com/ping").unwrap();
+        assert_eq!(sender_error_target(&ping), "sender.helius-rpc.com/ping");
+    }
 
     /// The v1 total-lamports fee conversion must stay the exact inverse of Atlas's
     /// `v1_priority_rate` (which the priority-fee estimator uses to price v1 transactions):
