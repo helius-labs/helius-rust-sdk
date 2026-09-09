@@ -158,6 +158,26 @@ pub const MAX_TRANSACTION_V1_SIZE: usize = solana_sdk::message::v1::MAX_TRANSACT
 /// data loaded. So the v1 builder always sets this, defaulting to the Agave maximum.
 pub const MAX_LOADED_ACCOUNTS_DATA_SIZE_BYTES: u32 = 64 * 1024 * 1024;
 
+/// Resolves and validates a v1 compute-unit limit, defaulting to [`MAX_COMPUTE_UNIT_LIMIT`].
+///
+/// Unset is not a neutral choice on v1: the runtime reads a missing limit as `0`, i.e. no compute
+/// budget at all. `Some(0)` is the same failure stated explicitly.
+///
+/// A value above the maximum is rejected rather than clamped. The runtime *would* clamp it, but it
+/// takes the v1 priority fee verbatim — so silently lowering the compute budget while the caller's
+/// fee was computed against the larger number is exactly the overpayment this PR exists to close.
+fn resolve_compute_unit_limit_for_v1(limit: Option<u32>) -> Result<u32> {
+    let limit: u32 = limit.unwrap_or(MAX_COMPUTE_UNIT_LIMIT);
+
+    if limit == 0 || limit > MAX_COMPUTE_UNIT_LIMIT {
+        return Err(HeliusError::InvalidInput(format!(
+            "compute_unit_limit must be between 1 and {MAX_COMPUTE_UNIT_LIMIT}, got {limit}"
+        )));
+    }
+
+    Ok(limit)
+}
+
 /// Resolves and validates a v1 loaded-accounts data-size limit, defaulting to
 /// [`MAX_LOADED_ACCOUNTS_DATA_SIZE_BYTES`].
 ///
@@ -180,23 +200,30 @@ fn resolve_loaded_accounts_data_size_limit(limit: Option<u32>) -> Result<u32> {
 /// Builds a v1 [`TransactionConfig`](solana_sdk::message::v1::TransactionConfig) from the given
 /// priority fee, compute-unit limit, and loaded-accounts data-size limit.
 ///
-/// The data-size limit is always set (defaulting to [`MAX_LOADED_ACCOUNTS_DATA_SIZE_BYTES`]) because
-/// v1 treats an unset limit as 0. Callers that accept the limit from the outside should run it
-/// through [`resolve_loaded_accounts_data_size_limit`] first — this builder does not validate.
+/// Both budget fields are always set, because the runtime reads an unset one as `0`
+/// (`from_v1_config` in `solana-runtime-transaction` resolves each with `unwrap_or(0)`): an omitted
+/// compute-unit limit means a zero compute budget, and an omitted data-size limit means a zero-byte
+/// account budget. Either is an immediate on-chain failure, so `None` becomes the maximum rather
+/// than being left out. The priority fee is genuinely optional — unset means no fee.
+///
+/// Callers taking either limit from the outside should validate first with
+/// [`resolve_compute_unit_limit_for_v1`] / [`resolve_loaded_accounts_data_size_limit`]; this
+/// builder only supplies defaults.
 fn build_v1_config(
     priority_fee_lamports: Option<u64>,
     compute_unit_limit: Option<u32>,
     loaded_accounts_data_size_limit: Option<u32>,
 ) -> v1::TransactionConfig {
-    let mut config: v1::TransactionConfig = v1::TransactionConfig::empty().with_loaded_accounts_data_size_limit(
-        loaded_accounts_data_size_limit.unwrap_or(MAX_LOADED_ACCOUNTS_DATA_SIZE_BYTES),
-    );
+    let mut config: v1::TransactionConfig = v1::TransactionConfig::empty()
+        .with_loaded_accounts_data_size_limit(
+            loaded_accounts_data_size_limit.unwrap_or(MAX_LOADED_ACCOUNTS_DATA_SIZE_BYTES),
+        )
+        .with_compute_unit_limit(compute_unit_limit.unwrap_or(MAX_COMPUTE_UNIT_LIMIT));
+
     if let Some(fee) = priority_fee_lamports {
         config = config.with_priority_fee(fee);
     }
-    if let Some(cu) = compute_unit_limit {
-        config = config.with_compute_unit_limit(cu);
-    }
+
     config
 }
 
@@ -220,13 +247,15 @@ fn build_v1_config(
 /// * `signers` - All required signers
 /// * `recent_blockhash` - A recent blockhash as the transaction's lifetime specifier
 /// * `priority_fee_lamports` - Optional total priority fee, in lamports
-/// * `compute_unit_limit` - Optional compute-unit limit
+/// * `compute_unit_limit` - Optional compute-unit limit; defaults to [`MAX_COMPUTE_UNIT_LIMIT`]
+///   because v1 treats an unset limit as 0 (no compute budget). Must be between 1 and that maximum
 /// * `loaded_accounts_data_size_limit` - Optional loaded-accounts data-size limit; defaults to
 ///   [`MAX_LOADED_ACCOUNTS_DATA_SIZE_BYTES`] because v1 treats an unset limit as 0 (immediate
 ///   failure). Must be between 1 and that maximum
 ///
 /// # Errors
-/// Returns [`HeliusError::InvalidInput`] if `loaded_accounts_data_size_limit` is out of range, the
+/// Returns [`HeliusError::InvalidInput`] if `compute_unit_limit` or
+/// `loaded_accounts_data_size_limit` is out of range, the
 /// message cannot be compiled, fails v1 validation, or the signed transaction exceeds
 /// [`MAX_TRANSACTION_V1_SIZE`], or [`HeliusError::SignerError`] if signing fails.
 pub fn build_v1_transaction(
@@ -240,7 +269,7 @@ pub fn build_v1_transaction(
 ) -> Result<VersionedTransaction> {
     let config: v1::TransactionConfig = build_v1_config(
         priority_fee_lamports,
-        compute_unit_limit,
+        Some(resolve_compute_unit_limit_for_v1(compute_unit_limit)?),
         Some(resolve_loaded_accounts_data_size_limit(
             loaded_accounts_data_size_limit,
         )?),
@@ -829,6 +858,14 @@ impl Helius {
             ));
         }
 
+        // The data-size limit lives in the v1 message header; legacy and v0 have nowhere to put it.
+        // Rejecting is better than accepting a budget that would be silently dropped.
+        if config.version != TransactionVersion::V1 && config.loaded_accounts_data_size_limit.is_some() {
+            return Err(HeliusError::InvalidInput(
+                "loaded_accounts_data_size_limit requires TransactionVersion::V1".to_string(),
+            ));
+        }
+
         // Whether the v0/legacy path should produce a versioned (v0) transaction. v1 is selected
         // explicitly via `config.version` and handled in its own branch below.
         let is_versioned: bool = config.lookup_tables.is_some();
@@ -1258,6 +1295,13 @@ impl Helius {
         if create_config.version == TransactionVersion::V1 && create_config.lookup_tables.is_some() {
             return Err(HeliusError::InvalidInput(
                 "Transaction v1 does not support address lookup tables".to_string(),
+            ));
+        }
+
+        // The data-size limit lives in the v1 message header; legacy and v0 have nowhere to put it.
+        if create_config.version != TransactionVersion::V1 && create_config.loaded_accounts_data_size_limit.is_some() {
+            return Err(HeliusError::InvalidInput(
+                "loaded_accounts_data_size_limit requires TransactionVersion::V1".to_string(),
             ));
         }
 
@@ -1954,10 +1998,11 @@ impl Helius {
 mod tests {
     use super::{
         build_v1_transaction, collect_unique_keypair_refs, collect_unique_signers, is_retryable_confirmation_error,
-        resolve_compute_unit_limit, resolve_loaded_accounts_data_size_limit, resolve_tip_lamports,
-        tip_floor_sol_to_lamports, v1_priority_fee_lamports, CU_BUFFER_MULTIPLIER_DEFAULT, DEFAULT_MAX_TIP_LAMPORTS,
-        MAX_COMPUTE_UNIT_LIMIT, MAX_LOADED_ACCOUNTS_DATA_SIZE_BYTES, MAX_PLAUSIBLE_TIP_FLOOR_SOL,
-        MAX_TRANSACTION_V1_SIZE, MIN_COMPUTE_UNIT_LIMIT, MIN_TIP_LAMPORTS_MAX, MIN_TIP_LAMPORTS_SWQOS,
+        resolve_compute_unit_limit, resolve_compute_unit_limit_for_v1, resolve_loaded_accounts_data_size_limit,
+        resolve_tip_lamports, tip_floor_sol_to_lamports, v1_priority_fee_lamports, CU_BUFFER_MULTIPLIER_DEFAULT,
+        DEFAULT_MAX_TIP_LAMPORTS, MAX_COMPUTE_UNIT_LIMIT, MAX_LOADED_ACCOUNTS_DATA_SIZE_BYTES,
+        MAX_PLAUSIBLE_TIP_FLOOR_SOL, MAX_TRANSACTION_V1_SIZE, MIN_COMPUTE_UNIT_LIMIT, MIN_TIP_LAMPORTS_MAX,
+        MIN_TIP_LAMPORTS_SWQOS,
     };
 
     /// The v1 total-lamports fee conversion must stay the exact inverse of Atlas's
@@ -2479,5 +2524,35 @@ mod tests {
                 "expected {good:?} to build"
             );
         }
+    }
+
+    /// v1 has no neutral "unset": the runtime resolves a missing compute-unit limit with
+    /// `unwrap_or(0)`, i.e. no compute budget at all. Same footgun as the loaded-accounts field,
+    /// on the sibling entry in the same header config.
+    #[test]
+    fn v1_compute_unit_limit_defaults_and_rejects_a_zero_budget() {
+        assert_eq!(
+            resolve_compute_unit_limit_for_v1(None).unwrap(),
+            MAX_COMPUTE_UNIT_LIMIT,
+            "unset must not reach the header, where it reads as 0"
+        );
+        assert!(
+            resolve_compute_unit_limit_for_v1(Some(0)).is_err(),
+            "zero compute budget"
+        );
+        assert_eq!(resolve_compute_unit_limit_for_v1(Some(1)).unwrap(), 1);
+        assert_eq!(
+            resolve_compute_unit_limit_for_v1(Some(MAX_COMPUTE_UNIT_LIMIT)).unwrap(),
+            MAX_COMPUTE_UNIT_LIMIT
+        );
+    }
+
+    /// Rejected rather than clamped: the runtime clamps the compute-unit limit but takes the v1
+    /// priority fee verbatim, so quietly lowering the budget under a fee computed against the
+    /// larger number is the overpayment this PR closes.
+    #[test]
+    fn v1_compute_unit_limit_rejects_an_over_maximum_value() {
+        assert!(resolve_compute_unit_limit_for_v1(Some(MAX_COMPUTE_UNIT_LIMIT + 1)).is_err());
+        assert!(resolve_compute_unit_limit_for_v1(Some(u32::MAX)).is_err());
     }
 }

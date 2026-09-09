@@ -1883,6 +1883,13 @@ impl CreateSmartTransactionConfig {
         self
     }
 
+    /// Selects [`TransactionVersion::V1`] for this transaction (larger transactions, header-config
+    /// fees, no lookup tables).
+    pub fn with_v1(mut self) -> Self {
+        self.version = TransactionVersion::V1;
+        self
+    }
+
     /// Sets the loaded-accounts data-size limit in bytes (Transaction v1 only).
     ///
     /// See [`CreateSmartTransactionConfig::loaded_accounts_data_size_limit`].
