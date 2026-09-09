@@ -1810,6 +1810,15 @@ pub struct CreateSmartTransactionConfig {
     /// Applied after `priority_fee_cap`: the per-CU rate is capped by `priority_fee_cap`, converted
     /// to a total-lamport fee, then capped by this — both apply on V1.
     pub priority_fee_lamports_cap: Option<u64>,
+    /// Maximum account data, in bytes, the transaction may load. Applies to
+    /// [`TransactionVersion::V1`] only, which carries it in the message header config.
+    ///
+    /// Defaults to [`MAX_LOADED_ACCOUNTS_DATA_SIZE_BYTES`] (64 MiB), matching the implicit budget
+    /// legacy and v0 transactions get. Lower it to reduce the transaction's cost. Must be between
+    /// 1 and that maximum; an out-of-range value fails the build.
+    ///
+    /// [`MAX_LOADED_ACCOUNTS_DATA_SIZE_BYTES`]: crate::optimized_transaction::MAX_LOADED_ACCOUNTS_DATA_SIZE_BYTES
+    pub loaded_accounts_data_size_limit: Option<u32>,
 }
 
 impl Default for CreateSmartTransactionConfig {
@@ -1823,6 +1832,7 @@ impl Default for CreateSmartTransactionConfig {
             cu_buffer_multiplier: Some(1.25),
             version: TransactionVersion::Auto,
             priority_fee_lamports_cap: None,
+            loaded_accounts_data_size_limit: None,
         }
     }
 }
@@ -1839,7 +1849,53 @@ impl CreateSmartTransactionConfig {
             cu_buffer_multiplier: None,
             version: TransactionVersion::Auto,
             priority_fee_lamports_cap: None,
+            loaded_accounts_data_size_limit: None,
         }
+    }
+
+    /// Sets the address lookup tables (legacy/v0 only).
+    pub fn with_lookup_tables(mut self, lookup_tables: Vec<AddressLookupTableAccount>) -> Self {
+        self.lookup_tables = Some(lookup_tables);
+        self
+    }
+
+    /// Sets a separate fee payer.
+    pub fn with_fee_payer(mut self, fee_payer: Arc<dyn Signer>) -> Self {
+        self.fee_payer = Some(fee_payer);
+        self
+    }
+
+    /// Sets the maximum priority fee rate, in micro-lamports per compute unit.
+    pub fn with_priority_fee_cap(mut self, priority_fee_cap: u64) -> Self {
+        self.priority_fee_cap = Some(priority_fee_cap);
+        self
+    }
+
+    /// Sets the compute-unit safety buffer applied to the simulated estimate.
+    pub fn with_cu_buffer_multiplier(mut self, cu_buffer_multiplier: f32) -> Self {
+        self.cu_buffer_multiplier = Some(cu_buffer_multiplier);
+        self
+    }
+
+    /// Sets the maximum total priority fee in lamports (Transaction v1 only).
+    pub fn with_priority_fee_lamports_cap(mut self, priority_fee_lamports_cap: u64) -> Self {
+        self.priority_fee_lamports_cap = Some(priority_fee_lamports_cap);
+        self
+    }
+
+    /// Selects [`TransactionVersion::V1`] for this transaction (larger transactions, header-config
+    /// fees, no lookup tables).
+    pub fn with_v1(mut self) -> Self {
+        self.version = TransactionVersion::V1;
+        self
+    }
+
+    /// Sets the loaded-accounts data-size limit in bytes (Transaction v1 only).
+    ///
+    /// See [`CreateSmartTransactionConfig::loaded_accounts_data_size_limit`].
+    pub fn with_loaded_accounts_data_size_limit(mut self, loaded_accounts_data_size_limit: u32) -> Self {
+        self.loaded_accounts_data_size_limit = Some(loaded_accounts_data_size_limit);
+        self
     }
 }
 
@@ -1916,6 +1972,10 @@ pub struct CreateSmartTransactionSeedConfig {
     /// Maximum **total** priority fee in lamports, applied to [`TransactionVersion::V1`]
     /// transactions.
     pub priority_fee_lamports_cap: Option<u64>,
+    /// Maximum account data, in bytes, the transaction may load ([`TransactionVersion::V1`] only).
+    ///
+    /// See [`CreateSmartTransactionConfig::loaded_accounts_data_size_limit`].
+    pub loaded_accounts_data_size_limit: Option<u32>,
 }
 
 impl Default for CreateSmartTransactionSeedConfig {
@@ -1929,6 +1989,7 @@ impl Default for CreateSmartTransactionSeedConfig {
             cu_buffer_multiplier: Some(1.25),
             version: TransactionVersion::Auto,
             priority_fee_lamports_cap: None,
+            loaded_accounts_data_size_limit: None,
         }
     }
 }
@@ -1944,6 +2005,7 @@ impl CreateSmartTransactionSeedConfig {
             cu_buffer_multiplier: None,
             version: TransactionVersion::Auto,
             priority_fee_lamports_cap: None,
+            loaded_accounts_data_size_limit: None,
         }
     }
 
@@ -1961,6 +2023,14 @@ impl CreateSmartTransactionSeedConfig {
     /// fees, no lookup tables).
     pub fn with_v1(mut self) -> Self {
         self.version = TransactionVersion::V1;
+        self
+    }
+
+    /// Sets the loaded-accounts data-size limit in bytes (Transaction v1 only).
+    ///
+    /// See [`CreateSmartTransactionConfig::loaded_accounts_data_size_limit`].
+    pub fn with_loaded_accounts_data_size_limit(mut self, loaded_accounts_data_size_limit: u32) -> Self {
+        self.loaded_accounts_data_size_limit = Some(loaded_accounts_data_size_limit);
         self
     }
 }
