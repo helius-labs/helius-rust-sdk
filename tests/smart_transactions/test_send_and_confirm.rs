@@ -72,3 +72,104 @@ async fn test_stops_when_blockhash_expired() {
     );
     send_mock.assert();
 }
+
+/// A send that keeps failing must surface the underlying error rather than a generic timeout.
+/// The retry arm previously discarded it (`Err(_) => continue`), so a permanently-failing
+/// transaction — a malformed one, say — was retried until the deadline and reported only as
+/// "failed to confirm", with the real reason gone.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_surfaces_send_error_instead_of_timeout() {
+    let (mut server, helius) = setup_mock().await;
+
+    // Blockhash is still valid, so the loop runs and the send is actually attempted.
+    mock_block_height(&mut server, 50);
+
+    // A 2s budget with a 500ms pause between attempts fits roughly four sends. Without the
+    // pause the loop re-sends as fast as the network allows and blows straight through this.
+    let send_mock = server
+        .mock("POST", Matcher::Any)
+        .match_body(Matcher::Regex("sendTransaction".to_string()))
+        .with_status(200)
+        .with_header("Content-Type", "application/json")
+        .with_body(
+            r#"{"jsonrpc":"2.0","error":{"code":-32602,"message":"Transaction signature verification failure"},"id":1}"#,
+        )
+        .expect_at_most(6)
+        .create();
+
+    let tx = dummy_transaction();
+    let result = helius
+        .send_and_confirm_transaction(
+            &tx,
+            RpcSendTransactionConfig::default(),
+            100,
+            Some(Duration::from_secs(2)),
+        )
+        .await;
+
+    let err = result.expect_err("a failing send should not return Ok");
+    assert!(
+        !matches!(err, HeliusError::Timeout { .. }),
+        "the send error should replace the generic timeout, got {err:?}"
+    );
+    assert!(
+        err.to_string().contains("signature verification failure"),
+        "the underlying send error should be preserved, got {err:?}"
+    );
+    // Also guards the backoff: a hot retry loop trips the request cap above.
+    send_mock.assert();
+}
+
+/// The retained send error must not outlive the attempt it came from. If an early send fails but
+/// a later one succeeds, the run ended in a confirmation timeout — reporting the stale send error
+/// would misattribute it, and would claim the transaction never left when it may well have landed.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_stale_send_error_does_not_mask_timeout() {
+    let (mut server, helius) = setup_mock().await;
+    let tx = dummy_transaction();
+
+    mock_block_height(&mut server, 50);
+
+    // First send fails...
+    server
+        .mock("POST", Matcher::Any)
+        .match_body(Matcher::Regex("sendTransaction".to_string()))
+        .with_status(200)
+        .with_header("Content-Type", "application/json")
+        .with_body(r#"{"jsonrpc":"2.0","error":{"code":-32002,"message":"Node is behind by 42 slots"},"id":1}"#)
+        .expect(1)
+        .create();
+
+    // ...then subsequent sends succeed, but the transaction never confirms. The RPC client checks
+    // the returned signature against the transaction's own, so the mock must echo the real one.
+    server
+        .mock("POST", Matcher::Any)
+        .match_body(Matcher::Regex("sendTransaction".to_string()))
+        .with_status(200)
+        .with_header("Content-Type", "application/json")
+        .with_body(format!(r#"{{"jsonrpc":"2.0","result":"{}","id":1}}"#, tx.signatures[0]))
+        .create();
+
+    server
+        .mock("POST", Matcher::Any)
+        .match_body(Matcher::Regex("getSignatureStatuses".to_string()))
+        .with_status(200)
+        .with_header("Content-Type", "application/json")
+        .with_body(r#"{"jsonrpc":"2.0","result":{"context":{"slot":1},"value":[null]},"id":1}"#)
+        .create();
+
+    let result = helius
+        .send_and_confirm_transaction(
+            &tx,
+            RpcSendTransactionConfig::default(),
+            100,
+            Some(Duration::from_secs(2)),
+        )
+        .await;
+
+    let err = result.expect_err("an unconfirmed transaction should not return Ok");
+    assert!(
+        matches!(err, HeliusError::Timeout { .. }),
+        "the run ended in a confirmation timeout, not the earlier send failure, got {err:?}"
+    );
+}

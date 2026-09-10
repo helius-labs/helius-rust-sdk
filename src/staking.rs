@@ -31,6 +31,20 @@ use solana_stake_interface::{
 pub static HELIUS_VALIDATOR_PUBKEY: Lazy<Pubkey> =
     Lazy::new(|| Pubkey::from_str("he1iusunGwqrNtafDtLdhsUQDFvo13z9sUa36PauBtk").expect("Invalid Pubkey"));
 
+/// Byte offset of `Meta::authorized.staker` within the bincode encoding of [`StakeStateV2`].
+///
+/// Layout: a 4-byte bincode enum discriminant, then `Meta::rent_exempt_reserve` (`u64`, 8 bytes),
+/// putting the staker at 12 and the withdrawer at 44. Pinned by `stake_state_authority_offsets`
+/// in the unit tests below.
+const STAKER_AUTHORITY_OFFSET: usize = 12;
+
+/// Byte offset of `Meta::authorized.withdrawer` within the bincode encoding of [`StakeStateV2`].
+///
+/// Not used to build a filter today; it exists so the layout test can prove offset 12 is the
+/// staker rather than merely that *something* sits there. See [`STAKER_AUTHORITY_OFFSET`].
+#[cfg(test)]
+const WITHDRAWER_AUTHORITY_OFFSET: usize = 44;
+
 impl Helius {
     /// Generate an unsigned, base58-encoded transaction that creates and delegates a new stake account
     ///
@@ -55,8 +69,8 @@ impl Helius {
     /// fails
     pub async fn create_stake_transaction(&self, owner: Pubkey, amount_sol: f64) -> Result<(String, Pubkey)> {
         let rent_exempt: u64 = self
-            .connection()
-            .get_minimum_balance_for_rent_exemption(StakeStateV2::size_of())?;
+            .run_blocking_rpc(|client| client.get_minimum_balance_for_rent_exemption(StakeStateV2::size_of()))
+            .await??;
         if !amount_sol.is_finite() || amount_sol <= 0.0 {
             return Err(HeliusError::InvalidInput(
                 "Stake amount must be a positive finite number".into(),
@@ -93,7 +107,7 @@ impl Helius {
         let delegate_ix: Instruction =
             stake_instruction::delegate_stake(&stake_account.pubkey(), &owner, &HELIUS_VALIDATOR_PUBKEY);
 
-        let blockhash: Hash = self.connection().get_latest_blockhash()?;
+        let blockhash: Hash = self.run_blocking_rpc(|client| client.get_latest_blockhash()).await??;
         let mut instructions: Vec<Instruction> = create_ix;
         instructions.push(delegate_ix);
 
@@ -128,7 +142,7 @@ impl Helius {
     pub async fn create_unstake_transaction(&self, owner: Pubkey, stake_account: Pubkey) -> Result<String> {
         let deactivate_ix: Instruction = stake_instruction::deactivate_stake(&stake_account, &owner);
 
-        let blockhash: Hash = self.connection().get_latest_blockhash()?;
+        let blockhash: Hash = self.run_blocking_rpc(|client| client.get_latest_blockhash()).await??;
 
         let mut tx: Transaction = Transaction::new_with_payer(&[deactivate_ix], Some(&owner));
 
@@ -175,7 +189,7 @@ impl Helius {
             None, // Custodian
         );
 
-        let blockhash: Hash = self.connection().get_latest_blockhash()?;
+        let blockhash: Hash = self.run_blocking_rpc(|client| client.get_latest_blockhash()).await??;
 
         let mut tx: Transaction = Transaction::new_with_payer(&[withdraw_ix], Some(&owner));
         tx.message.recent_blockhash = blockhash;
@@ -210,8 +224,8 @@ impl Helius {
     /// Returns an error if fetching the rent-exempt minimum balance fails
     pub async fn get_stake_instructions(&self, owner: Pubkey, amount_sol: f64) -> Result<(Vec<Instruction>, Keypair)> {
         let rent_exempt: u64 = self
-            .connection()
-            .get_minimum_balance_for_rent_exemption(StakeStateV2::size_of())?;
+            .run_blocking_rpc(|client| client.get_minimum_balance_for_rent_exemption(StakeStateV2::size_of()))
+            .await??;
 
         if !amount_sol.is_finite() || amount_sol <= 0.0 {
             return Err(HeliusError::InvalidInput(
@@ -318,8 +332,10 @@ impl Helius {
     /// Returns an error if the account cannot be found or isn't a valid stake account
     pub async fn get_withdrawable_amount(&self, stake_account: Pubkey, include_rent_exempt: bool) -> Result<u64> {
         let account = self
-            .connection()
-            .get_account_with_commitment(&stake_account, CommitmentConfig::confirmed())?
+            .run_blocking_rpc(move |client| {
+                client.get_account_with_commitment(&stake_account, CommitmentConfig::confirmed())
+            })
+            .await??
             .value
             .ok_or_else(|| HeliusError::NotFound {
                 text: format!("Stake account {} not found", stake_account),
@@ -339,7 +355,7 @@ impl Helius {
             }
         };
 
-        let current_epoch = self.connection().get_epoch_info()?.epoch;
+        let current_epoch = self.run_blocking_rpc(|client| client.get_epoch_info()).await??.epoch;
 
         // A stake deactivated in epoch N is only withdrawable once epoch N has fully passed
         // (i.e. current_epoch > deactivation_epoch). During the deactivation epoch itself it is
@@ -354,22 +370,30 @@ impl Helius {
         }
 
         let rent_exempt = self
-            .connection()
-            .get_minimum_balance_for_rent_exemption(StakeStateV2::size_of())?;
+            .run_blocking_rpc(|client| client.get_minimum_balance_for_rent_exemption(StakeStateV2::size_of()))
+            .await??;
 
         Ok(lamports.saturating_sub(rent_exempt))
     }
 
-    /// Return every stake-program account whose `Authorized::staker` (offset 44)
-    /// matches `wallet`. It uses the plain `get_program_accounts_with_config` call
-    /// because the *parsed* variant is not available in Solana-client v2.2.x
+    /// Return every stake-program account whose `Authorized::staker` (offset 12)
+    /// matches `wallet`.
+    ///
+    /// The filter is a `memcmp` against the bincode encoding of [`StakeStateV2`],
+    /// whose `Meta` prefix lays out as:
     ///
     /// ```text
-    /// offset 0  –   meta (8 bytes)
-    /// offset 8  –   rent-exempt reserve (8)
-    /// offset 16 –   credits observed etc. ...
-    /// offset 44 –   Authorized::staker (Pubkey, 32 bytes)
+    /// offset 0  –   enum discriminant (bincode u32, 4 bytes)
+    /// offset 4  –   Meta::rent_exempt_reserve (u64, 8 bytes)
+    /// offset 12 –   Meta::authorized.staker (Pubkey, 32 bytes)
+    /// offset 44 –   Meta::authorized.withdrawer (Pubkey, 32 bytes)
+    /// offset 76 –   Meta::lockup ...
     /// ```
+    ///
+    /// Note this filters on the **staker** authority (the one that can delegate and
+    /// deactivate), not the withdrawer. For accounts where the two differ — custodial
+    /// and liquid-staking setups, delegated management — these are different sets.
+    ///
     /// # Arguments
     /// * `wallet` – the Pubkey we filter for
     ///
@@ -379,7 +403,7 @@ impl Helius {
     /// `StakeStateV2::deserialize()` if you need to
     pub async fn get_stake_accounts(&self, wallet: Pubkey) -> Result<Vec<(Pubkey, Account)>> {
         let filters: Option<Vec<RpcFilterType>> = Some(vec![RpcFilterType::Memcmp(Memcmp::new(
-            44,
+            STAKER_AUTHORITY_OFFSET,
             MemcmpEncodedBytes::Base58(wallet.to_string()),
         ))]);
 
@@ -398,8 +422,10 @@ impl Helius {
         // `get_program_accounts_with_config` was removed in solana-client 4.x; its replacement
         // returns UI-encoded accounts, so decode each back into an `Account`.
         let accounts: Vec<(Pubkey, Account)> = self
-            .connection()
-            .get_program_ui_accounts_with_config(&solana_stake_interface::program::id(), cfg)
+            .run_blocking_rpc(move |client| {
+                client.get_program_ui_accounts_with_config(&solana_stake_interface::program::id(), cfg)
+            })
+            .await?
             .map_err(|e| HeliusError::InvalidInput(e.to_string()))?
             .into_iter()
             .map(|(pubkey, ui_account)| {
@@ -411,5 +437,61 @@ impl Helius {
             .collect::<Result<Vec<_>>>()?;
 
         Ok(accounts)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Pubkey, STAKER_AUTHORITY_OFFSET, WITHDRAWER_AUTHORITY_OFFSET};
+
+    use solana_stake_interface::stake_flags::StakeFlags;
+    use solana_stake_interface::state::{Authorized, Delegation, Lockup, Meta, Stake, StakeStateV2};
+
+    /// Pins the byte offsets of both authorities within the bincode encoding of `StakeStateV2`.
+    ///
+    /// `get_stake_accounts` filters with a `memcmp` at a hard-coded offset, so a layout change
+    /// upstream (or a transposed constant) would otherwise silently return the wrong accounts
+    /// rather than fail. Serializing a value whose staker and withdrawer differ is the only way
+    /// to tell the two apart: with equal keys, offset 44 looks just as correct as offset 12.
+    #[test]
+    #[allow(deprecated)] // `Meta::rent_exempt_reserve` is deprecated but still occupies the bytes
+    fn stake_state_authority_offsets() {
+        let staker = Pubkey::new_from_array([0x11; 32]);
+        let withdrawer = Pubkey::new_from_array([0x22; 32]);
+
+        let meta = Meta {
+            rent_exempt_reserve: 42,
+            authorized: Authorized { staker, withdrawer },
+            lockup: Lockup::default(),
+        };
+        let state = StakeStateV2::Stake(
+            meta,
+            Stake {
+                delegation: Delegation::default(),
+                credits_observed: 7,
+            },
+            StakeFlags::empty(),
+        );
+
+        let bytes = bincode::serialize(&state).expect("StakeStateV2 should serialize");
+
+        // 4-byte bincode enum discriminant, then `Meta::rent_exempt_reserve` (u64).
+        assert_eq!(&bytes[0..4], &[2, 0, 0, 0], "expected the `Stake` variant discriminant");
+        assert_eq!(
+            &bytes[4..12],
+            &42u64.to_le_bytes(),
+            "rent_exempt_reserve should directly follow the discriminant"
+        );
+
+        assert_eq!(
+            &bytes[STAKER_AUTHORITY_OFFSET..STAKER_AUTHORITY_OFFSET + 32],
+            staker.as_ref(),
+            "STAKER_AUTHORITY_OFFSET does not point at Authorized::staker"
+        );
+        assert_eq!(
+            &bytes[WITHDRAWER_AUTHORITY_OFFSET..WITHDRAWER_AUTHORITY_OFFSET + 32],
+            withdrawer.as_ref(),
+            "WITHDRAWER_AUTHORITY_OFFSET does not point at Authorized::withdrawer"
+        );
     }
 }

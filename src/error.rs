@@ -53,8 +53,19 @@ pub enum HeliusError {
     /// Covers general network failures
     ///
     /// This could range from DNS resolution failures, lost connections, issues with Solana, or any issue that prevents the client from reaching the server
+    ///
+    /// The underlying [`reqwest::Error`] is retained as the error's [`std::error::Error::source`],
+    /// so its own cause chain (hyper, the connector, the OS error) is reachable. `reqwest` does not
+    /// include that chain in its `Display`, so printing this error alone reports only *that* the
+    /// request failed — print the chain (e.g. `anyhow`'s `{:#}`) or walk `source()` to see why.
+    /// [`HeliusError::is_timeout`] and [`HeliusError::is_connect`] classify the common cases
+    /// without a downcast
+    ///
+    /// Note that a chain-printing consumer repeats the wrapped error's message once, because this
+    /// variant's own `Display` embeds it. That is deliberate: dropping it would leave anything
+    /// printing plain `{}` with no detail at all
     #[error("Network error: {0}")]
-    Network(ReqwestError),
+    Network(#[source] ReqwestError),
 
     /// Indicates the requested resource was not found
     ///
@@ -71,9 +82,11 @@ pub enum HeliusError {
 
     /// Indicates an error from the underlying HTTP client (i.e., reqwest)
     ///
-    /// This captures errors from the `reqwest` library specifically
+    /// This captures errors from the `reqwest` library specifically. As with
+    /// [`HeliusError::Network`], the underlying [`reqwest::Error`] is retained as this error's
+    /// [`std::error::Error::source`]
     #[error("Request error: {0}")]
-    ReqwestError(ReqwestError),
+    ReqwestError(#[source] ReqwestError),
 
     /// Represents a JSON-RPC error returned by the server in the response body
     ///
@@ -93,7 +106,7 @@ pub enum HeliusError {
     /// If the JSON data cannot be encoded or decoded, this error will be thrown, typically indicating an issue with the data structure
     ///
     #[error("Serialization / Deserialization error: {0}")]
-    SerdeJson(SerdeJsonError),
+    SerdeJson(#[source] SerdeJsonError),
 
     /// Occurs during high-performance JSON parsing via `simd-json`
     ///
@@ -154,7 +167,7 @@ pub enum HeliusError {
     /// Indicates a failure to parse a URL
     ///
     /// Returned when a provided RPC or WebSocket URL is malformed
-    #[error("Url parse error")]
+    #[error("URL parse error: {0}")]
     UrlParseError(#[from] url::ParseError),
 
     /// Indicates a TLS/SSL handshake or configuration error
@@ -177,6 +190,35 @@ impl HeliusError {
             StatusCode::TOO_MANY_REQUESTS => HeliusError::RateLimitExceeded { path },
             _ => HeliusError::Unknown { code: status, text },
         }
+    }
+
+    /// Returns the underlying [`reqwest::Error`], if this error came from the HTTP client
+    ///
+    /// Covers [`HeliusError::Network`] and [`HeliusError::ReqwestError`]. Use this to inspect the
+    /// failure with `reqwest`'s own predicates (`is_decode`, `is_body`, `is_redirect`, `status`,
+    /// ...) without downcasting through [`std::error::Error::source`]
+    pub fn as_reqwest(&self) -> Option<&ReqwestError> {
+        match self {
+            HeliusError::Network(err) | HeliusError::ReqwestError(err) => Some(err),
+            _ => None,
+        }
+    }
+
+    /// Returns `true` if this error was caused by an HTTP request timing out
+    ///
+    /// This reports *transport* timeouts only. Confirmation polling that runs out of time is
+    /// reported as [`HeliusError::Timeout`], which is a distinct condition — match on it directly
+    pub fn is_timeout(&self) -> bool {
+        self.as_reqwest().is_some_and(ReqwestError::is_timeout)
+    }
+
+    /// Returns `true` if this error was caused by a failure to reach the server
+    ///
+    /// Connection refused, DNS resolution failure, and TLS handshake failure all land here. Such a
+    /// request never arrived, so retrying it is safe regardless of whether the operation is
+    /// idempotent
+    pub fn is_connect(&self) -> bool {
+        self.as_reqwest().is_some_and(ReqwestError::is_connect)
     }
 }
 

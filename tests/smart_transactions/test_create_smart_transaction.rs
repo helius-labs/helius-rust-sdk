@@ -1,3 +1,4 @@
+use helius::optimized_transaction::MAX_LOADED_ACCOUNTS_DATA_SIZE_BYTES;
 use helius::types::{
     CreateSmartTransactionConfig, CreateSmartTransactionSeedConfig, SmartTransaction, TransactionVersion,
 };
@@ -348,4 +349,123 @@ async fn test_create_smart_transaction_errors_on_failed_simulation() {
         result.is_err(),
         "a failed simulation must surface as an error, got {result:?}"
     );
+}
+
+/// Drives `loaded_accounts_data_size_limit` end to end and asserts it reaches the v1 header, rather
+/// than only testing the resolver in isolation.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_v1_carries_the_caller_supplied_data_size_limit() {
+    let (mut server, helius) = setup_mock().await;
+
+    mock_latest_blockhash(&mut server);
+    mock_priority_fee_estimate(&mut server);
+    mock_simulate_transaction(&mut server, 50_000);
+
+    let payer = Keypair::new();
+    let payer_signer: Arc<dyn Signer> = Arc::new(payer.insecure_clone());
+
+    let config = CreateSmartTransactionConfig::new(
+        vec![system_instruction::transfer(
+            &payer.pubkey(),
+            &Pubkey::new_unique(),
+            1000,
+        )],
+        vec![payer_signer],
+    )
+    .with_v1()
+    .with_loaded_accounts_data_size_limit(2 * 1024 * 1024);
+
+    let (transaction, _) = helius
+        .create_smart_transaction(&config)
+        .await
+        .expect("v1 smart tx should build");
+
+    match transaction {
+        SmartTransaction::Versioned(vtx) => match vtx.message {
+            VersionedMessage::V1(m) => assert_eq!(
+                m.config.loaded_accounts_data_size_limit,
+                Some(2 * 1024 * 1024),
+                "the caller's budget must reach the header, not the 64 MiB default"
+            ),
+            other => panic!("expected a v1 message, got {other:?}"),
+        },
+        other => panic!("expected a versioned transaction, got {other:?}"),
+    }
+}
+
+/// The default is the 64 MiB maximum, matching the implicit budget legacy and v0 get.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_v1_defaults_the_data_size_limit_to_the_maximum() {
+    let (mut server, helius) = setup_mock().await;
+
+    mock_latest_blockhash(&mut server);
+    mock_priority_fee_estimate(&mut server);
+    mock_simulate_transaction(&mut server, 50_000);
+
+    let payer = Keypair::new();
+    let payer_signer: Arc<dyn Signer> = Arc::new(payer.insecure_clone());
+
+    let config = CreateSmartTransactionConfig::new(
+        vec![system_instruction::transfer(
+            &payer.pubkey(),
+            &Pubkey::new_unique(),
+            1000,
+        )],
+        vec![payer_signer],
+    )
+    .with_v1();
+
+    let (transaction, _) = helius
+        .create_smart_transaction(&config)
+        .await
+        .expect("v1 smart tx should build");
+
+    match transaction {
+        SmartTransaction::Versioned(vtx) => match vtx.message {
+            VersionedMessage::V1(m) => {
+                assert_eq!(
+                    m.config.loaded_accounts_data_size_limit,
+                    Some(MAX_LOADED_ACCOUNTS_DATA_SIZE_BYTES)
+                );
+                // The runtime reads an unset compute-unit limit as 0, so it must always be present.
+                assert!(
+                    m.config.compute_unit_limit.is_some(),
+                    "an unset v1 compute-unit limit means a zero compute budget"
+                );
+            }
+            other => panic!("expected a v1 message, got {other:?}"),
+        },
+        other => panic!("expected a versioned transaction, got {other:?}"),
+    }
+}
+
+/// Legacy and v0 have nowhere to carry the limit, so setting it there is rejected rather than
+/// silently dropped.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_data_size_limit_is_rejected_without_v1() {
+    let (mut server, helius) = setup_mock().await;
+    mock_latest_blockhash(&mut server);
+
+    let payer = Keypair::new();
+    let payer_signer: Arc<dyn Signer> = Arc::new(payer.insecure_clone());
+
+    let config = CreateSmartTransactionConfig::new(
+        vec![system_instruction::transfer(
+            &payer.pubkey(),
+            &Pubkey::new_unique(),
+            1000,
+        )],
+        vec![payer_signer],
+    )
+    .with_loaded_accounts_data_size_limit(1024);
+
+    let result = helius.create_smart_transaction(&config).await;
+
+    match result {
+        Ok(_) => panic!("expected the non-v1 config to be rejected"),
+        Err(err) => assert!(
+            err.to_string().contains("requires TransactionVersion::V1"),
+            "expected a version-mismatch error, got {err}"
+        ),
+    }
 }

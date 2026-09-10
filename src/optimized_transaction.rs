@@ -52,6 +52,46 @@ use tokio::time::sleep;
 /// and minimizing wasted compute unit fees (too much buffer).
 const CU_BUFFER_MULTIPLIER_DEFAULT: f32 = 1.25;
 
+/// Largest compute-unit limit the runtime accepts on a single transaction.
+///
+/// Applies to both formats: legacy/v0 set it with `ComputeBudgetInstruction::set_compute_unit_limit`,
+/// Transaction v1 carries it in the message header config. Neither the message compiler nor
+/// `v1::Message::validate` rejects a larger value, so the SDK clamps to it rather than building a
+/// transaction the cluster will refuse.
+pub const MAX_COMPUTE_UNIT_LIMIT: u32 = 1_400_000;
+
+/// Smallest compute-unit limit the SDK will request.
+///
+/// A simulated estimate can come back at or near zero, and a literal `0` limit fails on-chain.
+/// Below this the flat minimum is used rather than a multiple of a near-zero estimate.
+pub const MIN_COMPUTE_UNIT_LIMIT: u32 = 1_000;
+
+/// Applies the caller's safety buffer to a simulated compute-unit count, bounded by
+/// [`MIN_COMPUTE_UNIT_LIMIT`] and [`MAX_COMPUTE_UNIT_LIMIT`].
+///
+/// The buffer is why the ceiling is needed: simulation is capped at [`MAX_COMPUTE_UNIT_LIMIT`], so
+/// any multiplier above 1.0 pushes an expensive transaction past the maximum. A non-finite or
+/// non-positive multiplier falls back to the default rather than producing a garbage limit.
+fn resolve_compute_unit_limit(units_consumed: u64, multiplier: f32) -> u32 {
+    let multiplier: f64 = if multiplier.is_finite() && multiplier > 0.0 {
+        multiplier as f64
+    } else {
+        log::warn!("Ignoring invalid cu_buffer_multiplier ({multiplier}); using {CU_BUFFER_MULTIPLIER_DEFAULT}");
+        CU_BUFFER_MULTIPLIER_DEFAULT as f64
+    };
+
+    // Below the floor the buffer is deliberately not applied, preserving long-standing behaviour:
+    // a trivial transaction gets the flat minimum rather than a multiple of a near-zero estimate.
+    let buffered: u32 = if units_consumed < MIN_COMPUTE_UNIT_LIMIT as u64 {
+        MIN_COMPUTE_UNIT_LIMIT
+    } else {
+        // `as u32` saturates, so an overflowing product lands on u32::MAX and is capped below.
+        (units_consumed as f64 * multiplier).ceil() as u32
+    };
+
+    buffered.min(MAX_COMPUTE_UNIT_LIMIT)
+}
+
 /// Minimum tip in lamports for **Sender Max** (`swqos_only = false`).
 ///
 /// Sender Max routes a transaction across multiple high-speed pathways and
@@ -79,6 +119,29 @@ pub const MIN_TIP_LAMPORTS_DUAL: u64 = MIN_TIP_LAMPORTS_MAX;
 /// Minimum tip: 0.000005 SOL (5,000 lamports).
 pub const MIN_TIP_LAMPORTS_SWQOS: u64 = 5_000; // 0.000005 SOL
 
+/// Default hard ceiling on the auto-derived Sender tip: 0.01 SOL, 10x the Sender Max minimum.
+///
+/// The tip is read from a third-party feed and paid as a real transfer out of the fee payer's
+/// account, so it needs an upper bound as well as a lower one. 10x leaves ample room for genuine
+/// congestion — the 75th-percentile landed tip normally sits three orders of magnitude below this
+/// — while bounding the loss if the feed spikes or is tampered with.
+///
+/// Override per-send with [`SenderSendOptions::with_max_tip_lamports`](crate::types::SenderSendOptions::with_max_tip_lamports).
+pub const DEFAULT_MAX_TIP_LAMPORTS: u64 = 10_000_000; // 0.01 SOL
+
+// Satisfiability only: a default below the tier minimum would fail every default-configured send.
+// The 10x headroom is deliberately not asserted, so tuning the default is not a build break.
+const _: () = assert!(
+    DEFAULT_MAX_TIP_LAMPORTS >= MIN_TIP_LAMPORTS_MAX,
+    "DEFAULT_MAX_TIP_LAMPORTS must be satisfiable on the Sender Max tier"
+);
+
+/// Largest tip-floor value, in SOL, accepted from the feed. Anything above is treated as malformed.
+///
+/// Guards the parse independently of the per-send ceiling, so a broken or compromised feed cannot
+/// propose an absurd tip in the first place.
+const MAX_PLAUSIBLE_TIP_FLOOR_SOL: f64 = 1.0;
+
 /// Maximum serialized size of a Transaction v1 (SIMD-0296), in bytes.
 ///
 /// Agave 4.2 activates larger transactions: v1 (SIMD-0385) raises the cap from the legacy/v0
@@ -95,25 +158,72 @@ pub const MAX_TRANSACTION_V1_SIZE: usize = solana_sdk::message::v1::MAX_TRANSACT
 /// data loaded. So the v1 builder always sets this, defaulting to the Agave maximum.
 pub const MAX_LOADED_ACCOUNTS_DATA_SIZE_BYTES: u32 = 64 * 1024 * 1024;
 
+/// Resolves and validates a v1 compute-unit limit, defaulting to [`MAX_COMPUTE_UNIT_LIMIT`].
+///
+/// Unset is not a neutral choice on v1: the runtime reads a missing limit as `0`, i.e. no compute
+/// budget at all. `Some(0)` is the same failure stated explicitly.
+///
+/// A value above the maximum is rejected rather than clamped. The runtime *would* clamp it, but it
+/// takes the v1 priority fee verbatim — so silently lowering the compute budget while the caller's
+/// fee was computed against the larger number is exactly the overpayment this PR exists to close.
+fn resolve_compute_unit_limit_for_v1(limit: Option<u32>) -> Result<u32> {
+    let limit: u32 = limit.unwrap_or(MAX_COMPUTE_UNIT_LIMIT);
+
+    if limit == 0 || limit > MAX_COMPUTE_UNIT_LIMIT {
+        return Err(HeliusError::InvalidInput(format!(
+            "compute_unit_limit must be between 1 and {MAX_COMPUTE_UNIT_LIMIT}, got {limit}"
+        )));
+    }
+
+    Ok(limit)
+}
+
+/// Resolves and validates a v1 loaded-accounts data-size limit, defaulting to
+/// [`MAX_LOADED_ACCOUNTS_DATA_SIZE_BYTES`].
+///
+/// `Some(0)` is rejected rather than passed through: SIMD-0385 treats it as a zero-byte budget, and
+/// Agave charges a base cost per account against it, so every account load fails. Neither
+/// `try_compile_with_config` nor `v1::Message::validate` catches it, which would otherwise make a
+/// zero limit a signed, submitted, guaranteed-to-fail transaction.
+fn resolve_loaded_accounts_data_size_limit(limit: Option<u32>) -> Result<u32> {
+    let limit: u32 = limit.unwrap_or(MAX_LOADED_ACCOUNTS_DATA_SIZE_BYTES);
+
+    if limit == 0 || limit > MAX_LOADED_ACCOUNTS_DATA_SIZE_BYTES {
+        return Err(HeliusError::InvalidInput(format!(
+            "loaded_accounts_data_size_limit must be between 1 and {MAX_LOADED_ACCOUNTS_DATA_SIZE_BYTES} bytes, got {limit}"
+        )));
+    }
+
+    Ok(limit)
+}
+
 /// Builds a v1 [`TransactionConfig`](solana_sdk::message::v1::TransactionConfig) from the given
 /// priority fee, compute-unit limit, and loaded-accounts data-size limit.
 ///
-/// The data-size limit is always set (defaulting to [`MAX_LOADED_ACCOUNTS_DATA_SIZE_BYTES`]) because
-/// v1 treats an unset limit as 0.
+/// Both budget fields are always set, because the runtime reads an unset one as `0`
+/// (`from_v1_config` in `solana-runtime-transaction` resolves each with `unwrap_or(0)`): an omitted
+/// compute-unit limit means a zero compute budget, and an omitted data-size limit means a zero-byte
+/// account budget. Either is an immediate on-chain failure, so `None` becomes the maximum rather
+/// than being left out. The priority fee is genuinely optional — unset means no fee.
+///
+/// Callers taking either limit from the outside should validate first with
+/// [`resolve_compute_unit_limit_for_v1`] / [`resolve_loaded_accounts_data_size_limit`]; this
+/// builder only supplies defaults.
 fn build_v1_config(
     priority_fee_lamports: Option<u64>,
     compute_unit_limit: Option<u32>,
     loaded_accounts_data_size_limit: Option<u32>,
 ) -> v1::TransactionConfig {
-    let mut config: v1::TransactionConfig = v1::TransactionConfig::empty().with_loaded_accounts_data_size_limit(
-        loaded_accounts_data_size_limit.unwrap_or(MAX_LOADED_ACCOUNTS_DATA_SIZE_BYTES),
-    );
+    let mut config: v1::TransactionConfig = v1::TransactionConfig::empty()
+        .with_loaded_accounts_data_size_limit(
+            loaded_accounts_data_size_limit.unwrap_or(MAX_LOADED_ACCOUNTS_DATA_SIZE_BYTES),
+        )
+        .with_compute_unit_limit(compute_unit_limit.unwrap_or(MAX_COMPUTE_UNIT_LIMIT));
+
     if let Some(fee) = priority_fee_lamports {
         config = config.with_priority_fee(fee);
     }
-    if let Some(cu) = compute_unit_limit {
-        config = config.with_compute_unit_limit(cu);
-    }
+
     config
 }
 
@@ -137,14 +247,17 @@ fn build_v1_config(
 /// * `signers` - All required signers
 /// * `recent_blockhash` - A recent blockhash as the transaction's lifetime specifier
 /// * `priority_fee_lamports` - Optional total priority fee, in lamports
-/// * `compute_unit_limit` - Optional compute-unit limit
+/// * `compute_unit_limit` - Optional compute-unit limit; defaults to [`MAX_COMPUTE_UNIT_LIMIT`]
+///   because v1 treats an unset limit as 0 (no compute budget). Must be between 1 and that maximum
 /// * `loaded_accounts_data_size_limit` - Optional loaded-accounts data-size limit; defaults to
-///   [`MAX_LOADED_ACCOUNTS_DATA_SIZE_BYTES`] because v1 treats an unset limit as 0 (immediate failure)
+///   [`MAX_LOADED_ACCOUNTS_DATA_SIZE_BYTES`] because v1 treats an unset limit as 0 (immediate
+///   failure). Must be between 1 and that maximum
 ///
 /// # Errors
-/// Returns [`HeliusError::InvalidInput`] if the message cannot be compiled, fails v1 validation, or
-/// the signed transaction exceeds [`MAX_TRANSACTION_V1_SIZE`], or [`HeliusError::SignerError`] if
-/// signing fails.
+/// Returns [`HeliusError::InvalidInput`] if `compute_unit_limit` or
+/// `loaded_accounts_data_size_limit` is out of range, the
+/// message cannot be compiled, fails v1 validation, or the signed transaction exceeds
+/// [`MAX_TRANSACTION_V1_SIZE`], or [`HeliusError::SignerError`] if signing fails.
 pub fn build_v1_transaction(
     payer: &Pubkey,
     instructions: &[Instruction],
@@ -156,8 +269,10 @@ pub fn build_v1_transaction(
 ) -> Result<VersionedTransaction> {
     let config: v1::TransactionConfig = build_v1_config(
         priority_fee_lamports,
-        compute_unit_limit,
-        loaded_accounts_data_size_limit,
+        Some(resolve_compute_unit_limit_for_v1(compute_unit_limit)?),
+        Some(resolve_loaded_accounts_data_size_limit(
+            loaded_accounts_data_size_limit,
+        )?),
     );
 
     let message: v1::Message = v1::Message::try_compile_with_config(payer, instructions, recent_blockhash, config)
@@ -253,6 +368,43 @@ fn collect_unique_keypair_refs<'a>(signers: &'a [Keypair], fee_payer: &'a Keypai
     }
 
     all_signers
+}
+
+/// How long [`Helius::poll_transaction_confirmation`] polls before giving up.
+///
+/// Callers with their own deadline should use
+/// [`Helius::poll_transaction_confirmation_with_timeout`] and pass the time remaining, so a poll
+/// cannot overrun the budget the caller was given.
+pub const DEFAULT_CONFIRMATION_POLL_TIMEOUT: Duration = Duration::from_secs(15);
+
+/// Converts a tip-floor reading in SOL to lamports. `None` for anything that cannot be a real tip
+/// floor, leaving the caller to fall back to the tier minimum.
+fn tip_floor_sol_to_lamports(sol: f64) -> Option<u64> {
+    // Catches NaN and both infinities too: every comparison against NaN is false, so `contains`
+    // is false for them.
+    if !(0.0..=MAX_PLAUSIBLE_TIP_FLOOR_SOL).contains(&sol) {
+        log::warn!("Ignoring implausible tip-floor value from feed: {sol} SOL");
+        return None;
+    }
+
+    Some((sol * 1_000_000_000.0) as u64)
+}
+
+/// Resolves the tip to pay: a missing or rejected feed reading falls back to the minimum, and the
+/// result is *clamped*, not merely floored.
+///
+/// Callers reject an unsatisfiable ceiling before calling, since only they can attribute it. The
+/// bounds are normalized anyway so this cannot panic the way a bare `clamp` would; the
+/// `debug_assert` keeps that misuse loud in tests.
+fn resolve_tip_lamports(feed_lamports: Option<u64>, min_lamports: u64, max_tip_lamports: u64) -> u64 {
+    debug_assert!(
+        max_tip_lamports >= min_lamports,
+        "tip ceiling must not sit below the tier minimum"
+    );
+
+    let ceiling: u64 = max_tip_lamports.max(min_lamports);
+
+    feed_lamports.unwrap_or(min_lamports).clamp(min_lamports, ceiling)
 }
 
 fn is_retryable_confirmation_error(err: &HeliusError) -> bool {
@@ -382,6 +534,19 @@ pub fn sender_ping_url(region: &str) -> String {
     format!("{}/ping", sender_base_url(region))
 }
 
+/// Names a Sender endpoint for an error message: host and path, without the query string.
+///
+/// Elsewhere the SDK reports only `Url::path()`, because those URLs carry the API key in a query
+/// parameter and an error message is the wrong place for it. Sender endpoints are region-scoped
+/// and carry no key, so nothing here is secret, and the host is what identifies *which* region
+/// failed — the detail that matters when one is degraded and the others are fine.
+fn sender_error_target(url: &reqwest::Url) -> String {
+    match url.host_str() {
+        Some(host) => format!("{}{}", host, url.path()),
+        None => url.path().to_string(),
+    }
+}
+
 /// POST base64 wire-transaction to Sender via `/fast`.
 async fn post_to_sender(tx64: &str, opts: &SenderSendOptions) -> Result<Signature> {
     let mut endpoint: String = sender_fast_url(&opts.region);
@@ -406,23 +571,24 @@ async fn post_to_sender(tx64: &str, opts: &SenderSendOptions) -> Result<Signatur
         .json(&body)
         .send()
         .await
-        .map_err(|e| HeliusError::InvalidInput(format!("Sender request error: {e}")))?;
+        .map_err(HeliusError::Network)?;
 
     let status = res.status();
     if !status.is_success() {
-        // `text()` consumes `res` in this branch, and we return immediately.
+        // Borrowed before the `text()` below consumes `res`, which this branch can do because it
+        // returns immediately.
+        let target = sender_error_target(res.url());
         let text = res.text().await.unwrap_or_default();
-        Err(HeliusError::InvalidInput(format!(
-            "Sender HTTP {}: {}",
+        // Classified by status rather than lumped into `InvalidInput`, so a caller can tell a
+        // rate limit or an expired API key apart from a transaction it built wrong.
+        Err(HeliusError::from_response_status(
             status,
-            text.chars().take(200).collect::<String>()
-        )))
+            target,
+            text.chars().take(200).collect::<String>(),
+        ))
     } else {
         // Success path: `json()` consumes `res` *here*, not above.
-        let val: serde_json::Value = res
-            .json()
-            .await
-            .map_err(|e| HeliusError::InvalidInput(format!("Sender JSON parse error: {e}")))?;
+        let val: serde_json::Value = res.json().await.map_err(HeliusError::Network)?;
 
         if let Some(s) = val.as_str() {
             return Signature::from_str(s)
@@ -491,8 +657,34 @@ impl Helius {
         signers: Option<&[Arc<dyn Signer>]>,
         version: TransactionVersion,
     ) -> Result<Option<u64>> {
+        self.get_compute_units_with_data_size_limit(instructions, payer, lookup_tables, signers, version, None)
+            .await
+    }
+
+    /// Simulates the instructions to estimate compute units, loading accounts under
+    /// `loaded_accounts_data_size_limit` (Transaction v1 only).
+    ///
+    /// Simulation loads accounts too, so it has to run under the same budget the final transaction
+    /// will carry — simulating under the 64 MiB default while the transaction ships a smaller limit
+    /// produces an estimate that does not hold on-chain.
+    ///
+    /// # Arguments
+    /// * `loaded_accounts_data_size_limit` - The limit the final transaction will carry; `None`
+    ///   uses [`MAX_LOADED_ACCOUNTS_DATA_SIZE_BYTES`]
+    ///
+    /// # Returns
+    /// The compute units consumed, or `None` if unavailable
+    pub async fn get_compute_units_with_data_size_limit(
+        &self,
+        instructions: Vec<Instruction>,
+        payer: Pubkey,
+        lookup_tables: Vec<AddressLookupTableAccount>,
+        signers: Option<&[Arc<dyn Signer>]>,
+        version: TransactionVersion,
+        loaded_accounts_data_size_limit: Option<u32>,
+    ) -> Result<Option<u64>> {
         // Fetch the latest blockhash
-        let recent_blockhash: Hash = self.connection().get_latest_blockhash()?;
+        let recent_blockhash: Hash = self.run_blocking_rpc(|client| client.get_latest_blockhash()).await??;
 
         // Build a message matching the target version so simulation is not capped at the v0 size
         // limit for a large v1 transaction.
@@ -500,14 +692,20 @@ impl Helius {
             TransactionVersion::V1 => {
                 // v1 raises the CU limit via the header config, not a ComputeBudget instruction (a
                 // no-op on v1). Simulate against the max limit.
-                let config = build_v1_config(None, Some(1_400_000), None);
+                let config = build_v1_config(
+                    None,
+                    Some(MAX_COMPUTE_UNIT_LIMIT),
+                    Some(resolve_loaded_accounts_data_size_limit(
+                        loaded_accounts_data_size_limit,
+                    )?),
+                );
                 let message = v1::Message::try_compile_with_config(&payer, &instructions, recent_blockhash, config)
                     .map_err(|e| HeliusError::InvalidInput(format!("Failed to compile v1 message: {e}")))?;
                 VersionedMessage::V1(message)
             }
             TransactionVersion::Auto => {
                 let test_instructions: Vec<Instruction> =
-                    vec![ComputeBudgetInstruction::set_compute_unit_limit(1_400_000)]
+                    vec![ComputeBudgetInstruction::set_compute_unit_limit(MAX_COMPUTE_UNIT_LIMIT)]
                         .into_iter()
                         .chain(instructions)
                         .collect::<Vec<_>>();
@@ -541,8 +739,8 @@ impl Helius {
             ..Default::default()
         };
         let result: Response<RpcSimulateTransactionResult> = self
-            .connection()
-            .simulate_transaction_with_config(&transaction, config)?;
+            .run_blocking_rpc(move |client| client.simulate_transaction_with_config(&transaction, config))
+            .await??;
 
         // A failed simulation still returns `units_consumed: Some(0)`; surface the error instead of
         // proceeding with a bogus compute-unit count (e.g. `UnsupportedVersion` for v1 before the
@@ -557,17 +755,40 @@ impl Helius {
         Ok(result.value.units_consumed)
     }
 
-    /// Poll a transaction to check whether it has been confirmed
+    /// Poll a transaction to check whether it has been confirmed, for up to
+    /// [`DEFAULT_CONFIRMATION_POLL_TIMEOUT`].
     ///
     /// * `txt-sig` - The transaction signature to check
     ///
     /// # Returns
     /// The confirmed transaction signature or an error if the confirmation times out
     pub async fn poll_transaction_confirmation(&self, txt_sig: Signature) -> Result<Signature> {
-        // 15 second timeout
-        let timeout: Duration = Duration::from_secs(15);
-        // 5 second retry interval
-        let interval: Duration = Duration::from_secs(5);
+        self.poll_transaction_confirmation_with_timeout(txt_sig, DEFAULT_CONFIRMATION_POLL_TIMEOUT)
+            .await
+    }
+
+    /// Poll a transaction to check whether it has been confirmed, giving up after `timeout`.
+    ///
+    /// Callers that own an overall deadline should pass the time remaining in it, so the poll
+    /// cannot overrun the budget the caller was given.
+    ///
+    /// * `txt_sig` - The transaction signature to check
+    /// * `timeout` - How long to keep polling before returning [`HeliusError::Timeout`]
+    ///
+    /// # Returns
+    /// The confirmed transaction signature or an error if the confirmation times out
+    pub async fn poll_transaction_confirmation_with_timeout(
+        &self,
+        txt_sig: Signature,
+        timeout: Duration,
+    ) -> Result<Signature> {
+        // Poll on an exponential backoff rather than a fixed interval. A transaction typically
+        // confirms within a slot or two, so starting near the slot time keeps the common case
+        // fast; backing off to `MAX_POLL_INTERVAL` keeps a transaction that never lands from
+        // costing a request every 400ms for the full timeout.
+        const INITIAL_POLL_INTERVAL: Duration = Duration::from_millis(400);
+        const MAX_POLL_INTERVAL: Duration = Duration::from_secs(5);
+        let mut interval: Duration = INITIAL_POLL_INTERVAL;
         let start: Instant = Instant::now();
 
         loop {
@@ -578,27 +799,32 @@ impl Helius {
                 });
             }
 
-            let status = self.connection().get_signature_statuses(&[txt_sig])?;
+            let status = self
+                .run_blocking_rpc(move |client| client.get_signature_statuses(&[txt_sig]))
+                .await??;
 
             // `value` should hold exactly one entry for the single signature queried, but guard
             // against an empty/short response by treating a missing entry as "not yet available"
             // (retry) rather than indexing and panicking.
-            match status.value.first().cloned().flatten() {
-                Some(status) => {
-                    if status.err.is_none()
-                        && (status.confirmation_status == Some(TransactionConfirmationStatus::Confirmed)
-                            || status.confirmation_status == Some(TransactionConfirmationStatus::Finalized))
-                    {
-                        return Ok(txt_sig);
-                    }
-                    if let Some(err) = status.err {
-                        return Err(HeliusError::TransactionError(err));
-                    }
+            if let Some(status) = status.value.first().cloned().flatten() {
+                if let Some(err) = status.err {
+                    return Err(HeliusError::TransactionError(err));
                 }
-                None => {
-                    sleep(interval).await;
+                if status.confirmation_status == Some(TransactionConfirmationStatus::Confirmed)
+                    || status.confirmation_status == Some(TransactionConfirmationStatus::Finalized)
+                {
+                    return Ok(txt_sig);
                 }
             }
+
+            // Either the status is not available yet, or the transaction is still `Processed`.
+            // Both mean "not done" — always wait before the next check. Falling straight through
+            // on `Processed` (the normal state right after submission) would spin a hot loop of
+            // blocking RPC calls for the full timeout.
+            // Clamp the wait to the time actually left so the poll honours its timeout rather
+            // than overshooting it by up to one full interval.
+            sleep(interval.min(timeout.saturating_sub(start.elapsed()))).await;
+            interval = (interval * 2).min(MAX_POLL_INTERVAL);
         }
     }
 
@@ -625,8 +851,8 @@ impl Helius {
             .as_ref()
             .map_or(config.signers[0].pubkey(), |signer| signer.pubkey());
         let (recent_blockhash, last_valid_block_hash) = self
-            .connection()
-            .get_latest_blockhash_with_commitment(CommitmentConfig::confirmed())?;
+            .run_blocking_rpc(|client| client.get_latest_blockhash_with_commitment(CommitmentConfig::confirmed()))
+            .await??;
         // Check if any of the instructions provided set the compute unit price and/or limit, and throw an error if `true`
         let existing_compute_budget_instructions: bool = config.instructions.iter().any(|instruction| {
             instruction.program_id == ComputeBudgetInstruction::set_compute_unit_limit(0).program_id
@@ -643,6 +869,14 @@ impl Helius {
         if config.version == TransactionVersion::V1 && config.lookup_tables.is_some() {
             return Err(HeliusError::InvalidInput(
                 "Transaction v1 does not support address lookup tables".to_string(),
+            ));
+        }
+
+        // The data-size limit lives in the v1 message header; legacy and v0 have nowhere to put it.
+        // Rejecting is better than accepting a budget that would be silently dropped.
+        if config.version != TransactionVersion::V1 && config.loaded_accounts_data_size_limit.is_some() {
+            return Err(HeliusError::InvalidInput(
+                "loaded_accounts_data_size_limit requires TransactionVersion::V1".to_string(),
             ));
         }
 
@@ -713,12 +947,13 @@ impl Helius {
         };
 
         let units: Option<u64> = self
-            .get_compute_units(
+            .get_compute_units_with_data_size_limit(
                 simulation_instructions,
                 payer_pubkey,
                 config.lookup_tables.clone().unwrap_or_default(),
                 Some(&all_signers),
                 config.version,
+                config.loaded_accounts_data_size_limit,
             )
             .await?;
 
@@ -728,11 +963,7 @@ impl Helius {
 
         let multiplier: f32 = config.cu_buffer_multiplier.unwrap_or(CU_BUFFER_MULTIPLIER_DEFAULT);
 
-        let customers_cu: u32 = if compute_units < 1000 {
-            1000
-        } else {
-            (compute_units as f64 * multiplier as f64).ceil() as u32
-        };
+        let customers_cu: u32 = resolve_compute_unit_limit(compute_units, multiplier);
 
         match config.version {
             TransactionVersion::V1 => {
@@ -754,7 +985,7 @@ impl Helius {
                     recent_blockhash,
                     Some(priority_fee_lamports),
                     Some(customers_cu),
-                    None,
+                    config.loaded_accounts_data_size_limit,
                 )?;
 
                 Ok((SmartTransaction::Versioned(transaction), last_valid_block_hash))
@@ -826,46 +1057,89 @@ impl Helius {
     /// Sends a transaction and handles its confirmation status
     ///
     /// # Arguments
-    /// * `transaction` - The transaction to be sent, which implements `SerializableTransaction`
+    /// * `transaction` - The transaction to be sent, which implements `SerializableTransaction`.
+    ///   Each send attempt runs on tokio's blocking pool and so needs an owned copy; the bound is
+    ///   satisfied by `Transaction` and `VersionedTransaction`
     /// * `send_transaction_config` - Configuration options for sending the transaction
     /// * `last_valid_block_height` - The last block height at which the transaction is valid
     /// * `timeout` - Optional duration for polling transaction confirmation, defaults to 60 seconds
     ///
     /// # Returns
     /// The transaction signature, if successful
-    pub async fn send_and_confirm_transaction(
+    pub async fn send_and_confirm_transaction<T>(
         &self,
-        transaction: &impl SerializableTransaction,
+        transaction: &T,
         send_transaction_config: RpcSendTransactionConfig,
         last_valid_block_height: u64,
         timeout: Option<Duration>,
-    ) -> Result<Signature> {
+    ) -> Result<Signature>
+    where
+        T: SerializableTransaction + Clone + Send + 'static,
+    {
         // Retry logic with a timeout
         let timeout: Duration = timeout.unwrap_or(Duration::from_secs(60));
         let start_time: Instant = Instant::now();
+        // Pause between send attempts so a permanently-failing transaction does not spin.
+        let retry_delay: Duration = Duration::from_millis(500);
+        // Preserved so the caller sees why sending actually failed rather than a generic timeout.
+        let mut last_send_err: Option<HeliusError> = None;
 
         // Keep retrying only while both conditions hold: there is time left in the timeout
-        // budget AND the blockhash is still valid. Using `&&` stops as soon as either expires;
-        // `||` would keep looping until both elapsed, defeating the timeout.
-        while Instant::now().duration_since(start_time) < timeout
-            && self.connection().get_block_height()? <= last_valid_block_height
-        {
+        // budget AND the blockhash is still valid. The height check is a `break` rather than a
+        // second `while` clause only because it is now an `await`; stopping as soon as either
+        // expires is the same behaviour (looping until both elapsed would defeat the timeout).
+        while Instant::now().duration_since(start_time) < timeout {
+            let block_height: u64 = self.run_blocking_rpc(|client| client.get_block_height()).await??;
+            if block_height > last_valid_block_height {
+                break;
+            }
+
+            // `send_transaction_with_config` borrows the transaction, but the blocking pool needs
+            // an owned value that outlives this frame. Cloning per attempt is cheap next to the
+            // round trip it precedes, and keeps the serialization identical to before.
+            let attempt: T = transaction.clone();
             let result = self
-                .connection()
-                .send_transaction_with_config(transaction, send_transaction_config);
+                .run_blocking_rpc(move |client| client.send_transaction_with_config(&attempt, send_transaction_config))
+                .await?;
 
             match result {
                 Ok(signature) => {
-                    // Poll for transaction confirmation
-                    match self.poll_transaction_confirmation(signature).await {
+                    // This attempt got the transaction out, so any error retained from an earlier
+                    // attempt is stale — it must not be reported in place of a confirmation
+                    // timeout below.
+                    last_send_err = None;
+
+                    // Poll for transaction confirmation, bounded by whatever is left of the
+                    // caller's deadline — the poll's own default would otherwise run past it,
+                    // making the `timeout` argument advisory rather than binding.
+                    let remaining: Duration = timeout.saturating_sub(start_time.elapsed());
+                    match self
+                        .poll_transaction_confirmation_with_timeout(
+                            signature,
+                            remaining.min(DEFAULT_CONFIRMATION_POLL_TIMEOUT),
+                        )
+                        .await
+                    {
                         Ok(sig) => return Ok(sig),
                         Err(err) if is_retryable_confirmation_error(&err) => continue,
                         Err(err) => return Err(err),
                     }
                 }
-                // Retry on send failure
-                Err(_) => continue,
+                // Retry on send failure, but hold on to the error: a permanent failure (a malformed
+                // transaction, say) would otherwise be retried until the timeout and reported as a
+                // generic "timed out" with the real reason discarded.
+                Err(err) => {
+                    last_send_err = Some(HeliusError::from(err));
+                    sleep(retry_delay).await;
+                    continue;
+                }
             }
+        }
+
+        // Surface the last send failure if there was one; the timeout is only the real story when
+        // every send succeeded and confirmation never landed.
+        if let Some(err) = last_send_err {
+            return Err(err);
         }
 
         Err(HeliusError::Timeout {
@@ -898,20 +1172,47 @@ impl Helius {
         keypairs: Option<&[&Keypair]>,
         version: TransactionVersion,
     ) -> Result<Option<u64>> {
-        let recent_blockhash: Hash = self.connection().get_latest_blockhash()?;
+        self.get_compute_units_thread_safe_with_data_size_limit(
+            instructions,
+            payer,
+            lookup_tables,
+            keypairs,
+            version,
+            None,
+        )
+        .await
+    }
+
+    /// Thread-safe [`Helius::get_compute_units_with_data_size_limit`], taking `Keypair`s.
+    pub async fn get_compute_units_thread_safe_with_data_size_limit(
+        &self,
+        instructions: Vec<Instruction>,
+        payer: Pubkey,
+        lookup_tables: Vec<AddressLookupTableAccount>,
+        keypairs: Option<&[&Keypair]>,
+        version: TransactionVersion,
+        loaded_accounts_data_size_limit: Option<u32>,
+    ) -> Result<Option<u64>> {
+        let recent_blockhash: Hash = self.run_blocking_rpc(|client| client.get_latest_blockhash()).await??;
 
         // Build a message matching the target version so a large v1 transaction is not simulated
         // against the v0 size limit.
         let versioned_message: VersionedMessage = match version {
             TransactionVersion::V1 => {
-                let config = build_v1_config(None, Some(1_400_000), None);
+                let config = build_v1_config(
+                    None,
+                    Some(MAX_COMPUTE_UNIT_LIMIT),
+                    Some(resolve_loaded_accounts_data_size_limit(
+                        loaded_accounts_data_size_limit,
+                    )?),
+                );
                 let message = v1::Message::try_compile_with_config(&payer, &instructions, recent_blockhash, config)
                     .map_err(|e| HeliusError::InvalidInput(format!("Failed to compile v1 message: {e}")))?;
                 VersionedMessage::V1(message)
             }
             TransactionVersion::Auto => {
                 let test_instructions: Vec<Instruction> =
-                    vec![ComputeBudgetInstruction::set_compute_unit_limit(1_400_000)]
+                    vec![ComputeBudgetInstruction::set_compute_unit_limit(MAX_COMPUTE_UNIT_LIMIT)]
                         .into_iter()
                         .chain(instructions)
                         .collect::<Vec<_>>();
@@ -943,8 +1244,8 @@ impl Helius {
         };
 
         let result: Response<RpcSimulateTransactionResult> = self
-            .connection()
-            .simulate_transaction_with_config(&transaction, config)?;
+            .run_blocking_rpc(move |client| client.simulate_transaction_with_config(&transaction, config))
+            .await??;
 
         Ok(result.value.units_consumed)
     }
@@ -1001,13 +1302,20 @@ impl Helius {
         };
 
         let (recent_blockhash, last_valid_block_hash) = self
-            .connection()
-            .get_latest_blockhash_with_commitment(CommitmentConfig::confirmed())?;
+            .run_blocking_rpc(|client| client.get_latest_blockhash_with_commitment(CommitmentConfig::confirmed()))
+            .await??;
 
         // Transaction v1 does not support address lookup tables (SIMD-0385).
         if create_config.version == TransactionVersion::V1 && create_config.lookup_tables.is_some() {
             return Err(HeliusError::InvalidInput(
                 "Transaction v1 does not support address lookup tables".to_string(),
+            ));
+        }
+
+        // The data-size limit lives in the v1 message header; legacy and v0 have nowhere to put it.
+        if create_config.version != TransactionVersion::V1 && create_config.loaded_accounts_data_size_limit.is_some() {
+            return Err(HeliusError::InvalidInput(
+                "loaded_accounts_data_size_limit requires TransactionVersion::V1".to_string(),
             ));
         }
 
@@ -1069,12 +1377,13 @@ impl Helius {
         };
 
         let units: Option<u64> = self
-            .get_compute_units_thread_safe(
+            .get_compute_units_thread_safe_with_data_size_limit(
                 simulation_instructions,
                 fee_payer.pubkey(),
                 create_config.lookup_tables.clone().unwrap_or_default(),
                 Some(&all_signers),
                 create_config.version,
+                create_config.loaded_accounts_data_size_limit,
             )
             .await?;
 
@@ -1086,11 +1395,7 @@ impl Helius {
             .cu_buffer_multiplier
             .unwrap_or(CU_BUFFER_MULTIPLIER_DEFAULT);
 
-        let customers_cu: u32 = if compute_units < 1000 {
-            1000
-        } else {
-            (compute_units as f64 * multiplier as f64).ceil() as u32
-        };
+        let customers_cu: u32 = resolve_compute_unit_limit(compute_units, multiplier);
 
         // Create the final transaction
         let transaction: SmartTransaction = match create_config.version {
@@ -1110,7 +1415,7 @@ impl Helius {
                     recent_blockhash,
                     Some(priority_fee_lamports),
                     Some(customers_cu),
-                    None,
+                    create_config.loaded_accounts_data_size_limit,
                 )?;
                 SmartTransaction::Versioned(tx)
             }
@@ -1233,8 +1538,8 @@ impl Helius {
         let payer_pubkey: Pubkey = fee_payer.pubkey();
 
         let (recent_blockhash, last_valid_block_hash) = self
-            .connection()
-            .get_latest_blockhash_with_commitment(CommitmentConfig::confirmed())?;
+            .run_blocking_rpc(|client| client.get_latest_blockhash_with_commitment(CommitmentConfig::confirmed()))
+            .await??;
 
         let mut final_instructions: Vec<Instruction> = vec![];
 
@@ -1317,11 +1622,7 @@ impl Helius {
 
         let multiplier: f32 = config.cu_buffer_multiplier.unwrap_or(CU_BUFFER_MULTIPLIER_DEFAULT);
 
-        let customers_cu: u32 = if compute_units < 1000 {
-            1000
-        } else {
-            (compute_units as f64 * multiplier as f64).ceil() as u32
-        };
+        let customers_cu: u32 = resolve_compute_unit_limit(compute_units, multiplier);
 
         // Add the compute unit limit ix at the start
         let compute_units_ix = ComputeBudgetInstruction::set_compute_unit_limit(customers_cu);
@@ -1362,35 +1663,69 @@ impl Helius {
             .header("User-Agent", SDK_USER_AGENT)
             .send()
             .await
-            .map_err(|e| HeliusError::InvalidInput(format!("Tip floor fetch error: {e}")))?;
+            .map_err(HeliusError::Network)?;
 
         if !res.status().is_success() {
             return Ok(None);
         }
 
-        let json: serde_json::Value = res
-            .json()
-            .await
-            .map_err(|e| HeliusError::InvalidInput(format!("Tip floor JSON parse error: {e}")))?;
+        let json: serde_json::Value = res.json().await.map_err(HeliusError::Network)?;
 
         let val_sol = json
             .get(0)
             .and_then(|o| o.get("landed_tips_75th_percentile"))
             .and_then(|v| v.as_f64());
 
-        Ok(val_sol.map(|sol| (sol * 1_000_000_000.0) as u64))
+        Ok(val_sol.and_then(tip_floor_sol_to_lamports))
     }
 
-    /// Determines the tip amount in lamports using the 75th percentile floor or falling back to the minimum.
+    /// Determines the tip amount in lamports from the 75th-percentile tip floor, bounded below by
+    /// the tier minimum and above by [`DEFAULT_MAX_TIP_LAMPORTS`].
+    ///
+    /// To choose the ceiling yourself, use [`Helius::determine_tip_lamports_with_cap`].
+    ///
+    /// # Arguments
+    /// * `swqos_only` - Selects the tier, and with it the minimum tip
+    ///
+    /// # Returns
+    /// The tip in lamports, within `[tier minimum, DEFAULT_MAX_TIP_LAMPORTS]`
     pub async fn determine_tip_lamports(&self, swqos_only: bool) -> Result<u64> {
+        self.determine_tip_lamports_with_cap(swqos_only, DEFAULT_MAX_TIP_LAMPORTS)
+            .await
+    }
+
+    /// Determines the tip amount in lamports, bounded below by the tier minimum and above by
+    /// `max_tip_lamports`. See [`DEFAULT_MAX_TIP_LAMPORTS`] for why the ceiling exists.
+    ///
+    /// # Arguments
+    /// * `swqos_only` - Selects the tier, and with it the minimum tip
+    /// * `max_tip_lamports` - Hard ceiling on the derived tip
+    ///
+    /// # Returns
+    /// The tip in lamports, within `[tier minimum, max_tip_lamports]`
+    ///
+    /// # Errors
+    /// [`HeliusError::InvalidInput`] if `max_tip_lamports` is below the tier's minimum tip — no tip
+    /// satisfies both bounds, and paying above the caller's ceiling would defeat setting one.
+    /// Validated before the feed is contacted, so a misconfiguration costs no network call.
+    pub async fn determine_tip_lamports_with_cap(&self, swqos_only: bool, max_tip_lamports: u64) -> Result<u64> {
         let min_lamports: u64 = if swqos_only {
             MIN_TIP_LAMPORTS_SWQOS
         } else {
             MIN_TIP_LAMPORTS_MAX
         };
-        let floor_lamports: u64 = self.fetch_tip_floor_75th().await?.unwrap_or(min_lamports);
 
-        Ok(floor_lamports.max(min_lamports))
+        if max_tip_lamports < min_lamports {
+            return Err(HeliusError::InvalidInput(format!(
+                "max_tip_lamports ({max_tip_lamports}) is below the minimum tip for this tier \
+                 ({min_lamports} lamports, {tier}); raise the ceiling or switch tiers",
+                tier = if swqos_only { "SWQOS-only" } else { "Sender Max" },
+            )));
+        }
+
+        let feed_lamports: Option<u64> = self.fetch_tip_floor_75th().await?;
+
+        Ok(resolve_tip_lamports(feed_lamports, min_lamports, max_tip_lamports))
     }
 
     /// Creates an optimized smart transaction with an appended tip transfer instruction for Sender
@@ -1432,9 +1767,16 @@ impl Helius {
             .header("User-Agent", SDK_USER_AGENT)
             .send()
             .await
-            .map_err(|e| HeliusError::InvalidInput(format!("Sender ping error: {e}")))?;
-        if !res.status().is_success() {
-            return Err(HeliusError::InvalidInput(format!("Sender ping HTTP {}", res.status())));
+            .map_err(HeliusError::Network)?;
+        let status = res.status();
+        if !status.is_success() {
+            let target = sender_error_target(res.url());
+            let text = res.text().await.unwrap_or_default();
+            return Err(HeliusError::from_response_status(
+                status,
+                target,
+                text.chars().take(200).collect::<String>(),
+            ));
         }
         Ok(())
     }
@@ -1475,7 +1817,7 @@ impl Helius {
                 });
             }
 
-            if self.connection().get_block_height()? > last_valid_block_height {
+            if self.run_blocking_rpc(|client| client.get_block_height()).await?? > last_valid_block_height {
                 return Err(HeliusError::Timeout {
                     code: StatusCode::REQUEST_TIMEOUT,
                     text: format!(
@@ -1485,7 +1827,12 @@ impl Helius {
                 });
             }
 
-            match self.poll_transaction_confirmation(sig).await {
+            // Bounded by the remaining Sender poll budget so `poll_timeout_ms` is binding.
+            let remaining: Duration = timeout.saturating_sub(start.elapsed());
+            match self
+                .poll_transaction_confirmation_with_timeout(sig, remaining.min(DEFAULT_CONFIRMATION_POLL_TIMEOUT))
+                .await
+            {
                 Ok(confirmed) => return Ok(confirmed),
                 Err(err) if is_retryable_confirmation_error(&err) => sleep(interval).await,
                 Err(err) => return Err(err),
@@ -1504,17 +1851,11 @@ impl Helius {
             return Err(HeliusError::InvalidInput("Sender region must be specified".to_string()));
         }
 
-        // Determine tip and enforce floor (all in lamports)
-        let mut tip_lamports = self.determine_tip_lamports(sender_opts.swqos_only).await?;
-        let floor = if sender_opts.swqos_only {
-            MIN_TIP_LAMPORTS_SWQOS
-        } else {
-            MIN_TIP_LAMPORTS_MAX
-        };
-
-        if tip_lamports < floor {
-            tip_lamports = floor;
-        }
+        // The clamp lives in `determine_tip_lamports_with_cap`; a separate floor pass here would
+        // only mask a ceiling that was set too low.
+        let tip_lamports: u64 = self
+            .determine_tip_lamports_with_cap(sender_opts.swqos_only, sender_opts.max_tip_lamports)
+            .await?;
 
         let create_cfg: CreateSmartTransactionConfig = config.create_config;
 
@@ -1645,7 +1986,7 @@ impl Helius {
                     });
                 }
 
-                if self.connection().get_block_height()? > last_valid_block_height {
+                if self.run_blocking_rpc(|client| client.get_block_height()).await?? > last_valid_block_height {
                     return Err(HeliusError::Timeout {
                         code: StatusCode::REQUEST_TIMEOUT,
                         text: format!(
@@ -1654,7 +1995,12 @@ impl Helius {
                     });
                 }
 
-                match self.poll_transaction_confirmation(*sig).await {
+                // Bounded by the remaining Sender poll budget so `poll_timeout_ms` is binding.
+                let remaining: Duration = timeout.saturating_sub(start.elapsed());
+                match self
+                    .poll_transaction_confirmation_with_timeout(*sig, remaining.min(DEFAULT_CONFIRMATION_POLL_TIMEOUT))
+                    .await
+                {
                     Ok(_) => break,
                     Err(err) if is_retryable_confirmation_error(&err) => sleep(interval).await,
                     Err(err) => return Err(err),
@@ -1670,8 +2016,23 @@ impl Helius {
 mod tests {
     use super::{
         build_v1_transaction, collect_unique_keypair_refs, collect_unique_signers, is_retryable_confirmation_error,
-        v1_priority_fee_lamports, MAX_TRANSACTION_V1_SIZE,
+        resolve_compute_unit_limit, resolve_compute_unit_limit_for_v1, resolve_loaded_accounts_data_size_limit,
+        resolve_tip_lamports, sender_error_target, tip_floor_sol_to_lamports, v1_priority_fee_lamports,
+        CU_BUFFER_MULTIPLIER_DEFAULT, DEFAULT_MAX_TIP_LAMPORTS, MAX_COMPUTE_UNIT_LIMIT,
+        MAX_LOADED_ACCOUNTS_DATA_SIZE_BYTES, MAX_PLAUSIBLE_TIP_FLOOR_SOL, MAX_TRANSACTION_V1_SIZE,
+        MIN_COMPUTE_UNIT_LIMIT, MIN_TIP_LAMPORTS_MAX, MIN_TIP_LAMPORTS_SWQOS,
     };
+
+    /// A Sender failure has to name the region that failed, and must not carry the query string
+    /// into the error message — that is the pattern that leaks an API key on every other endpoint.
+    #[test]
+    fn sender_error_target_is_host_and_path_only() {
+        let url = reqwest::Url::parse("https://slc-sender.helius-rpc.com/fast?swqos_only=true").unwrap();
+        assert_eq!(sender_error_target(&url), "slc-sender.helius-rpc.com/fast");
+
+        let ping = reqwest::Url::parse("https://sender.helius-rpc.com/ping").unwrap();
+        assert_eq!(sender_error_target(&ping), "sender.helius-rpc.com/ping");
+    }
 
     /// The v1 total-lamports fee conversion must stay the exact inverse of Atlas's
     /// `v1_priority_rate` (which the priority-fee estimator uses to price v1 transactions):
@@ -1971,5 +2332,256 @@ mod tests {
         assert!(is_retryable_confirmation_error(&timeout));
         assert!(!is_retryable_confirmation_error(&tx_error));
         assert!(!is_retryable_confirmation_error(&invalid_input));
+    }
+
+    /// The tip-floor feed is third-party input that turns directly into a signed transfer, so
+    /// anything that cannot be a real tip floor is rejected rather than cast.
+    #[test]
+    fn tip_floor_rejects_values_that_cannot_be_a_tip_floor() {
+        assert_eq!(tip_floor_sol_to_lamports(f64::NAN), None, "NaN");
+        assert_eq!(tip_floor_sol_to_lamports(f64::INFINITY), None, "infinity");
+        assert_eq!(tip_floor_sol_to_lamports(f64::NEG_INFINITY), None, "negative infinity");
+        assert_eq!(tip_floor_sol_to_lamports(-0.5), None, "negative");
+        assert_eq!(
+            tip_floor_sol_to_lamports(MAX_PLAUSIBLE_TIP_FLOOR_SOL + 0.1),
+            None,
+            "above the plausible bound"
+        );
+        assert_eq!(tip_floor_sol_to_lamports(1_000_000.0), None, "absurd");
+    }
+
+    /// Ordinary readings convert cleanly, including the boundary value itself.
+    #[test]
+    fn tip_floor_accepts_plausible_values() {
+        // A typical reading: 0.000024871 SOL.
+        assert_eq!(tip_floor_sol_to_lamports(0.000_024_871), Some(24_871));
+        assert_eq!(tip_floor_sol_to_lamports(0.0), Some(0), "zero is a valid floor");
+        assert_eq!(
+            tip_floor_sol_to_lamports(MAX_PLAUSIBLE_TIP_FLOOR_SOL),
+            Some(1_000_000_000),
+            "the bound itself is inclusive"
+        );
+    }
+
+    /// The clamp is the fix: previously the feed was only floored, so an arbitrarily large reading
+    /// became an arbitrarily large transfer.
+    #[test]
+    fn resolve_tip_clamps_to_both_bounds() {
+        let min = MIN_TIP_LAMPORTS_MAX;
+        let max = DEFAULT_MAX_TIP_LAMPORTS;
+
+        assert_eq!(
+            resolve_tip_lamports(None, min, max),
+            min,
+            "no reading falls back to the minimum"
+        );
+        assert_eq!(
+            resolve_tip_lamports(Some(0), min, max),
+            min,
+            "below the minimum is raised"
+        );
+        assert_eq!(
+            resolve_tip_lamports(Some(min + 1), min, max),
+            min + 1,
+            "a reading inside the bounds is used as-is"
+        );
+        assert_eq!(
+            resolve_tip_lamports(Some(max), min, max),
+            max,
+            "the ceiling is inclusive"
+        );
+        assert_eq!(
+            resolve_tip_lamports(Some(max + 1), min, max),
+            max,
+            "above the ceiling is capped — this is what used to be unbounded"
+        );
+        assert_eq!(
+            resolve_tip_lamports(Some(u64::MAX), min, max),
+            max,
+            "a hostile feed value cannot exceed the ceiling"
+        );
+    }
+
+    /// The SWQOS tier has a much lower minimum, and the same clamp applies against it.
+    #[test]
+    fn resolve_tip_respects_the_swqos_minimum() {
+        let min = MIN_TIP_LAMPORTS_SWQOS;
+        let max = DEFAULT_MAX_TIP_LAMPORTS;
+
+        assert_eq!(resolve_tip_lamports(None, min, max), MIN_TIP_LAMPORTS_SWQOS);
+        assert_eq!(resolve_tip_lamports(Some(1), min, max), MIN_TIP_LAMPORTS_SWQOS);
+        assert_eq!(resolve_tip_lamports(Some(u64::MAX), min, max), max);
+    }
+
+    /// Simulation is capped at [`MAX_COMPUTE_UNIT_LIMIT`], so any buffer above 1.0 pushes an
+    /// expensive transaction past the maximum the runtime accepts. Nothing downstream catches it:
+    /// `try_compile_with_config` and `v1::Message::validate` both accept an out-of-range limit, so
+    /// without this clamp the SDK signs and submits a transaction the cluster refuses.
+    #[test]
+    fn compute_unit_limit_is_clamped_to_the_protocol_maximum() {
+        // The worst case reachable from a real simulation: the cap itself, times the default buffer.
+        assert_eq!(
+            resolve_compute_unit_limit(MAX_COMPUTE_UNIT_LIMIT as u64, CU_BUFFER_MULTIPLIER_DEFAULT),
+            MAX_COMPUTE_UNIT_LIMIT,
+            "1,400,000 x 1.25 = 1,750,000 must not reach the transaction"
+        );
+
+        // The first estimate whose buffered value exceeds the maximum.
+        assert_eq!(
+            resolve_compute_unit_limit(1_120_001, CU_BUFFER_MULTIPLIER_DEFAULT),
+            MAX_COMPUTE_UNIT_LIMIT
+        );
+        // Just below it, the buffer still applies untouched.
+        assert_eq!(
+            resolve_compute_unit_limit(1_120_000, CU_BUFFER_MULTIPLIER_DEFAULT),
+            1_400_000
+        );
+
+        // A caller-supplied multiplier cannot escape the ceiling either.
+        assert_eq!(resolve_compute_unit_limit(1_000_000, 100.0), MAX_COMPUTE_UNIT_LIMIT);
+        assert_eq!(resolve_compute_unit_limit(u64::MAX, 1.0), MAX_COMPUTE_UNIT_LIMIT);
+    }
+
+    /// A near-zero estimate still has to produce a usable limit: a literal `0` fails on-chain.
+    ///
+    /// Below the floor the buffer is deliberately not applied — unchanged from before this PR,
+    /// which only adds a ceiling. Pinned because applying the buffer here instead would quietly
+    /// raise the requested limit, and with it the v0 priority fee, which is rate x limit.
+    #[test]
+    fn compute_unit_limit_is_floored_without_applying_the_buffer() {
+        assert_eq!(
+            resolve_compute_unit_limit(0, CU_BUFFER_MULTIPLIER_DEFAULT),
+            MIN_COMPUTE_UNIT_LIMIT
+        );
+        assert_eq!(
+            resolve_compute_unit_limit(1, CU_BUFFER_MULTIPLIER_DEFAULT),
+            MIN_COMPUTE_UNIT_LIMIT
+        );
+        assert_eq!(
+            resolve_compute_unit_limit(999, CU_BUFFER_MULTIPLIER_DEFAULT),
+            MIN_COMPUTE_UNIT_LIMIT,
+            "999 x 1.25 = 1249, but below the floor the flat minimum wins"
+        );
+        assert_eq!(
+            resolve_compute_unit_limit(MIN_COMPUTE_UNIT_LIMIT as u64, 1.0),
+            MIN_COMPUTE_UNIT_LIMIT,
+            "at the floor the buffer applies again"
+        );
+    }
+
+    /// An ordinary estimate is buffered and rounded up, not clamped.
+    #[test]
+    fn compute_unit_limit_applies_the_buffer_in_range() {
+        assert_eq!(resolve_compute_unit_limit(100_000, 1.25), 125_000);
+        assert_eq!(resolve_compute_unit_limit(10_001, 1.5), 15_002, "rounds up");
+        assert_eq!(resolve_compute_unit_limit(50_000, 1.0), 50_000);
+    }
+
+    /// A multiplier that is NaN, infinite, zero, or negative would otherwise produce a garbage
+    /// limit (or saturate to the floor) rather than the caller's intended buffer.
+    #[test]
+    fn invalid_multiplier_falls_back_to_the_default() {
+        let expected = resolve_compute_unit_limit(100_000, CU_BUFFER_MULTIPLIER_DEFAULT);
+        for bad in [f32::NAN, f32::INFINITY, f32::NEG_INFINITY, 0.0, -1.5] {
+            assert_eq!(resolve_compute_unit_limit(100_000, bad), expected, "multiplier {bad}");
+        }
+    }
+
+    /// `Some(0)` is the case this validation exists for: SIMD-0385 reads it as a zero-byte budget,
+    /// and neither the v1 compiler nor `validate()` rejects it, so it would be signed and sent.
+    #[test]
+    fn loaded_accounts_limit_rejects_out_of_range_values() {
+        assert!(resolve_loaded_accounts_data_size_limit(Some(0)).is_err(), "zero budget");
+        assert!(
+            resolve_loaded_accounts_data_size_limit(Some(MAX_LOADED_ACCOUNTS_DATA_SIZE_BYTES + 1)).is_err(),
+            "above the protocol maximum"
+        );
+        assert!(resolve_loaded_accounts_data_size_limit(Some(u32::MAX)).is_err());
+    }
+
+    /// Unset means the 64 MiB default, matching the implicit budget legacy and v0 transactions get.
+    #[test]
+    fn loaded_accounts_limit_defaults_and_accepts_valid_values() {
+        assert_eq!(
+            resolve_loaded_accounts_data_size_limit(None).unwrap(),
+            MAX_LOADED_ACCOUNTS_DATA_SIZE_BYTES
+        );
+        assert_eq!(resolve_loaded_accounts_data_size_limit(Some(1)).unwrap(), 1);
+        assert_eq!(
+            resolve_loaded_accounts_data_size_limit(Some(MAX_LOADED_ACCOUNTS_DATA_SIZE_BYTES)).unwrap(),
+            MAX_LOADED_ACCOUNTS_DATA_SIZE_BYTES
+        );
+    }
+
+    /// The public v1 builder must reject an unusable limit rather than sign it. Verified against
+    /// the crate: a zero limit compiles *and* passes `v1::Message::validate`, so without this guard
+    /// the SDK would happily produce a transaction that fails account loading on-chain.
+    #[test]
+    fn build_v1_transaction_rejects_an_unusable_loaded_accounts_limit() {
+        let payer = Keypair::new();
+        let ix = solana_system_interface::instruction::transfer(&payer.pubkey(), &Pubkey::new_unique(), 1);
+
+        for bad in [Some(0), Some(MAX_LOADED_ACCOUNTS_DATA_SIZE_BYTES + 1)] {
+            let result = build_v1_transaction(
+                &payer.pubkey(),
+                std::slice::from_ref(&ix),
+                &[&payer as &dyn Signer],
+                Hash::default(),
+                None,
+                None,
+                bad,
+            );
+            assert!(
+                matches!(result, Err(HeliusError::InvalidInput(_))),
+                "expected {bad:?} to be rejected"
+            );
+        }
+
+        // The default and an in-range value both build.
+        for good in [None, Some(1), Some(MAX_LOADED_ACCOUNTS_DATA_SIZE_BYTES)] {
+            assert!(
+                build_v1_transaction(
+                    &payer.pubkey(),
+                    std::slice::from_ref(&ix),
+                    &[&payer as &dyn Signer],
+                    Hash::default(),
+                    None,
+                    None,
+                    good,
+                )
+                .is_ok(),
+                "expected {good:?} to build"
+            );
+        }
+    }
+
+    /// v1 has no neutral "unset": the runtime resolves a missing compute-unit limit with
+    /// `unwrap_or(0)`, i.e. no compute budget at all. Same footgun as the loaded-accounts field,
+    /// on the sibling entry in the same header config.
+    #[test]
+    fn v1_compute_unit_limit_defaults_and_rejects_a_zero_budget() {
+        assert_eq!(
+            resolve_compute_unit_limit_for_v1(None).unwrap(),
+            MAX_COMPUTE_UNIT_LIMIT,
+            "unset must not reach the header, where it reads as 0"
+        );
+        assert!(
+            resolve_compute_unit_limit_for_v1(Some(0)).is_err(),
+            "zero compute budget"
+        );
+        assert_eq!(resolve_compute_unit_limit_for_v1(Some(1)).unwrap(), 1);
+        assert_eq!(
+            resolve_compute_unit_limit_for_v1(Some(MAX_COMPUTE_UNIT_LIMIT)).unwrap(),
+            MAX_COMPUTE_UNIT_LIMIT
+        );
+    }
+
+    /// Rejected rather than clamped: the runtime clamps the compute-unit limit but takes the v1
+    /// priority fee verbatim, so quietly lowering the budget under a fee computed against the
+    /// larger number is the overpayment this PR closes.
+    #[test]
+    fn v1_compute_unit_limit_rejects_an_over_maximum_value() {
+        assert!(resolve_compute_unit_limit_for_v1(Some(MAX_COMPUTE_UNIT_LIMIT + 1)).is_err());
+        assert!(resolve_compute_unit_limit_for_v1(Some(u32::MAX)).is_err());
     }
 }
