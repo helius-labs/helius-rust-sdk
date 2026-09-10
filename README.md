@@ -335,4 +335,4 @@ v1 differs from legacy/v0: the compute-unit limit and **total** priority fee (in
 - [`make_keypairs`](https://github.com/helius-labs/helius-rust-sdk/blob/dev/src/utils/make_keypairs.rs) - Generates a specified number of keypairs
 
 ## Migrating Between Major Versions
-Upgrading across a major version? See the [Migration Guide](MIGRATION.md) for the breaking changes in each release (1.x → 2.0 and 0.x → 1.0) and how to update your code.
+Upgrading across a major version? See the [Migration Guide](MIGRATION.md) for the breaking changes in each release (2.x → 3.0, 1.x → 2.0, and 0.x → 1.0) and how to update your code.

@@ -3,8 +3,175 @@
 This guide covers breaking changes between major releases of the Helius Rust SDK and how to
 update your code. The most recent upgrade is listed first.
 
+- [2.x → 3.0](#2x--30)
 - [1.x → 2.0](#1x--20)
 - [0.x → 1.0](#0x--10)
+
+---
+
+## 2.x → 3.0
+
+3.0 is a correctness and resilience release. Only two changes can fail to compile, and both are
+one-line fixes. The rest are behavior changes: they need attention only if you depended on the
+old behavior, and several of them fix results that were previously wrong. Each change below
+includes what to do.
+
+### Summary of Changes
+
+- **Smart-transaction configs gained `loaded_accounts_data_size_limit`**: `CreateSmartTransactionConfig` and `CreateSmartTransactionSeedConfig` have a new field. Struct-literal construction now needs it — add `..Default::default()`.
+- **`send_and_confirm_transaction` gained `Clone + Send + 'static` bounds**: only affects callers passing a custom `SerializableTransaction` type.
+- **Sender and tip-floor transport failures are no longer `HeliusError::InvalidInput`**: they are now `Network`, and Sender HTTP failure statuses are classified like every other endpoint's.
+- **`HeliusError` now exposes its cause chain**: `source()` returns the underlying error instead of `None`.
+- **`get_stake_accounts` returns a corrected set of accounts**: it filtered on the withdrawer authority instead of the staker.
+- **`loaded_accounts_data_size_limit` is rejected on legacy and v0** instead of being silently ignored, and out-of-range v1 budgets now error.
+- **The auto-derived Sender tip is now capped** at `DEFAULT_MAX_TIP_LAMPORTS` (0.01 SOL).
+- **Confirmation polling honors your deadline and backs off**: `timeout` is now a real bound, and a failed send returns the send error rather than a generic confirmation timeout.
+
+### Smart-transaction configs
+
+`CreateSmartTransactionConfig` and `CreateSmartTransactionSeedConfig` gained
+`loaded_accounts_data_size_limit`, which sets the account-data budget a Transaction v1 carries in
+its message header. If you build either with a struct literal that enumerates every field, add
+`..Default::default()` — the same fix as the 2.0 upgrade, and it makes future field additions
+non-breaking for your code:
+
+```rust
+// Before
+let config = CreateSmartTransactionConfig {
+    instructions,
+    signers,
+    version: TransactionVersion::V1,
+    lookup_tables: None,
+    fee_payer: None,
+    priority_fee_cap: None,
+    cu_buffer_multiplier: None,
+    priority_fee_lamports_cap: None,
+};
+
+// After
+let config = CreateSmartTransactionConfig {
+    instructions,
+    signers,
+    version: TransactionVersion::V1,
+    ..Default::default()
+};
+```
+
+The field defaults to `MAX_LOADED_ACCOUNTS_DATA_SIZE_BYTES` (64 MiB) — the implicit budget legacy
+and v0 transactions already get — so the default preserves prior behavior.
+
+### `send_and_confirm_transaction` bounds
+
+Each send attempt now runs on tokio's blocking pool, which needs an owned value outliving the call
+frame, so the transaction is cloned per attempt:
+
+```rust
+// Before
+pub async fn send_and_confirm_transaction(
+    transaction: &impl SerializableTransaction, ...
+
+// After
+pub async fn send_and_confirm_transaction<T>(transaction: &T, ...) -> Result<Signature>
+where
+    T: SerializableTransaction + Clone + Send + 'static,
+```
+
+`Transaction` and `VersionedTransaction` both already satisfy the bounds, so if you pass either,
+no change is needed. If you pass your own `SerializableTransaction` type, add `Clone` (and make
+sure it is `Send + 'static`).
+
+### Sender and tip-floor error variants
+
+Transport failures against Sender and the Jito tip-floor feed used to be flattened into
+`HeliusError::InvalidInput` with a formatted string, which put network faults in the variant that
+otherwise means "you passed bad arguments". They are now `HeliusError::Network`, and Sender HTTP
+failure statuses go through the same classification as every other endpoint:
+
+```rust
+// Before — matched on a message substring, and could not tell a rate limit from a bad transaction
+match helius.send_smart_transaction_with_sender(config, options).await {
+    Err(HeliusError::InvalidInput(msg)) if msg.contains("Sender request error") => retry(),
+    Err(HeliusError::InvalidInput(msg)) if msg.contains("Sender HTTP 429") => back_off(),
+    ...
+}
+
+// After — classified variants, plus accessors for the transport cases
+match helius.send_smart_transaction_with_sender(config, options).await {
+    Err(e) if e.is_connect() || e.is_timeout() => retry(),
+    Err(HeliusError::RateLimitExceeded { path }) => back_off(&path),
+    Err(HeliusError::Unauthorized { .. }) => refresh_credentials(),
+    ...
+}
+```
+
+If you match `InvalidInput` to detect *your own* bad input, that now works as intended — network
+faults no longer land there. If you matched it to catch Sender failures, switch to the above.
+
+### `HeliusError` cause chain
+
+`HeliusError::Network`, `ReqwestError`, and `SerdeJson` now mark the wrapped error as their
+`source`, so the cause chain is reachable:
+
+```rust
+use std::error::Error;
+
+let mut cause = err.source();
+while let Some(c) = cause {
+    eprintln!("caused by: {c}");   // client error (Connect) -> tcp connect error -> Connection refused
+    cause = c.source();
+}
+```
+
+`Display` is unchanged, so anything printing `{}` keeps the message it had. Two notes: code that
+asserted `source().is_none()` will now see `Some`, and a chain-printing consumer (`anyhow`'s
+`{:#}`) repeats the wrapped error's message once, because the variant's own `Display` embeds it.
+For classification, prefer `is_connect()` / `is_timeout()` / `as_reqwest()` over walking the chain.
+
+### `get_stake_accounts` authority filter
+
+The `memcmp` filter used offset 44 — `Authorized::withdrawer` — rather than offset 12,
+`Authorized::staker`, which is what the method name and docs describe. Where the two authorities
+differ (custodial setups, liquid staking, delegated management), this returned the wrong set:
+accounts you control as staker were omitted, and accounts where you are only the withdrawer were
+included. **The method now returns a different, correct set.** If you compensated for the old
+behavior — filtering results client-side, or querying the withdrawer separately — drop the
+workaround.
+
+### Budget-field validation
+
+Three cases that used to pass silently now return `HeliusError::InvalidInput`:
+
+- `loaded_accounts_data_size_limit` set on a legacy or v0 transaction. Those formats have nowhere
+  to carry it, so it was being dropped. Either move to `version: TransactionVersion::V1` or stop
+  setting the field.
+- A v1 `compute_unit_limit` outside `1..=MAX_COMPUTE_UNIT_LIMIT`.
+- A `loaded_accounts_data_size_limit` outside `1..=MAX_LOADED_ACCOUNTS_DATA_SIZE_BYTES` (`0` read
+  as a zero-byte budget under which every account load fails).
+
+### Sender tip ceiling
+
+`determine_tip_lamports` keeps its signature but now clamps the tip derived from the third-party
+feed to `DEFAULT_MAX_TIP_LAMPORTS` (0.01 SOL, 10x the Sender Max minimum) instead of applying only
+a floor. Existing callers are bounded without a code change. If your workload legitimately tips
+above that during congestion, set your own ceiling with
+`SenderSendOptions::with_max_tip_lamports` or `determine_tip_lamports_with_cap`. A ceiling below
+the tier's minimum tip is unsatisfiable and errors rather than silently paying above it. This
+bounds only the *derived* tip — a tip you build into the instructions yourself is untouched.
+
+### Confirmation polling and deadlines
+
+Three related changes to `send_and_confirm_transaction` and the Sender send paths:
+
+- **`timeout` is now a real deadline.** Each confirmation poll previously ran its own fixed
+  15-second budget, so `Some(Duration::from_secs(2))` could still block for 15+ seconds. If you
+  passed a short timeout and relied on the longer actual wait to get a confirmation, raise it to
+  the value you actually want.
+- **A failed send returns the send error.** Previously a permanently-failing transaction was
+  retried in a tight loop and surfaced as a generic "failed to confirm" with the cause discarded.
+  Code matching on that timeout message should expect the underlying error instead.
+- **Polling backs off** (400ms, doubling to a 5s ceiling) instead of spinning. A successful
+  confirmation now typically costs one `getSignatureStatuses` call; a transaction that never
+  confirms costs about six over the timeout.
 
 ---
 
