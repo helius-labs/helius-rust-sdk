@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+## [3.0.1] - 2026-09-21
+
+Dependency-only release. There are no source changes; 3.0.1 exists so that a fresh `cargo build` of the crate compiles again.
+
+### Fixed
+- **A fresh build of 3.0.0 has failed to compile since Agave 4.3.0 was published on 2026-09-18.** The manifest asked for `solana-client = "4.2.1"`, a caret range that resolves to the newest 4.x release, so a fresh resolve (any new consumer, or any `cargo update`) pulled in the 4.3.0 Agave crates. Those moved to `wincode` 0.6 while the SDK still declared `wincode` 0.5, so the `SchemaWrite` impl the Transaction v1 serializer relies on came from a different crate version and `optimized_transaction.rs` no longer type-checked; the graph also carried both `solana-system-interface` 2.0 and 3.3, which broke the `system_instruction::transfer` import. Existing lockfiles that resolved before 2026-09-18 were unaffected, which is why CI stayed green. The directly consumed Agave crates (`solana-client`, `solana-account-decoder`, `solana-rpc-client-api`, `solana-transaction-status-client-types`) are now pinned to `=4.3.0`, and `wincode` (0.6.1), `solana-system-interface` (3.3.0), `solana-stake-interface` (4.4.0), and `solana-compute-budget-interface` (3.1.0) are aligned to the versions those crates use. The resolved graph now contains a single `wincode` and a single `solana-system-interface`.
+
+### Changed
+- **The minimum supported Rust version is now 1.97.1** (was 1.85.1), matching the `rust-version` declared by `solana-client` 4.3.0. In practice 3.0.0 already required this on any fresh resolve; the manifest now states it, so an older toolchain fails with a clear MSRV error instead of a compile error deep in a dependency.
+
 ## [3.0.0] - 2026-09-09
 
 ### Added
@@ -297,7 +307,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - Integration test suite using `mockito`
 - GitHub Actions CI workflow
 
-[Unreleased]: https://github.com/helius-labs/helius-rust-sdk/compare/v3.0.0...HEAD
+[Unreleased]: https://github.com/helius-labs/helius-rust-sdk/compare/v3.0.1...HEAD
+[3.0.1]: https://github.com/helius-labs/helius-rust-sdk/compare/v3.0.0...v3.0.1
 [3.0.0]: https://github.com/helius-labs/helius-rust-sdk/compare/v2.0.0...v3.0.0
 [2.0.0]: https://github.com/helius-labs/helius-rust-sdk/compare/v1.1.0...v2.0.0
 [1.1.0]: https://github.com/helius-labs/helius-rust-sdk/compare/v1.0.1...v1.1.0

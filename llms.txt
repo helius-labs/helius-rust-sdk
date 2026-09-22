@@ -1,6 +1,6 @@
 ---
 url: https://github.com/helius-labs/helius-rust-sdk
-last_updated: 2026-09-09
+last_updated: 2026-09-21
 ---
 
 # Helius Rust SDK
@@ -12,12 +12,12 @@ last_updated: 2026-09-09
 The Helius Rust SDK provides asynchronous access to Helius APIs and enhanced Solana RPC functionality. It simplifies Solana development with high-level abstractions for assets, transactions, webhooks, staking, and ultra-low latency transaction submission via Helius Sender.
 
 - Crate: `helius` (crates.io)
-- Version: 2.0.x
+- Version: 3.0.x
 - Changelog: https://github.com/helius-labs/helius-rust-sdk/blob/dev/CHANGELOG.md
-- Rust: 1.85+ (edition 2021)
+- Rust: 1.97.1+ (edition 2021)
 - Async Runtime: tokio
 - HTTP Client: reqwest
-- Solana: solana-client 3.0.x, solana-sdk 3.0.x
+- Solana: solana-client 4.3.0, solana-sdk 4.x
 - API Key (required): Get from https://dashboard.helius.dev
 - API Key for Agents (required): Get from https://dashboard.helius.dev/agents.md
 - License: MIT

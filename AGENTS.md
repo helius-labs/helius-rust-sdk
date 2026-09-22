@@ -3,9 +3,9 @@
 Machine-readable guide for AI agents using the Helius Rust SDK to build on Solana.
 
 - Crate: `helius` (crates.io)
-- Version: 1.x (uses solana-sdk 3.0, solana-client 3.0)
+- Version: 3.x (uses solana-sdk 4.x, solana-client 4.3.0)
 - Runtime: Async (tokio 1.x)
-- Rust: 1.85+
+- Rust: 1.97.1+
 - License: MIT
 
 ## Getting an API Key
