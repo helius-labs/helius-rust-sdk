@@ -237,6 +237,22 @@ impl From<simd_json::Error> for HeliusError {
     }
 }
 
+impl From<tokio::task::JoinError> for HeliusError {
+    /// Converts a `tokio::task::JoinError` into [`HeliusError::Unknown`]
+    ///
+    /// A `JoinError` means a task handed to `tokio::task::spawn_blocking` did not complete, either
+    /// because it panicked or because the runtime is shutting down. It carries no HTTP status, so
+    /// it is reported as an internal error. This lets the result of a `spawn_blocking` decode
+    /// (see `request_handler::decode_response`) be unwrapped with `??` inside a function
+    /// returning the SDK's [`Result`]
+    fn from(err: tokio::task::JoinError) -> Self {
+        HeliusError::Unknown {
+            code: StatusCode::INTERNAL_SERVER_ERROR,
+            text: format!("Blocking task failed to complete: {err}"),
+        }
+    }
+}
+
 impl From<SanitizeError> for HeliusError {
     /// Converts a Solana `SanitizeError` into [`HeliusError::InvalidInput`]
     fn from(err: SanitizeError) -> Self {

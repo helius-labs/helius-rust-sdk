@@ -83,6 +83,7 @@ examples/
 ├── enhanced/                                 # Enhanced transaction parsing
 │   ├── get_parse_transactions.rs             #   Parse transactions by signature
 │   ├── get_parsed_transaction_history.rs     #   Parsed tx history for address
+│   ├── get_parsed_transaction_history_raw.rs #   Same, decoded on the blocking pool
 │   ├── get_transactions_for_address.rs       #   Transaction history
 │   └── get_transactions_for_address_with_filters.rs  # Filtered tx history
 ├── helius/                                   # Helius-specific RPC methods
@@ -434,6 +435,16 @@ let parsed = helius.parse_transactions(&["tx_signature_1", "tx_signature_2"]).aw
 
 // Get parsed transaction history for an address
 let history = helius.parsed_transaction_history("address", None).await?;
+
+// Keep JSON decoding off the async runtime: fetch the raw body, then decode it on the
+// blocking pool with the same parser the typed method uses. Also available as
+// `parse_transactions_raw` and, for DAS / RPC V2 calls, `rpc().post_rpc_request_raw`
+// paired with `helius::rpc_client::decode_rpc_response`.
+use helius::request_handler::decode_response;
+
+let body = helius.parsed_transaction_history_raw(request).await?;
+let history: Vec<EnhancedTransaction> =
+    tokio::task::spawn_blocking(move || decode_response(&body)).await.expect("decode task panicked")?;
 ```
 
 ### Webhooks

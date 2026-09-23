@@ -6,6 +6,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+### Added
+- **Raw response access, so JSON decoding can run off the async runtime.** Every SDK method deserializes its response on the task that awaited it. For large payloads — a full page of parsed transaction history, a `getProgramAccountsV2` page — that parse is CPU work that parks a tokio worker for its duration and shows up as latency on everything else scheduled there. Callers with a throughput-sensitive pipeline can now fetch and decode separately:
+  - `RequestHandler::send_raw` returns the body of a successful response as `bytes::Bytes` without decoding it. Status handling and error mapping are identical to `send`; a non-2xx response is still returned as the matching `HeliusError` and never as bytes.
+  - `Helius::parse_transactions_raw` and `Helius::parsed_transaction_history_raw` are `Bytes`-returning twins of the typed methods, sharing their URL construction.
+  - `RpcClient::post_rpc_request_raw` returns the full JSON-RPC envelope of a DAS / RPC V2 call as `Bytes`.
+  - `helius::request_handler::decode_response` and `helius::rpc_client::decode_rpc_response` are the decoding halves of `send` and `post_rpc_request`, exposed as plain functions so a body can be decoded inside `tokio::task::spawn_blocking` with exactly the semantics of the typed path (empty body → `T::default()`, simd-json first with a serde_json fallback on the original bytes, JSON-RPC `error` surfaced as `HeliusError::RpcError`).
+  - `examples/enhanced/get_parsed_transaction_history_raw.rs` shows the fetch-then-decode-on-the-blocking-pool pattern.
+- `HeliusError` now implements `From<tokio::task::JoinError>`, mapping to `HeliusError::Unknown` with a 500 status, so the result of a `spawn_blocking` decode can be unwrapped with `??` inside a function returning the SDK's `Result`.
+
+### Changed
+- The typed request path is now `send_raw` followed by `decode_response` (and `post_rpc_request` is `post_rpc_request_raw` followed by `decode_rpc_response`), so the raw and typed paths cannot drift apart. Results and errors of the typed methods are unchanged for any response that is valid UTF-8, which every well-formed JSON response is.
+- Response bodies are read as bytes rather than text, which removes a UTF-8 validation pass over every payload; the JSON parsers validate what they consume. **One edge case is stricter as a result:** a 2xx body containing bytes that are not valid UTF-8 previously had them replaced with U+FFFD by `reqwest`'s text decoding and then deserialized; it now fails with `HeliusError::SerdeJson`, since both JSON parsers reject invalid UTF-8 inside strings. JSON is required to be UTF-8 (RFC 8259), so a well-formed response is unaffected. Error bodies are converted lossily (assuming UTF-8, ignoring any declared charset) for the error message.
+- `bytes` is now a direct dependency. It was already in the dependency graph via `reqwest`, so no new crate is compiled.
+
 ## [3.0.1] - 2026-09-21
 
 Dependency-only release. There are no source changes; 3.0.1 exists so that a fresh `cargo build` of the crate compiles again.

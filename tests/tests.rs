@@ -5,6 +5,7 @@ mod utils {
 }
 
 mod rpc {
+    mod helpers;
     mod test_get_all_program_accounts;
     mod test_get_all_token_accounts_by_owner;
     mod test_get_asset;
@@ -22,6 +23,7 @@ mod rpc {
     mod test_get_token_accounts;
     mod test_get_transactions_for_address;
     mod test_get_transfers_by_address;
+    mod test_post_rpc_request_raw;
     mod test_rpc_error;
     mod test_search_assets;
 }
