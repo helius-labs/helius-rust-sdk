@@ -45,7 +45,7 @@ use solana_commitment_config::CommitmentConfig;
 /// Decodes a raw JSON-RPC envelope into the method's result the way the typed methods do
 ///
 /// This is the decoding half of [`RpcClient::post_rpc_request`], exposed so a body obtained
-/// from [`RpcClient::post_rpc_request_raw`] can be decoded off the async runtime. It parses the
+/// from [`RpcClient::post_rpc_request_raw`] can be decoded off the async runtime. It decodes the
 /// envelope with [`decode_response`](crate::request_handler::decode_response), surfaces a
 /// JSON-RPC `error` object as `HeliusError::RpcError`, and unwraps `result`.
 ///

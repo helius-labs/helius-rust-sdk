@@ -49,7 +49,7 @@ impl RequestHandler {
     /// Sends an HTTP request and processes the response to deserialize into a specified generic type
     ///
     /// This is [`send_raw`](Self::send_raw) followed by [`decode_response`], so the two paths
-    /// share status handling, error mapping, and JSON parsing exactly. The decode runs inline on
+    /// share status handling, error mapping, and JSON decoding exactly. The decode runs inline on
     /// the calling task; callers who want it off the async runtime use `send_raw` and decode on
     /// a blocking thread themselves.
     ///
@@ -82,14 +82,14 @@ impl RequestHandler {
     /// Status handling and error mapping are identical to [`send`](Self::send): a non-2xx
     /// response is turned into the matching [`HeliusError`] variant and never reaches the
     /// caller as bytes. What the caller gets back is the raw body of a successful response,
-    /// still to be parsed.
+    /// still to be decoded.
     ///
     /// Use this when JSON decoding should not run on the async runtime. Deserializing a large
     /// payload (a page of parsed transaction history, a `getProgramAccountsV2` page) is CPU
     /// work that parks a tokio worker for its duration; on a busy runtime that shows up as
     /// latency on every other task scheduled there. `Bytes` is `Send + 'static` and cheap to
     /// move, so it can be handed straight to `tokio::task::spawn_blocking` and decoded there
-    /// with [`decode_response`], which applies the same simd-json/serde_json parsing the typed
+    /// with [`decode_response`], which applies the same simd-json/serde_json decoding the typed
     /// path uses. `HeliusError` converts from `tokio::task::JoinError`, so the join and the
     /// decode can both be handled with `?`:
     ///
@@ -159,14 +159,14 @@ impl RequestHandler {
         // returns `Ok` here with zero bytes and is handled by the decoder.
         //
         // The body is read as bytes rather than text so that no UTF-8 validation pass runs over
-        // it; the JSON parsers validate what they consume.
+        // it; simd-json and serde_json validate what they consume.
         let body: Bytes = response.bytes().await.map_err(HeliusError::Network)?;
 
         if status.is_success() {
             return Ok(body);
         }
 
-        // Parse the error body in place; the lossy `String` copy is only needed when the body
+        // Decode the error body in place; the lossy `String` copy is only needed when the body
         // is not JSON and is itself the error message.
         match serde_json::from_slice::<Value>(&body) {
             Ok(body) => {
@@ -193,13 +193,13 @@ impl RequestHandler {
 
 /// Decodes a successful response body the way the SDK's typed methods do
 ///
-/// This is the parsing half of [`RequestHandler::send`], exposed so a body obtained from
+/// This is the decoding half of [`RequestHandler::send`], exposed so a body obtained from
 /// [`RequestHandler::send_raw`] (or one of the `_raw` methods built on it) can be decoded
 /// somewhere other than the async task that fetched it, typically inside
 /// `tokio::task::spawn_blocking`. The semantics match the typed path exactly:
 ///
 /// - An empty body decodes to `T::default()`
-/// - The body is parsed with simd-json first; if that fails, serde_json is tried on the
+/// - The body is decoded with simd-json first; if that fails, serde_json is tried on the
 ///   original bytes, and its error is the one returned if both fail
 ///
 /// ```
@@ -231,14 +231,14 @@ where
         return Ok(T::default());
     }
 
-    // simd-json parses faster than serde_json on large payloads (DAS, getProgramAccountsV2,
+    // simd-json decodes faster than serde_json on large payloads (DAS, getProgramAccountsV2,
     // parsed transaction history), but it unescapes strings *in place*, so the buffer it was
-    // handed is already rewritten by the time it reports an error. Parsing that buffer again —
+    // handed is already rewritten by the time it reports an error. Decoding that buffer again —
     // as the `serde_json` retry and the raw-JSON log below do — reads corrupted bytes and
     // produces a spurious error that then masks simd-json's accurate one.
     //
     // simd-json therefore gets a scratch copy and `body` stays pristine for both. The copy
-    // costs one allocation and memcpy per response, which is small next to the parse it feeds
+    // costs one allocation and memcpy per response, which is small next to the decode it feeds
     // and is the price of a fallback that can actually recover (and of a debug log that shows
     // the real payload).
     let mut scratch: Vec<u8> = body.to_vec();

@@ -7,7 +7,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Added
-- **Raw response access, so JSON decoding can run off the async runtime.** Every SDK method deserializes its response on the task that awaited it. For large payloads — a full page of parsed transaction history, a `getProgramAccountsV2` page — that parse is CPU work that parks a tokio worker for its duration and shows up as latency on everything else scheduled there. Callers with a throughput-sensitive pipeline can now fetch and decode separately:
+- **Raw response access, so JSON decoding can run off the async runtime.** Every SDK method deserializes its response on the task that awaited it. For large payloads — a full page of parsed transaction history, a `getProgramAccountsV2` page — that decode is CPU work that parks a tokio worker for its duration and shows up as latency on everything else scheduled there. Callers with a throughput-sensitive pipeline can now fetch and decode separately:
   - `RequestHandler::send_raw` returns the body of a successful response as `bytes::Bytes` without decoding it. Status handling and error mapping are identical to `send`; a non-2xx response is still returned as the matching `HeliusError` and never as bytes.
   - `Helius::parse_transactions_raw` and `Helius::parsed_transaction_history_raw` are `Bytes`-returning twins of the typed methods, sharing their URL construction.
   - `RpcClient::post_rpc_request_raw` returns the full JSON-RPC envelope of a DAS / RPC V2 call as `Bytes`.
@@ -17,7 +17,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ### Changed
 - The typed request path is now `send_raw` followed by `decode_response` (and `post_rpc_request` is `post_rpc_request_raw` followed by `decode_rpc_response`), so the raw and typed paths cannot drift apart. Results and errors of the typed methods are unchanged for any response that is valid UTF-8, which every well-formed JSON response is.
-- Response bodies are read as bytes rather than text, which removes a UTF-8 validation pass over every payload; the JSON parsers validate what they consume. **One edge case is stricter as a result:** a 2xx body containing bytes that are not valid UTF-8 previously had them replaced with U+FFFD by `reqwest`'s text decoding and then deserialized; it now fails with `HeliusError::SerdeJson`, since both JSON parsers reject invalid UTF-8 inside strings. JSON is required to be UTF-8 (RFC 8259), so a well-formed response is unaffected. Error bodies are converted lossily (assuming UTF-8, ignoring any declared charset) for the error message.
+- Response bodies are read as bytes rather than text, which removes a UTF-8 validation pass over every payload; simd-json and serde_json validate what they consume. **One edge case is stricter as a result:** a 2xx body containing bytes that are not valid UTF-8 previously had them replaced with U+FFFD by `reqwest`'s text decoding and then deserialized; it now fails with `HeliusError::SerdeJson`, since simd-json and serde_json both reject invalid UTF-8 inside strings. JSON is required to be UTF-8 (RFC 8259), so a well-formed response is unaffected. Error bodies are converted lossily (assuming UTF-8, ignoring any declared charset) for the error message.
 - `bytes` is now a direct dependency. It was already in the dependency graph via `reqwest`, so no new crate is compiled.
 
 ## [3.0.1] - 2026-09-21
