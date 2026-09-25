@@ -259,6 +259,7 @@ Our SDK is designed to provide a seamless developer experience when building on 
 ### Enhanced Transactions API
 - [`parse_transactions`](https://www.helius.dev/docs/api-reference/enhanced-transactions/gettransactions) - Parses transactions given an array of transaction IDs
 - [`parsed_transaction_history`](https://www.helius.dev/docs/api-reference/enhanced-transactions/gettransactionsbyaddress) - Retrieves a parsed transaction history for a specific address
+- `parse_transactions_raw` / `parsed_transaction_history_raw` - Same requests, but the response body is returned as `Bytes` for decoding elsewhere (e.g. on tokio's blocking pool with `helius::request_handler::decode_response`), so a large page never parks an async worker. See `examples/enhanced/get_parsed_transaction_history_raw.rs`
 
 ### Webhooks
 - [`append_addresses_to_webhook`](https://github.com/helius-labs/helius-rust-sdk/blob/2d161e1ebf6d06df686d9e248ea80de215457b40/src/webhook.rs#L50-L73) - Appends a set of addresses to a given webhook
@@ -327,6 +328,7 @@ v1 differs from legacy/v0: the compute-unit limit and **total** priority fee (in
 ### RPC Methods
 - [`get_priority_fee_estimate`](https://www.helius.dev/docs/api-reference/priority-fee/getpriorityfeeestimate#getpriorityfeeestimate) - Gets an estimate of the priority fees required for a transaction to be processed more quickly
 - [`get_transactions_for_address`](https://www.helius.dev/docs/api-reference/rpc/http/gettransactionsforaddress) - Gets transaction history for a specific address with advanced filtering, sorting, and pagination. Optionally include transactions from associated token accounts
+- `rpc().post_rpc_request_raw` - Sends any DAS / RPC V2 method and returns the JSON-RPC envelope as `Bytes` instead of decoding it, for callers who want to run deserialization of large pages (`getProgramAccountsV2`, `getAssetsByOwner`) on tokio's blocking pool. Pair with `helius::rpc_client::decode_rpc_response`, which unwraps `result` and surfaces a JSON-RPC `error` exactly as the typed methods do
 - [`get_transfers_by_address`](https://www.helius.dev/docs/api-reference/rpc/http/gettransfersbyaddress) - Gets token and native SOL transfers for a specific address with counterparty, mint, direction, amount, slot, block time, sorting, and cursor pagination filters
 
 ### Helper Methods

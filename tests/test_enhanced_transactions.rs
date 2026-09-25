@@ -1,5 +1,7 @@
+use bytes::Bytes;
 use helius::config::Config;
-use helius::error::Result;
+use helius::error::{HeliusError, Result};
+use helius::request_handler::decode_response;
 use helius::rpc_client::RpcClient;
 use helius::types::{
     AccountData, ApiKey, Cluster, EnhancedTransaction, HeliusEndpoints, InnerInstruction, Instruction, NativeTransfer,
@@ -446,4 +448,134 @@ async fn test_parse_transaction_history_empty_response() {
     let response: Result<Vec<EnhancedTransaction>> = helius.parsed_transaction_history(request).await;
     assert!(response.is_ok(), "The API call failed: {:?}", response.err());
     assert!(response.unwrap().is_empty(), "Expected empty transaction history");
+}
+
+/// The raw variant hits the same URL as the typed one and returns the body untouched;
+/// `decode_response` then yields exactly what `parsed_transaction_history` would have, and can
+/// do so on the blocking pool.
+#[tokio::test]
+async fn test_parsed_transaction_history_raw_returns_body_and_decodes_off_runtime() {
+    let mut server: Server = Server::new_with_opts_async(mockito::ServerOpts::default()).await;
+    let url: String = format!("{}/", server.url());
+
+    let mock_response: Vec<EnhancedTransaction> = vec![create_mock_transaction(
+        "yy5BT9benHhx8fGCvhcAfTtLEHAtRJ3hRTzVL16bdrTCWm63t2vapfrZQZLJC3RcuagekaXjSs2zUGQvbcto8DK",
+        TransactionType::Swap,
+        Source::Jupiter,
+    )];
+    let body: String = serde_json::to_string(&mock_response).unwrap();
+
+    server
+        .mock("GET", mockito::Matcher::Regex(
+            r"/v0/addresses/46tC8n6GyWvUjFxpTE9juG5WZ72RXADpPhY4S1d6wvTi/transactions\?api-key=fake_api_key&type=SWAP&limit=100".to_string()
+        ))
+        .with_status(200)
+        .with_header("Content-Type", "application/json")
+        .with_body(&body)
+        .create();
+
+    let helius: Helius = create_test_helius(&url);
+    let request: ParsedTransactionHistoryRequest = ParsedTransactionHistoryRequest {
+        address: "46tC8n6GyWvUjFxpTE9juG5WZ72RXADpPhY4S1d6wvTi".to_string(),
+        before: None,
+        until: None,
+        transaction_type: Some(TransactionType::Swap),
+        commitment: None,
+        limit: Some(100),
+        source: None,
+    };
+
+    let raw: Bytes = helius
+        .parsed_transaction_history_raw(request)
+        .await
+        .expect("raw history call failed");
+    assert_eq!(raw.as_ref(), body.as_bytes(), "raw body must be returned unmodified");
+
+    let decoded: Vec<EnhancedTransaction> =
+        tokio::task::spawn_blocking(move || decode_response::<Vec<EnhancedTransaction>>(&raw))
+            .await
+            .expect("blocking decode task should complete")
+            .expect("body should decode");
+
+    assert_eq!(decoded.len(), 1);
+    assert_eq!(decoded[0].signature, mock_response[0].signature);
+    assert_eq!(decoded[0].transaction_type, TransactionType::Swap);
+    assert_eq!(decoded[0].source, Source::Jupiter);
+}
+
+/// A failure status on the raw history path is still mapped to the matching error.
+#[tokio::test]
+async fn test_parsed_transaction_history_raw_maps_failure_status() {
+    let mut server: Server = Server::new_with_opts_async(mockito::ServerOpts::default()).await;
+    let url: String = format!("{}/", server.url());
+
+    server
+        .mock(
+            "GET",
+            "/v0/addresses/46tC8n6GyWvUjFxpTE9juG5WZ72RXADpPhY4S1d6wvTi/transactions?api-key=fake_api_key",
+        )
+        .with_status(429)
+        .with_header("Content-Type", "application/json")
+        .with_body(r#"{"error":"Too many requests"}"#)
+        .create();
+
+    let helius: Helius = create_test_helius(&url);
+    let request: ParsedTransactionHistoryRequest = ParsedTransactionHistoryRequest {
+        address: "46tC8n6GyWvUjFxpTE9juG5WZ72RXADpPhY4S1d6wvTi".to_string(),
+        before: None,
+        until: None,
+        transaction_type: None,
+        commitment: None,
+        limit: None,
+        source: None,
+    };
+
+    let response: Result<Bytes> = helius.parsed_transaction_history_raw(request).await;
+    assert!(
+        matches!(response, Err(HeliusError::RateLimitExceeded { .. })),
+        "expected RateLimitExceeded, got {response:?}"
+    );
+}
+
+/// The raw parse variant posts the same request to the same URL and returns the body untouched.
+#[tokio::test]
+async fn test_parse_transactions_raw_returns_body() {
+    let mut server: Server = Server::new_with_opts_async(mockito::ServerOpts::default()).await;
+    let url: String = format!("{}/", server.url());
+
+    let mock_response: Vec<EnhancedTransaction> = vec![create_mock_transaction(
+        "2sShYqqcWAcJiGc3oK74iFsYKgLCNiY2DsivMbaJGQT8pRzR8z5iBcdmTMXRobH8cZNZgeV9Ur9VjvLsykfFE2Li",
+        TransactionType::Transfer,
+        Source::SystemProgram,
+    )];
+    let body: String = serde_json::to_string(&mock_response).unwrap();
+
+    server
+        .mock("POST", "/v0/transactions?api-key=fake_api_key")
+        .match_body(mockito::Matcher::Json(serde_json::json!({
+            "transactions": ["2sShYqqcWAcJiGc3oK74iFsYKgLCNiY2DsivMbaJGQT8pRzR8z5iBcdmTMXRobH8cZNZgeV9Ur9VjvLsykfFE2Li"]
+        })))
+        .with_status(200)
+        .with_header("Content-Type", "application/json")
+        .with_body(&body)
+        .create();
+
+    let helius: Helius = create_test_helius(&url);
+    let request: ParseTransactionsRequest = ParseTransactionsRequest {
+        transactions: vec![
+            "2sShYqqcWAcJiGc3oK74iFsYKgLCNiY2DsivMbaJGQT8pRzR8z5iBcdmTMXRobH8cZNZgeV9Ur9VjvLsykfFE2Li".to_string(),
+        ],
+    };
+
+    let raw: Bytes = helius
+        .parse_transactions_raw(request)
+        .await
+        .expect("raw parse call failed");
+    assert_eq!(raw.as_ref(), body.as_bytes(), "raw body must be returned unmodified");
+
+    let decoded: Vec<EnhancedTransaction> = decode_response(&raw).expect("body should decode");
+    assert_eq!(decoded.len(), 1);
+    assert_eq!(decoded[0].signature, mock_response[0].signature);
+    assert_eq!(decoded[0].transaction_type, TransactionType::Transfer);
+    assert_eq!(decoded[0].source, Source::SystemProgram);
 }

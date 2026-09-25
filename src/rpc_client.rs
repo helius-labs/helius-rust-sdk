@@ -34,12 +34,73 @@ use crate::types::{
     TokenAccountsList, TokenAccountsOwnerFilter, TransactionSignatureList,
 };
 
+use bytes::Bytes;
 use reqwest::{Client, Method, Url};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use serde_json::Value;
 use solana_client::rpc_client::RpcClient as SolanaRpcClient;
 use solana_commitment_config::CommitmentConfig;
+
+/// Decodes a raw JSON-RPC envelope into the method's result the way the typed methods do
+///
+/// This is the decoding half of [`RpcClient::post_rpc_request`], exposed so a body obtained
+/// from [`RpcClient::post_rpc_request_raw`] can be decoded off the async runtime. It decodes the
+/// envelope with [`decode_response`](crate::request_handler::decode_response), surfaces a
+/// JSON-RPC `error` object as `HeliusError::RpcError`, and unwraps `result`.
+///
+/// ```
+/// use helius::rpc_client::decode_rpc_response;
+///
+/// let body = br#"{"jsonrpc":"2.0","result":{"total":1,"items":[]},"id":"1"}"#;
+/// let result: serde_json::Value = decode_rpc_response("getAssetsByOwner", body).unwrap();
+///
+/// assert_eq!(result["total"], 1);
+/// ```
+///
+/// # Arguments
+/// * `method` - The RPC method name the body answers, used in error messages
+/// * `body` - The raw response body
+///
+/// # Returns
+/// A result that, if successful, contains the deserialized `result` field
+///
+/// # Errors
+/// Returns `HeliusError::RpcError` if the envelope carries an `error` object, or neither a
+/// `result` nor an `error` that `T` can represent; `HeliusError::SerdeJson` if the body is not
+/// a valid envelope
+pub fn decode_rpc_response<T>(method: &str, body: &[u8]) -> Result<T>
+where
+    T: DeserializeOwned + Default,
+{
+    let rpc_response: RpcResponse<T> = crate::request_handler::decode_response(body)?;
+
+    // Solana/Helius report method-level failures as a JSON-RPC error object with an HTTP 200
+    // status, so surface `error` before returning `result`.
+    if let Some(error) = rpc_response.error {
+        let message: String = match error.data {
+            Some(data) => format!("{} ({})", error.message, data),
+            None => error.message,
+        };
+
+        return Err(HeliusError::RpcError {
+            code: error.code,
+            message,
+        });
+    }
+
+    match rpc_response.result {
+        Some(result) => Ok(result),
+        // A `"result": null` response deserializes the outer `Option` to `None`, not
+        // `Some(None)`, so recover the null case for methods whose `T` can represent it
+        // (e.g. `Option<Asset>`). If `T` cannot deserialize from null, the response
+        // genuinely carried neither a result nor an error, so surface that.
+        None => serde_json::from_value::<T>(Value::Null).map_err(|_| HeliusError::RpcError {
+            code: 0,
+            message: format!("RPC method '{}' returned neither a result nor an error", method),
+        }),
+    }
+}
 
 /// Default upper bound on the number of pages the auto-paginating helpers
 /// (`get_all_program_accounts`, `get_all_token_accounts_by_owner`) will fetch. Acts as a
@@ -133,37 +194,55 @@ impl RpcClient {
         R: Debug + Serialize + Send + Sync,
         T: Debug + DeserializeOwned + Default,
     {
+        let body: Bytes = self.post_rpc_request_raw(method, request).await?;
+        decode_rpc_response(method, &body)
+    }
+
+    /// Streamlines an RPC POST request and returns the JSON-RPC envelope undecoded
+    ///
+    /// The transport and error handling match [`post_rpc_request`](Self::post_rpc_request): a
+    /// non-2xx status is mapped to the matching `HeliusError` and never reaches the caller as
+    /// bytes. What comes back is the full `{"jsonrpc", "id", "result" | "error"}` envelope of a
+    /// 2xx response, which may still carry a JSON-RPC `error` object; [`decode_rpc_response`]
+    /// surfaces that as `HeliusError::RpcError` exactly as the typed path does.
+    ///
+    /// Use this to keep JSON decoding off the async runtime for large DAS or RPC V2 pages.
+    /// `HeliusError` converts from `tokio::task::JoinError`, so the join and the decode can
+    /// both be handled with `?`:
+    ///
+    /// ```no_run
+    /// # use helius::error::Result;
+    /// # use helius::rpc_client::decode_rpc_response;
+    /// # use helius::types::{AssetList, Cluster, GetAssetsByOwner};
+    /// # use helius::Helius;
+    /// # async fn run(request: GetAssetsByOwner) -> Result<()> {
+    /// let helius: Helius = Helius::new("your_api_key", Cluster::MainnetBeta)?;
+    ///
+    /// let body = helius.rpc().post_rpc_request_raw("getAssetsByOwner", request).await?;
+    /// let assets: AssetList =
+    ///     tokio::task::spawn_blocking(move || decode_rpc_response("getAssetsByOwner", &body)).await??;
+    /// # Ok(())
+    /// # }
+    /// ```
+    ///
+    /// # Arguments
+    /// * `method` - RPC method name as a string reference (e.g., "getAsset")
+    /// * `request` - Request data for a given method that conforms to the Debug, Serialize, Send, and Sync traits
+    ///
+    /// # Returns
+    /// A result that, if successful, contains the raw response body
+    ///
+    /// # Errors
+    /// Returns `HeliusError` if the URL cannot be parsed or the HTTP request fails
+    pub async fn post_rpc_request_raw<R>(&self, method: &str, request: R) -> Result<Bytes>
+    where
+        R: Debug + Serialize + Send + Sync,
+    {
         let base_url: String = self.config.build_rpc_url();
         let url: Url = Url::parse(&base_url)?;
 
         let rpc_request: RpcRequest<R> = RpcRequest::new(method.to_string(), request);
-        let rpc_response: RpcResponse<T> = self.handler.send(Method::POST, url, Some(&rpc_request)).await?;
-
-        // Solana/Helius report method-level failures as a JSON-RPC error object with an HTTP 200
-        // status, so surface `error` before returning `result`.
-        if let Some(error) = rpc_response.error {
-            let message: String = match error.data {
-                Some(data) => format!("{} ({})", error.message, data),
-                None => error.message,
-            };
-
-            return Err(HeliusError::RpcError {
-                code: error.code,
-                message,
-            });
-        }
-
-        match rpc_response.result {
-            Some(result) => Ok(result),
-            // A `"result": null` response deserializes the outer `Option` to `None`, not
-            // `Some(None)`, so recover the null case for methods whose `T` can represent it
-            // (e.g. `Option<Asset>`). If `T` cannot deserialize from null, the response
-            // genuinely carried neither a result nor an error, so surface that.
-            None => serde_json::from_value::<T>(Value::Null).map_err(|_| HeliusError::RpcError {
-                code: 0,
-                message: format!("RPC method '{}' returned neither a result nor an error", method),
-            }),
-        }
+        self.handler.send_raw(Method::POST, url, Some(&rpc_request)).await
     }
 
     /// Gets an asset by its ID
