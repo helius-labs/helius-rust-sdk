@@ -310,7 +310,24 @@ let fee = helius.rpc().get_priority_fee_estimate(GetPriorityFeeEstimateRequest {
 }).await?;
 ```
 
+#### MEV Protect
+
+Route sends away from validators statistically linked to sandwich attacks. Off by default. Enable it for the whole client (adds `mev-protect=true` to the RPC URL, covering every send, and sets the default for the Sender helpers), or per call on the Sender helpers:
+
+```rust
+let helius = HeliusBuilder::new()
+    .with_api_key("your-key")?
+    .with_cluster(Cluster::MainnetBeta)
+    .with_mev_protect(true)
+    .build()
+    .await?;
+
+// Overrides the client setting for this send only
+let opts = SenderSendOptions::new().with_region("US_EAST").with_mev_protect(true);
+```
+
 Learn more: https://www.helius.dev/docs/api-reference/sender/llms.txt
+https://www.helius.dev/docs/sending-transactions/mev-protect
 
 ### RPC V2 Methods
 

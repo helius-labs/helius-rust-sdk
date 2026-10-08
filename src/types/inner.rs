@@ -2070,6 +2070,14 @@ pub struct SenderSendOptions {
     /// [`MIN_TIP_LAMPORTS_MAX`]: crate::optimized_transaction::MIN_TIP_LAMPORTS_MAX
     /// [`MIN_TIP_LAMPORTS_SWQOS`]: crate::optimized_transaction::MIN_TIP_LAMPORTS_SWQOS
     pub max_tip_lamports: u64,
+    /// Per-call [MEV Protect](https://www.helius.dev/docs/sending-transactions/mev-protect)
+    /// override: route away from validators statistically linked to sandwich attacks by
+    /// appending `mev-protect=true` to `/fast`.
+    ///
+    /// `None` (the default) follows the client's setting
+    /// ([`HeliusBuilder::with_mev_protect`](crate::HeliusBuilder::with_mev_protect)), which is
+    /// off unless enabled. `Some(_)` overrides it for this send only.
+    pub mev_protect: Option<bool>,
 }
 
 impl Default for SenderSendOptions {
@@ -2081,6 +2089,7 @@ impl Default for SenderSendOptions {
             poll_timeout_ms: 60_000,
             poll_interval_ms: 2_000,
             max_tip_lamports: crate::optimized_transaction::DEFAULT_MAX_TIP_LAMPORTS,
+            mev_protect: None,
         }
     }
 }
@@ -2126,6 +2135,14 @@ impl SenderSendOptions {
     /// See [`SenderSendOptions::max_tip_lamports`]. Must be at least the tier's minimum tip.
     pub fn with_max_tip_lamports(mut self, max_tip_lamports: u64) -> Self {
         self.max_tip_lamports = max_tip_lamports;
+        self
+    }
+
+    /// Turns MEV Protect on or off for this send, overriding the client's setting.
+    ///
+    /// See [`SenderSendOptions::mev_protect`].
+    pub fn with_mev_protect(mut self, enabled: bool) -> Self {
+        self.mev_protect = Some(enabled);
         self
     }
 }

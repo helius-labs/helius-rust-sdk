@@ -8,6 +8,9 @@ use solana_client::nonblocking::rpc_client::RpcClient as AsyncSolanaRpcClient;
 use std::sync::Arc;
 use url::Url;
 
+/// Query parameter that opts an RPC or Sender request in to MEV Protect.
+const MEV_PROTECT_PARAM: &str = "mev-protect";
+
 /// Configuration settings for the Helius client
 ///
 /// `Config` contains all the necessary parameters needed to configure and authenticate the `Helius` client to interact with a specific Solana cluster
@@ -80,6 +83,70 @@ impl Config {
                 feature
             ))
         })
+    }
+
+    /// Turns [MEV Protect](https://www.helius.dev/docs/sending-transactions/mev-protect) on or off
+    /// for this configuration.
+    ///
+    /// MEV Protect routes transactions away from validators statistically linked to sandwich
+    /// attacks. Enabling it sets `mev-protect=true` on the RPC endpoint, so it covers every send
+    /// made through a client built from this config (`send_transaction`, `send_smart_transaction`,
+    /// and friends), and it becomes the default for the Sender helpers
+    /// (`send_smart_transaction_with_sender`, `send_and_confirm_via_sender`,
+    /// `send_bundle_with_sender`), which can override it per call with
+    /// [`SenderSendOptions::with_mev_protect`](crate::types::SenderSendOptions::with_mev_protect).
+    /// WebSocket connections are unaffected. Off by default.
+    ///
+    /// The setting is stored on `endpoints.rpc` rather than in a field of its own, so call this
+    /// after any change to `endpoints`. Disabling it removes the parameter from that URL.
+    ///
+    /// # Example
+    /// ```rust
+    /// use helius::config::Config;
+    /// use helius::types::Cluster;
+    ///
+    /// let config = Config::new("your_api_key", Cluster::MainnetBeta)
+    ///     .unwrap()
+    ///     .with_mev_protect(true);
+    /// assert!(config.mev_protect());
+    /// ```
+    pub fn with_mev_protect(mut self, enabled: bool) -> Self {
+        if enabled && self.mev_protect() {
+            return self;
+        }
+
+        let mut url = Url::parse(&self.endpoints.rpc).expect("Config endpoints should always be valid URLs");
+        // Only a query that already names the parameter is rebuilt (which re-encodes it), so
+        // turning MEV Protect on for a custom URL leaves the rest of its query as written
+        if url.query_pairs().any(|(key, _)| key == MEV_PROTECT_PARAM) {
+            let kept: Vec<(String, String)> = url
+                .query_pairs()
+                .filter(|(key, _)| key != MEV_PROTECT_PARAM)
+                .map(|(key, value)| (key.into_owned(), value.into_owned()))
+                .collect();
+            url.set_query(None);
+            if !kept.is_empty() {
+                url.query_pairs_mut().extend_pairs(kept);
+            }
+        }
+        if enabled {
+            url.query_pairs_mut().append_pair(MEV_PROTECT_PARAM, "true");
+        }
+
+        self.endpoints.rpc = url.to_string();
+        self
+    }
+
+    /// Whether MEV Protect is on, i.e. whether the RPC endpoint carries `mev-protect=true`.
+    ///
+    /// This is also true for a custom RPC URL that already includes the parameter.
+    pub fn mev_protect(&self) -> bool {
+        Url::parse(&self.endpoints.rpc)
+            .map(|url| {
+                url.query_pairs()
+                    .any(|(key, value)| key == MEV_PROTECT_PARAM && value == "true")
+            })
+            .unwrap_or(false)
     }
 
     /// Builds an RPC URL with authentication.

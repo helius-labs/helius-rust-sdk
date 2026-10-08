@@ -457,3 +457,117 @@ async fn test_helius_new_with_url_rejects_credentials() {
     let result = Helius::new_with_url("https://user:pass@rpc.example.com");
     assert!(result.is_err());
 }
+
+// ===== MEV Protect =====
+
+fn query_value(url: &str, key: &str) -> Option<String> {
+    url::Url::parse(url)
+        .unwrap()
+        .query_pairs()
+        .find(|(k, _)| k == key)
+        .map(|(_, v)| v.into_owned())
+}
+
+#[tokio::test]
+async fn test_builder_mev_protect_off_by_default() {
+    let helius = HeliusBuilder::new()
+        .with_api_key("test-key")
+        .unwrap()
+        .with_cluster(Cluster::MainnetBeta)
+        .build()
+        .await
+        .unwrap();
+
+    assert!(!helius.config().mev_protect());
+    assert_eq!(query_value(&helius.connection().url(), "mev-protect"), None);
+}
+
+#[tokio::test]
+async fn test_builder_mev_protect_adds_param_to_rpc_url() {
+    let helius = HeliusBuilder::new()
+        .with_api_key("test-key")
+        .unwrap()
+        .with_cluster(Cluster::MainnetBeta)
+        .with_async_solana()
+        .with_mev_protect(true)
+        .build()
+        .await
+        .unwrap();
+
+    assert!(helius.config().mev_protect());
+
+    let rpc_url = helius.connection().url();
+    assert_eq!(query_value(&rpc_url, "mev-protect").as_deref(), Some("true"));
+    assert_eq!(query_value(&rpc_url, "api-key").as_deref(), Some("test-key"));
+
+    let async_url = helius.async_connection().unwrap().url();
+    assert_eq!(query_value(&async_url, "mev-protect").as_deref(), Some("true"));
+}
+
+#[tokio::test]
+async fn test_builder_mev_protect_leaves_custom_url_query_as_written() {
+    let helius = HeliusBuilder::new()
+        .with_custom_url("https://proxy.example.com/rpc?sig=a%20b&flag")
+        .unwrap()
+        .with_mev_protect(true)
+        .build()
+        .await
+        .unwrap();
+
+    assert_eq!(
+        helius.config().endpoints.rpc,
+        "https://proxy.example.com/rpc?sig=a%20b&flag&mev-protect=true"
+    );
+}
+
+#[test]
+fn test_config_mev_protect_detected_on_custom_url() {
+    let config = helius::config::Config {
+        api_key: None,
+        cluster: Cluster::Devnet,
+        endpoints: helius::types::HeliusEndpoints {
+            api: "https://api.example.com/".to_string(),
+            rpc: "https://rpc.example.com/?mev-protect=true".to_string(),
+        },
+        custom_url: None,
+    };
+
+    assert!(config.mev_protect());
+}
+
+#[test]
+fn test_config_with_mev_protect_is_idempotent_and_reversible() {
+    let config = helius::config::Config::new("test-key", Cluster::MainnetBeta)
+        .unwrap()
+        .with_mev_protect(true)
+        .with_mev_protect(true);
+    assert_eq!(config.endpoints.rpc, "https://mainnet.helius-rpc.com/?mev-protect=true");
+
+    let config = config.with_mev_protect(false);
+    assert!(!config.mev_protect());
+    assert_eq!(config.endpoints.rpc, "https://mainnet.helius-rpc.com/");
+}
+
+#[test]
+fn test_config_with_mev_protect_replaces_a_false_value() {
+    let mut config = helius::config::Config::new("test-key", Cluster::MainnetBeta).unwrap();
+    config.endpoints.rpc = "https://rpc.example.com/?a=1&mev-protect=false".to_string();
+
+    let config = config.with_mev_protect(true);
+    assert_eq!(config.endpoints.rpc, "https://rpc.example.com/?a=1&mev-protect=true");
+
+    let config = config.with_mev_protect(false);
+    assert_eq!(config.endpoints.rpc, "https://rpc.example.com/?a=1");
+}
+
+#[test]
+fn test_sender_send_options_mev_protect_defaults_to_client_setting() {
+    use helius::types::SenderSendOptions;
+
+    assert_eq!(SenderSendOptions::default().mev_protect, None);
+    assert_eq!(SenderSendOptions::new().with_mev_protect(true).mev_protect, Some(true));
+    assert_eq!(
+        SenderSendOptions::new().with_mev_protect(false).mev_protect,
+        Some(false)
+    );
+}

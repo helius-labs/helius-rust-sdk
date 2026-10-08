@@ -528,6 +528,21 @@ pub fn sender_fast_url(region: &str) -> String {
     format!("{}/fast", sender_base_url(region))
 }
 
+/// `/fast` endpoint with the query a send asks for: `swqos_only=true` for the SWQOS-only tier
+/// and `mev-protect=true` for MEV Protect.
+fn sender_fast_url_with_query(region: &str, swqos_only: bool, mev_protect: bool) -> String {
+    let mut url: String = sender_fast_url(region);
+    let params: Vec<&str> = [(swqos_only, "swqos_only=true"), (mev_protect, "mev-protect=true")]
+        .into_iter()
+        .filter_map(|(on, param)| on.then_some(param))
+        .collect();
+    if !params.is_empty() {
+        url.push('?');
+        url.push_str(&params.join("&"));
+    }
+    url
+}
+
 /// `/ping` endpoint used for connection warming
 #[inline]
 pub fn sender_ping_url(region: &str) -> String {
@@ -548,11 +563,10 @@ fn sender_error_target(url: &reqwest::Url) -> String {
 }
 
 /// POST base64 wire-transaction to Sender via `/fast`.
-async fn post_to_sender(tx64: &str, opts: &SenderSendOptions) -> Result<Signature> {
-    let mut endpoint: String = sender_fast_url(&opts.region);
-    if opts.swqos_only {
-        endpoint.push_str("?swqos_only=true");
-    }
+///
+/// `mev_protect` is the resolved setting: the per-call override, else the client's.
+async fn post_to_sender(tx64: &str, opts: &SenderSendOptions, mev_protect: bool) -> Result<Signature> {
+    let endpoint: String = sender_fast_url_with_query(&opts.region, opts.swqos_only, mev_protect);
 
     let body = json!({
         "jsonrpc": "2.0",
@@ -1802,7 +1816,8 @@ impl Helius {
         let tx64: String = B64.encode(&wire);
 
         // Send to Sender
-        let sig: Signature = post_to_sender(&tx64, &opts).await?;
+        let mev_protect: bool = opts.mev_protect.unwrap_or_else(|| self.config.mev_protect());
+        let sig: Signature = post_to_sender(&tx64, &opts, mev_protect).await?;
 
         // Poll until confirmed (or timeout/last valid blockhash expiry)
         let start: Instant = Instant::now();
@@ -1889,7 +1904,7 @@ impl Helius {
     /// # Arguments
     /// * `transactions` - 1..=5 signed transactions to submit as a bundle.
     /// * `opts` - Sender options (region, polling, etc.). `swqos_only` is ignored
-    ///   for bundles (Sender Max only).
+    ///   for bundles (Sender Max only); `mev_protect` applies, defaulting to the client's setting.
     ///
     /// # Returns
     /// The signatures of every transaction in the bundle, in submission order,
@@ -1930,12 +1945,13 @@ impl Helius {
             signatures.push(*tx.get_signature());
         }
 
-        // Bundles always go through Sender Max (no `?swqos_only=true`).
+        // Bundles always go through Sender Max (no `?swqos_only=true`), but do honor MEV Protect.
         //
         // Wire format verified against the Sender backend `/fast` handler
         // (`atlas-txn-sender/src/http_server/server.rs`): the `sendBundle` method
         // parses `params` as `[[base64Tx, ...], { "encoding": "base64" }]`.
-        let endpoint = sender_fast_url(&opts.region);
+        let mev_protect: bool = opts.mev_protect.unwrap_or_else(|| self.config.mev_protect());
+        let endpoint = sender_fast_url_with_query(&opts.region, false, mev_protect);
         let body = json!({
             "jsonrpc": "2.0",
             "id": format!("helius-rust-bundle-{}", std::time::SystemTime::now()
@@ -2017,8 +2033,8 @@ mod tests {
     use super::{
         build_v1_transaction, collect_unique_keypair_refs, collect_unique_signers, is_retryable_confirmation_error,
         resolve_compute_unit_limit, resolve_compute_unit_limit_for_v1, resolve_loaded_accounts_data_size_limit,
-        resolve_tip_lamports, sender_error_target, tip_floor_sol_to_lamports, v1_priority_fee_lamports,
-        CU_BUFFER_MULTIPLIER_DEFAULT, DEFAULT_MAX_TIP_LAMPORTS, MAX_COMPUTE_UNIT_LIMIT,
+        resolve_tip_lamports, sender_error_target, sender_fast_url_with_query, tip_floor_sol_to_lamports,
+        v1_priority_fee_lamports, CU_BUFFER_MULTIPLIER_DEFAULT, DEFAULT_MAX_TIP_LAMPORTS, MAX_COMPUTE_UNIT_LIMIT,
         MAX_LOADED_ACCOUNTS_DATA_SIZE_BYTES, MAX_PLAUSIBLE_TIP_FLOOR_SOL, MAX_TRANSACTION_V1_SIZE,
         MIN_COMPUTE_UNIT_LIMIT, MIN_TIP_LAMPORTS_MAX, MIN_TIP_LAMPORTS_SWQOS,
     };
@@ -2032,6 +2048,24 @@ mod tests {
 
         let ping = reqwest::Url::parse("https://sender.helius-rpc.com/ping").unwrap();
         assert_eq!(sender_error_target(&ping), "sender.helius-rpc.com/ping");
+    }
+
+    /// Mirrors the TS SDK's `senderFastUrl`: each flag adds its own parameter, in this order.
+    #[test]
+    fn sender_fast_url_with_query_sets_swqos_and_mev_protect() {
+        let cases = [
+            (false, false, "http://sender.helius-rpc.com/fast"),
+            (true, false, "http://sender.helius-rpc.com/fast?swqos_only=true"),
+            (false, true, "http://sender.helius-rpc.com/fast?mev-protect=true"),
+            (
+                true,
+                true,
+                "http://sender.helius-rpc.com/fast?swqos_only=true&mev-protect=true",
+            ),
+        ];
+        for (swqos_only, mev_protect, expected) in cases {
+            assert_eq!(sender_fast_url_with_query("Default", swqos_only, mev_protect), expected);
+        }
     }
 
     /// The v1 total-lamports fee conversion must stay the exact inverse of Atlas's

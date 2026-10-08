@@ -113,7 +113,7 @@ let helius = HeliusBuilder::new()
     .await?;
 ```
 
-Builder methods: `with_api_key()`, `with_cluster()`, `with_custom_url()`, `with_custom_api_url()`, `with_custom_ws_url()`, `with_commitment()`, `with_async_solana()`, `with_websocket()`, `with_http_client()`.
+Builder methods: `with_api_key()`, `with_cluster()`, `with_custom_url()`, `with_custom_api_url()`, `with_custom_ws_url()`, `with_commitment()`, `with_async_solana()`, `with_websocket()`, `with_http_client()`, `with_mev_protect()`.
 
 ### `HeliusFactory` — Multi-Cluster
 
@@ -204,6 +204,8 @@ let sig = helius.send_smart_transaction_with_sender(
     },
 ).await?;
 ```
+
+For swaps and other trades that can be sandwiched, enable MEV Protect: `HeliusBuilder::with_mev_protect(true)` covers every send through the client, or pass `SenderSendOptions::new().with_mev_protect(true)` per call to the Sender helpers.
 
 ### Use `get_asset_batch` for Multiple Assets
 
