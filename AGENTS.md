@@ -169,7 +169,8 @@ let sig = helius.send_smart_transaction(SmartTransactionConfig {
         cu_buffer_multiplier: Some(1.1),    // 10% compute unit headroom (default: 1.25)
         ..Default::default()
     },
-    ..Default::default()
+    send_options: RpcSendTransactionConfig::default(),
+    timeout: Timeout::default(),
 }).await?;
 ```
 
@@ -189,7 +190,6 @@ let sig = helius.send_smart_transaction_with_sender(
 ```
 
 `SenderSendOptions` is `#[non_exhaustive]`, so build it with `SenderSendOptions::new()` and the `with_*` methods; a struct literal does not compile outside the crate.
-```
 
 For swaps and other trades that can be sandwiched, enable MEV Protect: `HeliusBuilder::with_mev_protect(true)` covers every send through the client, or pass `SenderSendOptions::new().with_mev_protect(true)` per call to the Sender helpers.
 
@@ -399,7 +399,7 @@ where
 
 6. **`get_asset` returns `Option<Asset>`** — A successful response may still be `None` if the asset doesn't exist. Handle the `Option` explicitly.
 
-7. **Sender tips are mandatory** — `send_smart_transaction_with_sender` automatically determines and appends tips. Minimum 0.0002 SOL (Dual mode) or 0.000005 SOL (SWQOS-only).
+7. **Sender tips are mandatory** — `send_smart_transaction_with_sender` automatically determines and appends tips. Minimum 0.001 SOL (Sender Max) or 0.000005 SOL (SWQOS-only).
 
 8. **TLS feature flags** — The crate defaults to `native-tls`. Use `features = ["rustls"]` (and `default-features = false`) for pure-Rust TLS when OpenSSL is unavailable.
 
