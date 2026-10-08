@@ -279,24 +279,18 @@ v1 carries its compute-unit limit and total priority fee (in lamports) in the me
 Send transactions with ultra-low latency via Helius Sender. Automatically optimizes compute units and priority fees.
 
 ```rust
-use helius::types::{SmartTransactionConfig, SendOptions};
-use solana_sdk::signature::Keypair;
+use helius::types::{SenderSendOptions, SmartTransactionConfig, Timeout};
+use solana_sdk::signature::{Keypair, Signer};
+use std::sync::Arc;
 
 // Build transaction config
-let config = SmartTransactionConfig {
-    instructions: vec![transfer_instruction],
-    signers: vec![&payer_keypair],
-    lookup_tables: None,
-    fee_payer: None,
-};
+let payer_signer: Arc<dyn Signer> = Arc::new(payer_keypair);
+let config = SmartTransactionConfig::new(vec![transfer_instruction], vec![payer_signer], Timeout::default());
 
-// Send via Helius Sender (recommended)
+// Send via Helius Sender (recommended). The SDK derives and appends the Sender tip.
 let signature = helius.send_smart_transaction_with_sender(
     config,
-    Some(SendOptions {
-        skip_preflight: true,
-        ..Default::default()
-    }),
+    SenderSendOptions::new().with_region("US_EAST"),
 ).await?;
 
 // Get a priority fee estimate if building the transaction yourself

@@ -54,18 +54,9 @@ async fn main() -> helius::error::Result<()> {
 
     // Send a transaction via Helius Sender (ultra-low latency)
     let sig = helius.send_smart_transaction_with_sender(
-        SmartTransactionConfig {
-            create_config: CreateSmartTransactionConfig {
-                instructions: vec![transfer_instruction],
-                signers: vec![wallet_signer],
-                ..Default::default()
-            },
-            ..Default::default()
-        },
-        SenderSendOptions {
-            region: "US_EAST".to_string(),  // Default, US_SLC, US_EAST, EU_WEST, EU_CENTRAL, EU_NORTH, AP_SINGAPORE, AP_TOKYO
-            ..Default::default()
-        },
+        SmartTransactionConfig::new(vec![transfer_instruction], vec![wallet_signer], Timeout::default()),
+        // Default, US_SLC, US_EAST, EU_WEST, EU_CENTRAL, EU_NORTH, AP_SINGAPORE, AP_TOKYO
+        SenderSendOptions::new().with_region("US_EAST"),
     ).await?;
 
     Ok(())
@@ -188,21 +179,16 @@ For time-sensitive transactions (arbitrage, sniping, liquidations), reliability,
 
 ```rust
 let sig = helius.send_smart_transaction_with_sender(
-    SmartTransactionConfig {
-        create_config: CreateSmartTransactionConfig {
-            instructions: vec![your_instruction],
-            signers: vec![wallet_signer],
-            ..Default::default()
-        },
-        ..Default::default()
-    },
-    SenderSendOptions {
-        region: "US_EAST".to_string(),
-        swqos_only: false,          // true = SWQOS only, false = Dual (SWQOS + Jito)
-        poll_timeout_ms: 60_000,
-        poll_interval_ms: 2_000,
-    },
+    SmartTransactionConfig::new(vec![your_instruction], vec![wallet_signer], Timeout::default()),
+    SenderSendOptions::new()
+        .with_region("US_EAST")
+        .with_swqos_only(false)       // true = SWQOS-only (0.000005 SOL min tip), false = Sender Max (0.001 SOL min tip)
+        .with_poll_timeout_ms(60_000)
+        .with_poll_interval_ms(2_000),
 ).await?;
+```
+
+`SenderSendOptions` is `#[non_exhaustive]`, so build it with `SenderSendOptions::new()` and the `with_*` methods; a struct literal does not compile outside the crate.
 ```
 
 For swaps and other trades that can be sandwiched, enable MEV Protect: `HeliusBuilder::with_mev_protect(true)` covers every send through the client, or pass `SenderSendOptions::new().with_mev_protect(true)` per call to the Sender helpers.
