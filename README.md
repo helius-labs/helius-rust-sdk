@@ -294,6 +294,22 @@ Admin API access is feature-gated per project and served from `https://admin-api
 - [`send_bundle_with_sender`](https://github.com/helius-labs/helius-rust-sdk/blob/dev/src/optimized_transaction.rs) - Submits a bundle of up to 5 transactions to Sender Max via `sendBundle`. The caller includes only the 0.001 SOL Sender tip in ≥1 transaction; Helius adds any pathway tips. Landing is tracked per-transaction by signature (not bundle IDs)
 - [`warm_sender_connection`](https://github.com/helius-labs/helius-rust-sdk/blob/47d68afcf644938bc474f609368b214170423bba/src/optimized_transaction.rs#L1009-L1021) - Warms Sender connection by hitting `/ping`
 
+**[MEV Protect](https://www.helius.dev/docs/sending-transactions/mev-protect)** routes transactions away from validators statistically linked to sandwich attacks. It's off by default. Turn it on for a whole client with `HeliusBuilder::with_mev_protect(true)` (or `Config::with_mev_protect(true)`): every send through that client is protected, including `send_transaction`, `send_smart_transaction`, and the Sender helpers. Or set it per call on the Sender helpers, which overrides the client setting:
+
+```rust
+let helius = HeliusBuilder::new()
+    .with_api_key("YOUR_API_KEY")?
+    .with_cluster(Cluster::MainnetBeta)
+    .with_mev_protect(true)
+    .build()
+    .await?;
+
+// Per-call override for send_smart_transaction_with_sender, send_and_confirm_via_sender, send_bundle_with_sender
+let opts = SenderSendOptions::new().with_region("US_EAST").with_mev_protect(true);
+```
+
+Only a small fraction of stake is excluded, so the effect on landing rate is small; for the most latency-sensitive flows, measure with and without it first.
+
 ### Transaction v1 (Larger Transactions)
 
 Agave 4.2 introduces **Transaction v1** (SIMD-0385), which raises the maximum transaction size from ~1,232 bytes to **4,096 bytes** (SIMD-0296). Opt in per transaction by setting `version: TransactionVersion::V1` on `CreateSmartTransactionConfig` (or `.with_v1()` on the seed config):
