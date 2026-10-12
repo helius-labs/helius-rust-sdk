@@ -79,7 +79,16 @@ path = "examples/das/get_asset_batch.rs"
 name = "get_asset_proof_batch"
 path = "examples/das/get_asset_proof_batch.rs"
 
-# Enhanced transaction examples
+# Parsed Events examples
+[[example]]
+name = "parsed_events_parse_transactions"
+path = "examples/parsed_events/parse_transactions.rs"
+
+[[example]]
+name = "parsed_events_get_transaction_history"
+path = "examples/parsed_events/get_transaction_history.rs"
+
+# Enhanced transaction examples (deprecated API, plus get_transactions_for_address)
 [[example]]
 name = "get_parse_transactions"
 path = "examples/enhanced/get_parse_transactions.rs"

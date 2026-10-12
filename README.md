@@ -256,7 +256,23 @@ Our SDK is designed to provide a seamless developer experience when building on 
 - [`get_transaction_with_compression_info`](https://www.helius.dev/docs/api-reference/zk-compression/gettransactionwithcompressioninfo) - Gets transaction details including compression-specific metadata
 - [`get_validity_proof`](https://www.helius.dev/docs/api-reference/zk-compression/getvalidityproof) - Gets a validity proof for compressed data
 
-### Enhanced Transactions API
+### Parsed Events API
+[Parsed Events](https://www.helius.dev/docs/parsed-events) decodes transactions into instructions, transfers, and summaries using Helius's IDL catalog. It is the successor to the Enhanced Transactions API. Mainnet only (with a custom RPC URL, set `.with_cluster(Cluster::MainnetBeta)`); requires an API key; 10 credits per request. Available on `helius.parsed_events()`, with types in `helius::types::parsed_events`.
+- [`parse_transactions`](https://www.helius.dev/docs/api-reference/parsed-events/transactions) - Parses up to 100 transaction signatures. Each result carries a `parser_status`, so a missing transaction comes back as an item-level `parser_error` instead of failing the request
+- [`get_transaction_history`](https://www.helius.dev/docs/api-reference/parsed-events/transaction-history) - Returns parsed transaction history for an address with slot and block-time bounds, paginated with `pagination_token`
+- `parse_transactions_raw` / `get_transaction_history_raw` - Same requests, with the response body returned as `Bytes` for decoding off the async runtime
+
+See `examples/parsed_events/`.
+
+### Enhanced Transactions API (Deprecated)
+> **Deprecated:** the Enhanced Transactions API is in maintenance mode. Use `helius.parsed_events()` for new mainnet code; see the [migration guide](https://www.helius.dev/docs/parsed-events/guides/migrate-from-enhanced-transactions).
+> `parse_transactions` maps to `parsed_events().parse_transactions` and `parsed_transaction_history` to `parsed_events().get_transaction_history`, with these differences:
+> - `commitment` defaults to `confirmed` (was `finalized`); pass `ParsedEventsCommitment::Finalized` to keep the old behavior.
+> - `limit` defaults to 100 (was 10).
+> - History requires a wallet address; program-wide scans and the `source` / `transaction_type` filters are not supported (filter client-side on `parsed.summary`).
+> - Results are wrapped: `{ signature, parser_status, parsed, parser_error }`, and history pages are `{ data, pagination_token }`.
+> - Parsed Events is mainnet only, so devnet code should stay on the enhanced methods for now.
+
 - [`parse_transactions`](https://www.helius.dev/docs/api-reference/enhanced-transactions/gettransactions) - Parses transactions given an array of transaction IDs
 - [`parsed_transaction_history`](https://www.helius.dev/docs/api-reference/enhanced-transactions/gettransactionsbyaddress) - Retrieves a parsed transaction history for a specific address
 - `parse_transactions_raw` / `parsed_transaction_history_raw` - Same requests, but the response body is returned as `Bytes` for decoding elsewhere (e.g. on tokio's blocking pool with `helius::request_handler::decode_response`), so a large page never parks an async worker. See `examples/enhanced/get_parsed_transaction_history_raw.rs`

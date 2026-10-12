@@ -80,7 +80,10 @@ examples/
 │   ├── get_asset_proof_batch.rs              #   Merkle proofs for cNFTs
 │   ├── get_all_program_accounts.rs           #   Auto-paginating program accounts
 │   └── get_all_token_accounts_by_owner.rs    #   Auto-paginating token accounts
-├── enhanced/                                 # Enhanced transaction parsing
+├── parsed_events/                            # Parsed Events transaction parsing (mainnet)
+│   ├── parse_transactions.rs                 #   Parse transactions by signature
+│   ├── get_transaction_history.rs            #   Paginated parsed history for an address
+├── enhanced/                                 # Enhanced transaction parsing (deprecated API)
 │   ├── get_parse_transactions.rs             #   Parse transactions by signature
 │   ├── get_parsed_transaction_history.rs     #   Parsed tx history for address
 │   ├── get_parsed_transaction_history_raw.rs #   Same, decoded on the blocking pool
@@ -436,9 +439,39 @@ if let Some(token) = transfers.pagination_token {
 }
 ```
 
-### Enhanced Transactions
+### Parsed Events
 
-Parse raw transactions into human-readable format.
+Parse transactions into decoded instructions, transfers, and summaries (mainnet only, requires an API key; with a custom RPC URL, set `.with_cluster(Cluster::MainnetBeta)`). Successor to Enhanced Transactions, which is deprecated.
+
+```rust
+use helius::types::parsed_events::{
+    ComparisonBounds, GetTransactionHistoryRequest, ParseTransactionsRequest, ParserStatus,
+};
+
+// One result per signature, in order. Check parser_status before reading parsed.
+let results = helius.parsed_events().parse_transactions(ParseTransactionsRequest {
+    transactions: vec!["tx_signature_1".to_string(), "tx_signature_2".to_string()],
+    ..Default::default()
+}).await?;
+for r in &results {
+    if r.parser_status == ParserStatus::Ok {
+        println!("{:?}", r.parsed.as_ref().and_then(|p| p.summary.as_ref()).map(|s| &s.description));
+    }
+}
+
+// Address history, paginated with pagination_token (None on the last page)
+let page = helius.parsed_events().get_transaction_history(GetTransactionHistoryRequest {
+    address: "wallet_address".to_string(),
+    time: Some(ComparisonBounds { gte: Some(1_767_225_600), ..Default::default() }),
+    ..Default::default()
+}).await?;
+```
+
+`parse_transactions_raw` and `get_transaction_history_raw` return the body as `Bytes` for decoding off the runtime, like the enhanced `_raw` methods below.
+
+### Enhanced Transactions (Deprecated)
+
+Deprecated: use Parsed Events on mainnet. Devnet code can keep using these. Parse raw transactions into human-readable format.
 
 ```rust
 // Parse transaction signatures

@@ -14,6 +14,10 @@ impl Helius {
     ///
     /// # Returns
     /// A `Result` wrapping a vector of `EnhancedTransaction`s
+    #[deprecated(
+        since = "3.1.0",
+        note = "the Enhanced Transactions API is in maintenance mode; on mainnet use `helius.parsed_events().parse_transactions` (devnet can keep using this). See https://www.helius.dev/docs/parsed-events/guides/migrate-from-enhanced-transactions"
+    )]
     pub async fn parse_transactions(&self, request: ParseTransactionsRequest) -> Result<Vec<EnhancedTransaction>> {
         let url: Url = self.parse_transactions_url()?;
 
@@ -31,6 +35,7 @@ impl Helius {
     /// both be handled with `?`:
     ///
     /// ```no_run
+    /// # #![allow(deprecated)]
     /// # use helius::error::Result;
     /// # use helius::request_handler::decode_response;
     /// # use helius::types::{Cluster, EnhancedTransaction, ParseTransactionsRequest};
@@ -52,6 +57,10 @@ impl Helius {
     ///
     /// # Returns
     /// A `Result` wrapping the raw JSON body of a successful response
+    #[deprecated(
+        since = "3.1.0",
+        note = "the Enhanced Transactions API is in maintenance mode; on mainnet use `helius.parsed_events().parse_transactions` (devnet can keep using this). See https://www.helius.dev/docs/parsed-events/guides/migrate-from-enhanced-transactions"
+    )]
     pub async fn parse_transactions_raw(&self, request: ParseTransactionsRequest) -> Result<Bytes> {
         let url: Url = self.parse_transactions_url()?;
 
@@ -70,6 +79,10 @@ impl Helius {
     ///
     /// # Returns
     /// A `Result` wrapping a vector of `EnhancedTransaction`s
+    #[deprecated(
+        since = "3.1.0",
+        note = "the Enhanced Transactions API is in maintenance mode; on mainnet use `helius.parsed_events().get_transaction_history` (devnet can keep using this). See https://www.helius.dev/docs/parsed-events/guides/migrate-from-enhanced-transactions"
+    )]
     pub async fn parsed_transaction_history(
         &self,
         request: ParsedTransactionHistoryRequest,
@@ -91,6 +104,7 @@ impl Helius {
     /// both be handled with `?`:
     ///
     /// ```no_run
+    /// # #![allow(deprecated)]
     /// # use helius::error::Result;
     /// # use helius::request_handler::decode_response;
     /// # use helius::types::{Cluster, EnhancedTransaction, ParsedTransactionHistoryRequest};
@@ -121,6 +135,10 @@ impl Helius {
     ///
     /// # Returns
     /// A `Result` wrapping the raw JSON body of a successful response
+    #[deprecated(
+        since = "3.1.0",
+        note = "the Enhanced Transactions API is in maintenance mode; on mainnet use `helius.parsed_events().get_transaction_history` (devnet can keep using this). See https://www.helius.dev/docs/parsed-events/guides/migrate-from-enhanced-transactions"
+    )]
     pub async fn parsed_transaction_history_raw(&self, request: ParsedTransactionHistoryRequest) -> Result<Bytes> {
         let url: Url = self.parsed_transaction_history_url(&request)?;
 

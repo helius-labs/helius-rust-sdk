@@ -307,6 +307,7 @@ async fn test_admin_internal_error_500() {
 // Enhanced transactions endpoint error tests (POST /v0/transactions?...)
 // ---------------------------------------------------------------------------
 
+#[allow(deprecated)] // the enhanced API is deprecated but still tested
 async fn parse_transactions_error_test(status: u16, body: &str) -> HeliusError {
     let mut server: Server = Server::new_with_opts_async(mockito::ServerOpts::default()).await;
     let url: String = format!("{}/", server.url());

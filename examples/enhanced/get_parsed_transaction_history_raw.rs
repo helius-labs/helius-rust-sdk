@@ -1,3 +1,5 @@
+//! Deprecated: the Enhanced Transactions API is in maintenance mode. See examples/parsed_events/.
+//!
 //! Fetches a page of parsed transaction history and decodes it off the async runtime.
 //!
 //! `parsed_transaction_history` deserializes the response on the calling task. A full page
@@ -9,6 +11,7 @@
 //! The `_raw` variant returns the body as `Bytes` instead, which is `Send + 'static` and cheap
 //! to move, so decoding can run on tokio's blocking pool with `decode_response` — the same
 //! simd-json/serde_json parser the typed method uses, so the result is identical.
+#![allow(deprecated)]
 
 use helius::error::Result;
 use helius::request_handler::decode_response;
