@@ -535,3 +535,28 @@ fn test_url_parse_error_displays_the_cause() {
         err
     );
 }
+
+// ---------------------------------------------------------------------------
+// Error message fallbacks (shared by RequestHandler and the Sender endpoints)
+// ---------------------------------------------------------------------------
+
+/// Gateway errors (auth, plan limits) carry their message in a top-level `message`, not `error`
+#[tokio::test]
+async fn test_gateway_message_body_is_surfaced() {
+    let err = rpc_error_test(403, r#"{"message":"Plan does not include this endpoint"}"#).await;
+    assert!(
+        matches!(err, HeliusError::Unauthorized { ref text, .. } if text == "Plan does not include this endpoint"),
+        "Expected Unauthorized with the gateway message, got: {:?}",
+        err
+    );
+}
+
+#[tokio::test]
+async fn test_empty_error_body_falls_back_to_status_reason() {
+    let err = rpc_error_test(500, "").await;
+    assert!(
+        matches!(err, HeliusError::InternalError { ref text, .. } if text == "Internal Server Error"),
+        "Expected InternalError with the status reason, got: {:?}",
+        err
+    );
+}
