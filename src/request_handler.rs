@@ -166,29 +166,49 @@ impl RequestHandler {
             return Ok(body);
         }
 
-        // Decode the error body in place; the lossy `String` copy is only needed when the body
-        // is not JSON and is itself the error message.
-        match serde_json::from_slice::<Value>(&body) {
-            Ok(body) => {
-                let error_message = match body["error"].clone() {
-                    Value::Object(error_value) => error_value
-                        .into_iter()
-                        .map(|(k, v)| format!("{}: {}", k, v))
-                        .collect::<Vec<String>>()
-                        .join(", ")
-                        .to_string(),
-                    Value::String(error_value) => error_value,
-                    _ => "Unknown error".to_string(),
-                };
-                Err(HeliusError::from_response_status(status, path, error_message))
-            }
-            Err(_) => Err(HeliusError::from_response_status(
-                status,
-                path,
-                String::from_utf8_lossy(&body).into_owned(),
-            )),
-        }
+        Err(HeliusError::from_response_status(
+            status,
+            path,
+            error_message(status, &body),
+        ))
     }
+}
+
+/// Extracts the most useful message from a failed response's body
+///
+/// Follows the TS SDK's order, taking the first value that is not empty or whitespace:
+/// 1. `error`, as a string, or as an object rendered as `key: value` pairs. Helius REST
+///    endpoints return `{"error": "..."}`, JSON-RPC style errors `{"error": {"code", "message"}}`
+/// 2. a top-level `message`, as some gateway errors (auth, plan limits) return `{"message": "..."}`
+/// 3. the body itself, when it is a JSON string or not JSON at all (e.g. a gateway's HTML error page)
+/// 4. the HTTP status reason (e.g. `Forbidden`)
+///
+/// Shared by [`RequestHandler`] and the Sender endpoints, which do not go through it.
+pub(crate) fn error_message(status: StatusCode, body: &[u8]) -> String {
+    let reason = || status.canonical_reason().unwrap_or("Unknown error").to_string();
+
+    let non_blank = |text: String| (!text.trim().is_empty()).then_some(text);
+
+    let Ok(json) = serde_json::from_slice::<Value>(body) else {
+        return non_blank(String::from_utf8_lossy(body).into_owned()).unwrap_or_else(reason);
+    };
+
+    let error = match &json["error"] {
+        Value::Object(fields) => fields
+            .iter()
+            .map(|(k, v)| format!("{}: {}", k, v))
+            .collect::<Vec<String>>()
+            .join(", "),
+        Value::String(message) => message.clone(),
+        _ => String::new(),
+    };
+    let message = json["message"].as_str().unwrap_or_default().to_string();
+    let body_string = json.as_str().unwrap_or_default().to_string();
+
+    non_blank(error)
+        .or_else(|| non_blank(message))
+        .or_else(|| non_blank(body_string))
+        .unwrap_or_else(reason)
 }
 
 /// Decodes a successful response body the way the SDK's typed methods do
@@ -253,5 +273,56 @@ where
                 Err(HeliusError::from(serde_err))
             }
         },
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::error_message;
+    use reqwest::StatusCode;
+
+    #[test]
+    fn error_message_takes_the_first_non_empty_source() {
+        let forbidden = |body: &str| error_message(StatusCode::FORBIDDEN, body.as_bytes());
+
+        // `error` as a string or an object wins
+        assert_eq!(
+            forbidden(r#"{"error":"invalid request payload"}"#),
+            "invalid request payload"
+        );
+        assert_eq!(
+            forbidden(r#"{"error":{"code":-32401,"message":"invalid api key provided"}}"#),
+            r#"code: -32401, message: "invalid api key provided""#
+        );
+        assert_eq!(forbidden(r#"{"error":"x","message":"y"}"#), "x");
+
+        // Then a top-level `message`, as gateway errors return
+        assert_eq!(
+            forbidden(r#"{"message":"Plan does not include this endpoint"}"#),
+            "Plan does not include this endpoint"
+        );
+        assert_eq!(forbidden(r#"{"error":"","message":"from message"}"#), "from message");
+        assert_eq!(forbidden(r#"{"error":{},"message":"from message"}"#), "from message");
+
+        // Then the status reason for a JSON body with neither
+        assert_eq!(forbidden(r#"{"error":""}"#), "Forbidden");
+        assert_eq!(forbidden(r#"{"error":null,"message":""}"#), "Forbidden");
+        assert_eq!(forbidden(r#"{"detail":"elsewhere"}"#), "Forbidden");
+        assert_eq!(forbidden(r#"[1,2]"#), "Forbidden");
+
+        // Whitespace counts as empty at every step
+        assert_eq!(forbidden(r#"{"error":" ","message":"Plan limit"}"#), "Plan limit");
+        assert_eq!(forbidden(r#"{"error":"","message":"\t"}"#), "Forbidden");
+
+        // A JSON string or non-JSON body is the message itself, unless it is empty
+        assert_eq!(
+            forbidden(r#""API key not allowed for this method""#),
+            "API key not allowed for this method"
+        );
+        assert_eq!(forbidden(r#""  ""#), "Forbidden");
+        assert_eq!(forbidden("<html>Bad Gateway</html>"), "<html>Bad Gateway</html>");
+        assert_eq!(forbidden(""), "Forbidden");
+        assert_eq!(forbidden("  \n"), "Forbidden");
+        assert_eq!(error_message(StatusCode::from_u16(599).unwrap(), b""), "Unknown error");
     }
 }

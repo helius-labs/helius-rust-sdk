@@ -1,5 +1,5 @@
 use crate::error::{HeliusError, Result};
-use crate::request_handler::SDK_USER_AGENT;
+use crate::request_handler::{error_message, SDK_USER_AGENT};
 use crate::types::{
     CreateSmartTransactionConfig, CreateSmartTransactionSeedConfig, GetPriorityFeeEstimateOptions,
     GetPriorityFeeEstimateRequest, GetPriorityFeeEstimateResponse, PriorityLevel, SenderSendOptions, SmartTransaction,
@@ -592,7 +592,7 @@ async fn post_to_sender(tx64: &str, opts: &SenderSendOptions, mev_protect: bool)
         // Borrowed before the `text()` below consumes `res`, which this branch can do because it
         // returns immediately.
         let target = sender_error_target(res.url());
-        let text = res.text().await.unwrap_or_default();
+        let text = error_message(status, &res.bytes().await.unwrap_or_default());
         // Classified by status rather than lumped into `InvalidInput`, so a caller can tell a
         // rate limit or an expired API key apart from a transaction it built wrong.
         Err(HeliusError::from_response_status(
@@ -1785,7 +1785,7 @@ impl Helius {
         let status = res.status();
         if !status.is_success() {
             let target = sender_error_target(res.url());
-            let text = res.text().await.unwrap_or_default();
+            let text = error_message(status, &res.bytes().await.unwrap_or_default());
             return Err(HeliusError::from_response_status(
                 status,
                 target,
@@ -1970,7 +1970,7 @@ impl Helius {
 
         let status = res.status();
         if !status.is_success() {
-            let text = res.text().await.unwrap_or_default();
+            let text = error_message(status, &res.bytes().await.unwrap_or_default());
             return Err(HeliusError::InvalidInput(format!(
                 "Sender bundle HTTP {}: {}",
                 status,

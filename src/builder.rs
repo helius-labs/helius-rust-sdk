@@ -1,4 +1,4 @@
-use crate::config::Config;
+use crate::config::{validate_rebate_address, Config};
 use crate::error::{HeliusError, Result};
 use crate::types::{validate_rpc_url, validate_ws_url, ApiKey, Cluster, HeliusEndpoints};
 use crate::websocket::EnhancedWebsocket;
@@ -68,6 +68,7 @@ pub struct HeliusBuilder {
     enable_async: bool,
     ws_config: Option<(Option<u64>, Option<u64>)>, // (ping_interval, pong_timeout)
     mev_protect: bool,
+    rebate_address: Option<String>,
 }
 
 impl HeliusBuilder {
@@ -273,6 +274,29 @@ impl HeliusBuilder {
         self
     }
 
+    /// Sets the wallet that receives rebates for RPC usage through this client.
+    ///
+    /// Adds `rebate-address=<address>` to the RPC URL, replacing any already in a custom URL.
+    /// WebSocket and Sender requests are unaffected. See [`Config::with_rebate_address`].
+    ///
+    /// # Errors
+    /// Returns `HeliusError::InvalidInput` if `address` is not a valid Solana address.
+    ///
+    /// # Examples
+    ///
+    /// ```ignore
+    /// let helius = HeliusBuilder::new()
+    ///     .with_api_key("your-api-key")?
+    ///     .with_cluster(Cluster::MainnetBeta)
+    ///     .with_rebate_address("your-wallet-address")?
+    ///     .build()
+    ///     .await?;
+    /// ```
+    pub fn with_rebate_address(mut self, address: impl AsRef<str>) -> Result<Self> {
+        self.rebate_address = Some(validate_rebate_address(address.as_ref())?.to_string());
+        Ok(self)
+    }
+
     /// Uses a custom reqwest HTTP client.
     ///
     /// Useful for configuring:
@@ -381,9 +405,12 @@ impl HeliusBuilder {
 
     /// Internal: Builds the Config from builder settings.
     fn build_config(&self) -> Result<Arc<Config>> {
-        let config = self.build_base_config()?;
+        let mut config = self.build_base_config()?;
         if self.mev_protect {
-            return Ok(Arc::new(config.with_mev_protect(true)));
+            config = config.with_mev_protect(true);
+        }
+        if let Some(ref address) = self.rebate_address {
+            config = config.with_rebate_address(address)?;
         }
         Ok(Arc::new(config))
     }

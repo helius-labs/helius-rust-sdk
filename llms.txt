@@ -161,6 +161,7 @@ let helius = HeliusBuilder::new()
     .with_async_solana()
     .with_commitment(CommitmentConfig::confirmed())
     .with_websocket(Some(5), Some(15))  // custom ping/pong timeouts
+    .with_rebate_address("your-wallet-address")?  // wallet that receives RPC rebates (optional; must be a valid base58 address)
     .build()
     .await?;
 

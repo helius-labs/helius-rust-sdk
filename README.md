@@ -154,6 +154,16 @@ async fn main() {
         .build()
         .await
         .expect("Failed to build client");
+
+    // Send RPC rebates to a wallet (adds rebate-address=<wallet> to the RPC URL).
+    // The address is validated, so replace the placeholder with your base58 wallet address first
+    let helius = HeliusBuilder::new()
+        .with_api_key("YOUR_API_KEY").unwrap()
+        .with_cluster(Cluster::MainnetBeta)
+        .with_rebate_address("YOUR_WALLET_ADDRESS").unwrap()
+        .build()
+        .await
+        .expect("Failed to build client");
 }
 ```
 

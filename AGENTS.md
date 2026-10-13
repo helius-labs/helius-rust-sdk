@@ -104,7 +104,7 @@ let helius = HeliusBuilder::new()
     .await?;
 ```
 
-Builder methods: `with_api_key()`, `with_cluster()`, `with_custom_url()`, `with_custom_api_url()`, `with_custom_ws_url()`, `with_commitment()`, `with_async_solana()`, `with_websocket()`, `with_http_client()`, `with_mev_protect()`.
+Builder methods: `with_api_key()`, `with_cluster()`, `with_custom_url()`, `with_custom_api_url()`, `with_custom_ws_url()`, `with_commitment()`, `with_async_solana()`, `with_websocket()`, `with_http_client()`, `with_mev_protect()`, `with_rebate_address()`.
 
 ### `HeliusFactory` — Multi-Cluster
 
