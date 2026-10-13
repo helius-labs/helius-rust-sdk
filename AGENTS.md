@@ -71,7 +71,7 @@ async fn main() -> helius::error::Result<()> {
 let helius = Helius::new("your-api-key", Cluster::MainnetBeta)?;
 ```
 
-Simplest constructor. Synchronous — no `.await` needed. Provides RPC methods, webhooks, Enhanced Transactions, smart transactions, and Wallet API. No async Solana client or WebSocket support.
+Simplest constructor. Synchronous — no `.await` needed. Provides RPC methods, webhooks, Parsed Events, smart transactions, and Wallet API. No async Solana client or WebSocket support.
 
 ### `Helius::new_async` — Full-Featured Async Client
 
@@ -457,11 +457,14 @@ helius.fetch_tip_floor_75th()                                            // Get 
 helius.warm_sender_connection(region)                                    // Warm connection via /ping
 ```
 
-### Enhanced Transactions
+### Parsed Events (replaces Enhanced Transactions)
 
 ```rust
-helius.parse_transactions(ParseTransactionsRequest { transactions })     // Parse by signatures
-helius.parsed_transaction_history(ParsedTransactionHistoryRequest { address, .. })  // Parse by address
+// Types: helius::types::parsed_events::*. Mainnet only.
+helius.parsed_events().parse_transactions(ParseTransactionsRequest { transactions, .. })              // Parse by signatures
+helius.parsed_events().get_transaction_history(GetTransactionHistoryRequest { address, .. })          // Parse address history
+helius.parse_transactions(ParseTransactionsRequest { transactions })                                  // Deprecated: use parsed_events()
+helius.parsed_transaction_history(ParsedTransactionHistoryRequest { address, .. })                    // Deprecated: use parsed_events()
 ```
 
 ### Webhooks

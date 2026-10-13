@@ -17,12 +17,28 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - `HeliusBuilder::with_mev_protect(bool)` and `Config::with_mev_protect(bool)` add `mev-protect=true` to the RPC URL, so every send through the client is protected (`send_transaction`, `send_smart_transaction`, and the async Solana client). WebSocket URLs are unaffected. `Config::mev_protect()` reports whether it is on, including for a custom RPC URL that already carries the parameter.
   - `SenderSendOptions::mev_protect` (`Option<bool>`, set with `with_mev_protect`) overrides the client setting per call for `send_smart_transaction_with_sender`, `send_and_confirm_via_sender`, and `send_bundle_with_sender`; `None` follows the client. Combined with `swqos_only`, the Sender URL is `/fast?swqos_only=true&mev-protect=true`.
   - Non-breaking: the setting is stored on `Config::endpoints.rpc` rather than in a new `Config` field, so struct-literal `Config` construction keeps compiling, and `SenderSendOptions` is already `#[non_exhaustive]`.
+- **Parsed Events API.** `Helius::parsed_events()` returns a client for [Parsed Events](https://www.helius.dev/docs/parsed-events), which decodes transactions into instructions, transfers, and summaries. It matches the TS SDK's `helius.parsedEvents` namespace. Mainnet only; requires an API key.
+  - `parse_transactions` (`POST /v1/parsed-events/transactions`, up to 100 signatures) returns one `ParsedTransactionResult` per signature, in order. A missing or unparseable transaction is an item with `parser_status: ParserStatus::Error` and a `parser_error`, not a failed request.
+  - `get_transaction_history` (`POST /v1/parsed-events/transaction-history`) returns a page of results for an address, with `slot` / `time` bounds and manual pagination via `pagination_token`. An empty `pagination_token` is treated as no cursor.
+  - `parse_transactions_raw` and `get_transaction_history_raw` return the body as `Bytes`, for decoding with `decode_response` off the runtime.
+  - Types are in `helius::types::parsed_events` and are not glob-exported from `helius::types`, because names such as `ParseTransactionsRequest` already belong to the enhanced API.
+  - The network check fails closed, so a non-mainnet client never silently receives mainnet data: a `Cluster::Devnet` client, or one whose RPC host has a `devnet` or `testnet` label, is rejected with `HeliusError::InvalidInput` before any request is sent. Custom URLs default the cluster to `Devnet`, so a mainnet custom URL needs `.with_cluster(Cluster::MainnetBeta)` on `HeliusBuilder` (the error says so). Requests always go to `https://mainnet.helius-rpc.com/v1/parsed-events`, as in the TS SDK, whatever the RPC URL; only a hand-built `Config` with a loopback RPC endpoint (as in the mockito tests) is used as-is.
+  - `ParserStatus` and `ParsedTransactionStatus` deserialize unrecognized values as `Unknown` (serialized as `"UNKNOWN"`), so a status added to the API later does not fail a whole page.
+  - `examples/parsed_events/` shows both methods.
 - `HeliusError` now implements `From<tokio::task::JoinError>`, mapping to `HeliusError::Unknown` with a 500 status, so the result of a `spawn_blocking` decode can be unwrapped with `??` inside a function returning the SDK's `Result`.
 
 ### Changed
 - The typed request path is now `send_raw` followed by `decode_response` (and `post_rpc_request` is `post_rpc_request_raw` followed by `decode_rpc_response`), so the raw and typed paths cannot drift apart. Results and errors of the typed methods are unchanged for any response that is valid UTF-8, which every well-formed JSON response is.
 - Response bodies are read as bytes rather than text, which removes a UTF-8 validation pass over every payload; simd-json and serde_json validate what they consume. **One edge case is stricter as a result:** a 2xx body containing bytes that are not valid UTF-8 previously had them replaced with U+FFFD by `reqwest`'s text decoding and then deserialized; it now fails with `HeliusError::SerdeJson`, since simd-json and serde_json both reject invalid UTF-8 inside strings. JSON is required to be UTF-8 (RFC 8259), so a well-formed response is unaffected. Error bodies are converted lossily (assuming UTF-8, ignoring any declared charset) for the error message.
 - `bytes` is now a direct dependency. It was already in the dependency graph via `reqwest`, so no new crate is compiled.
+
+### Deprecated
+- The Enhanced Transactions API methods `Helius::parse_transactions`, `parse_transactions_raw`, `parsed_transaction_history`, and `parsed_transaction_history_raw` are deprecated in favor of `Helius::parsed_events()`. The API is in maintenance mode. They keep working, and devnet code should keep using them, since Parsed Events is mainnet only. See the [migration guide](https://www.helius.dev/docs/parsed-events/guides/migrate-from-enhanced-transactions). In short, `parse_transactions` maps to `parsed_events().parse_transactions` and `parsed_transaction_history` to `parsed_events().get_transaction_history`, with these differences:
+  - `commitment` defaults to `confirmed` (was `finalized`); pass `ParsedEventsCommitment::Finalized` to keep the old behavior.
+  - `limit` defaults to 100 (was 10).
+  - History requires a wallet address; program-wide scans and the `source` / `transaction_type` filters are not supported (filter client-side on `parsed.summary`).
+  - Results are wrapped: `{ signature, parser_status, parsed, parser_error }`, and history pages are `{ data, pagination_token }`.
+  - Parsed Events is mainnet only, so devnet code should stay on the enhanced methods for now.
 
 ## [3.0.1] - 2026-09-21
 

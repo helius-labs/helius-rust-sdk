@@ -1,3 +1,6 @@
+// Exercises the deprecated Enhanced Transactions API on purpose
+#![allow(deprecated)]
+
 use bytes::Bytes;
 use helius::config::Config;
 use helius::error::{HeliusError, Result};

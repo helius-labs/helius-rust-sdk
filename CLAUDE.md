@@ -25,7 +25,8 @@ cargo publish                  # Publish to crates.io
 - `src/error.rs` — `HeliusError` enum & `Result<T>` type alias
 
 ### Features
-- `src/enhanced_transactions.rs` — `parse_transactions`, `parsed_transaction_history`
+- `src/parsed_events.rs` — Parsed Events API via `helius.parsed_events()` (`parse_transactions`, `get_transaction_history`)
+- `src/enhanced_transactions.rs` — `parse_transactions`, `parsed_transaction_history` (deprecated; replaced by Parsed Events)
 - `src/optimized_transaction.rs` — Smart transactions, Helius Sender, priority fees
 - `src/webhook.rs` — Webhook CRUD and address management
 - `src/wallet.rs` — Wallet API (identity, balances, transfers, history, funding source)
@@ -38,10 +39,12 @@ cargo publish                  # Publish to crates.io
 - `src/types/options.rs` — Request option structs
 - `src/types/enhanced_websocket.rs` — WebSocket subscription types
 - `src/types/enhanced_transaction_types.rs` — Enhanced transaction types
+- `src/types/parsed_events.rs` — Parsed Events types (not glob-exported; import from `helius::types::parsed_events`)
 
 ### Examples (`examples/`)
 - `das/` — DAS API examples (get_asset_batch, get_asset_proof_batch, get_all_*)
-- `enhanced/` — Enhanced transaction parsing examples
+- `parsed_events/` — Parsed Events examples
+- `enhanced/` — Enhanced transaction parsing examples (deprecated API)
 - `helius/` — Helius-specific examples (config, RPC V2 methods, priority fees)
 - `solana/` — Standard Solana RPC examples (get_latest_blockhash)
 - `transactions/` — Smart transaction and Helius Sender examples
