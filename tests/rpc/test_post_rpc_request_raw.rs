@@ -89,6 +89,53 @@ fn test_decode_rpc_response_null_result_for_option() {
     assert!(decoded.is_none());
 }
 
+#[test]
+fn test_decode_rpc_response_rejects_missing_result() {
+    for body in [
+        b"".as_slice(),
+        br#"{"jsonrpc":"2.0","id":"1"}"#,
+        br#"{"jsonrpc":"2.0","id":"1","error":null}"#,
+    ] {
+        let decoded: Result<Option<Value>> = decode_rpc_response("getAsset", body);
+        assert!(decoded.is_err(), "missing result must fail, got {decoded:?}");
+    }
+}
+
+#[tokio::test]
+async fn test_get_asset_distinguishes_missing_result_from_null() {
+    let mut server = Server::new_async().await;
+    let helius = mock_helius(&server.url());
+
+    for (body, is_null_result) in [
+        ("", false),
+        (r#"{"jsonrpc":"2.0","id":"1"}"#, false),
+        (r#"{"jsonrpc":"2.0","id":"1","result":null}"#, true),
+    ] {
+        let mock = server
+            .mock("POST", "/?api-key=fake_api_key")
+            .with_status(200)
+            .with_header("content-type", "application/json")
+            .with_body(body)
+            .create_async()
+            .await;
+
+        let response = helius
+            .rpc()
+            .get_asset(helius::types::GetAsset {
+                id: "asset".to_string(),
+                ..Default::default()
+            })
+            .await;
+        if is_null_result {
+            assert!(matches!(response, Ok(None)), "expected no asset, got {response:?}");
+        } else {
+            assert!(response.is_err(), "broken response must fail, got {response:?}");
+        }
+        mock.assert_async().await;
+        server.reset();
+    }
+}
+
 /// A failure status is still mapped to an error on the raw path; the caller never sees an
 /// HTTP error body as `Bytes`.
 #[tokio::test]
