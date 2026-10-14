@@ -66,9 +66,9 @@ use solana_commitment_config::CommitmentConfig;
 /// A result that, if successful, contains the deserialized `result` field
 ///
 /// # Errors
-/// Returns `HeliusError::RpcError` if the envelope carries an `error` object, or neither a
-/// `result` nor an `error` that `T` can represent; `HeliusError::SerdeJson` if the body is not
-/// a valid envelope
+/// Returns `HeliusError::RpcError` if the envelope carries an `error` object, omits both
+/// `result` and `error`, or contains a null result that `T` cannot represent;
+/// `HeliusError::SerdeJson` if the body is empty or not a valid envelope
 pub fn decode_rpc_response<T>(method: &str, body: &[u8]) -> Result<T>
 where
     T: DeserializeOwned + Default,
@@ -92,13 +92,20 @@ where
     match rpc_response.result {
         Some(result) => Ok(result),
         // A `"result": null` response deserializes the outer `Option` to `None`, not
-        // `Some(None)`, so recover the null case for methods whose `T` can represent it
-        // (e.g. `Option<Asset>`). If `T` cannot deserialize from null, the response
-        // genuinely carried neither a result nor an error, so surface that.
-        None => serde_json::from_value::<T>(Value::Null).map_err(|_| HeliusError::RpcError {
-            code: 0,
-            message: format!("RPC method '{}' returned neither a result nor an error", method),
-        }),
+        // `Some(None)`. Check field presence before recovering null for nullable targets.
+        None => {
+            let envelope: Value = serde_json::from_slice(body)?;
+            if envelope.get("result").is_none() {
+                return Err(HeliusError::RpcError {
+                    code: 0,
+                    message: format!("RPC method '{}' returned neither a result nor an error", method),
+                });
+            }
+            serde_json::from_value::<T>(Value::Null).map_err(|_| HeliusError::RpcError {
+                code: 0,
+                message: format!("RPC method '{}' returned a null result that cannot be decoded", method),
+            })
+        }
     }
 }
 
