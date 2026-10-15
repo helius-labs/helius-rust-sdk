@@ -22,7 +22,7 @@ use std::sync::Arc;
 use crate::config::Config;
 use crate::error::{HeliusError, Result};
 use crate::request_handler::RequestHandler;
-use crate::types::inner::{RpcRequest, RpcResponse};
+use crate::types::inner::{RpcError, RpcRequest};
 use crate::types::{
     Asset, AssetList, AssetProof, EditionsList, GetAsset, GetAssetBatch, GetAssetProof, GetAssetProofBatch,
     GetAssetSignatures, GetAssetsByAuthority, GetAssetsByCreator, GetAssetsByGroup, GetAssetsByOwner, GetNftEditions,
@@ -37,10 +37,32 @@ use crate::types::{
 use bytes::Bytes;
 use reqwest::{Client, Method, Url};
 use serde::de::DeserializeOwned;
-use serde::Serialize;
+use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::Value;
 use solana_client::rpc_client::RpcClient as SolanaRpcClient;
 use solana_commitment_config::CommitmentConfig;
+
+// Keep field presence in the decoder without changing the public RpcResponse type.
+#[derive(Deserialize, Default)]
+#[serde(bound(deserialize = "T: Deserialize<'de>"))]
+struct RpcResponseWithPresence<T> {
+    #[serde(rename = "jsonrpc")]
+    _jsonrpc: String,
+    #[serde(default, rename = "id")]
+    _id: Option<String>,
+    #[serde(default, deserialize_with = "deserialize_present_result")]
+    result: Option<Option<T>>,
+    #[serde(default)]
+    error: Option<RpcError>,
+}
+
+fn deserialize_present_result<'de, D, T>(deserializer: D) -> std::result::Result<Option<Option<T>>, D::Error>
+where
+    D: Deserializer<'de>,
+    T: Deserialize<'de>,
+{
+    Option::<T>::deserialize(deserializer).map(Some)
+}
 
 /// Decodes a raw JSON-RPC envelope into the method's result the way the typed methods do
 ///
@@ -66,14 +88,20 @@ use solana_commitment_config::CommitmentConfig;
 /// A result that, if successful, contains the deserialized `result` field
 ///
 /// # Errors
-/// Returns `HeliusError::RpcError` if the envelope carries an `error` object, or neither a
-/// `result` nor an `error` that `T` can represent; `HeliusError::SerdeJson` if the body is not
-/// a valid envelope
+/// Returns `HeliusError::RpcError` if the body is empty, the envelope carries an `error` object, omits both
+/// `result` and `error`, or contains a null result that `T` cannot represent;
+/// `HeliusError::SerdeJson` if the body is not a valid envelope
 pub fn decode_rpc_response<T>(method: &str, body: &[u8]) -> Result<T>
 where
     T: DeserializeOwned + Default,
 {
-    let rpc_response: RpcResponse<T> = crate::request_handler::decode_response(body)?;
+    if body.is_empty() {
+        return Err(HeliusError::RpcError {
+            code: 0,
+            message: format!("RPC method '{}' returned an empty response body", method),
+        });
+    }
+    let rpc_response: RpcResponseWithPresence<T> = crate::request_handler::decode_response(body)?;
 
     // Solana/Helius report method-level failures as a JSON-RPC error object with an HTTP 200
     // status, so surface `error` before returning `result`.
@@ -90,12 +118,12 @@ where
     }
 
     match rpc_response.result {
-        Some(result) => Ok(result),
-        // A `"result": null` response deserializes the outer `Option` to `None`, not
-        // `Some(None)`, so recover the null case for methods whose `T` can represent it
-        // (e.g. `Option<Asset>`). If `T` cannot deserialize from null, the response
-        // genuinely carried neither a result nor an error, so surface that.
-        None => serde_json::from_value::<T>(Value::Null).map_err(|_| HeliusError::RpcError {
+        Some(Some(result)) => Ok(result),
+        Some(None) => serde_json::from_value::<T>(Value::Null).map_err(|_| HeliusError::RpcError {
+            code: 0,
+            message: format!("RPC method '{}' returned a null result that cannot be decoded", method),
+        }),
+        None => Err(HeliusError::RpcError {
             code: 0,
             message: format!("RPC method '{}' returned neither a result nor an error", method),
         }),

@@ -89,6 +89,89 @@ fn test_decode_rpc_response_null_result_for_option() {
     assert!(decoded.is_none());
 }
 
+#[test]
+fn test_decode_rpc_response_rejects_missing_result() {
+    for body in [
+        br#"{"jsonrpc":"2.0","id":"1"}"#.as_slice(),
+        br#"{"jsonrpc":"2.0","id":"1","error":null}"#,
+    ] {
+        let decoded: Result<Option<Value>> = decode_rpc_response("getAsset", body);
+        assert_rpc_error(decoded, "RPC method 'getAsset' returned neither a result nor an error");
+    }
+}
+
+fn assert_rpc_error<T: std::fmt::Debug>(result: Result<T>, expected_message: &str) {
+    match result {
+        Err(HeliusError::RpcError { code, message }) => {
+            assert_eq!(code, 0);
+            assert_eq!(message, expected_message);
+        }
+        other => panic!("Expected HeliusError::RpcError, got {other:?}"),
+    }
+}
+
+#[test]
+fn test_decode_rpc_response_rejects_empty_body() {
+    let decoded: Result<Option<Value>> = decode_rpc_response("getAsset", b"");
+    assert_rpc_error(decoded, "RPC method 'getAsset' returned an empty response body");
+}
+
+#[test]
+fn test_decode_rpc_response_rejects_null_for_non_nullable_result() {
+    let decoded: Result<u64> = decode_rpc_response("getAsset", br#"{"jsonrpc":"2.0","result":null}"#);
+    assert_rpc_error(
+        decoded,
+        "RPC method 'getAsset' returned a null result that cannot be decoded",
+    );
+}
+
+#[test]
+fn test_decode_rpc_response_preserves_result_value() {
+    let decoded: Option<Value> =
+        decode_rpc_response("getAsset", br#"{"jsonrpc":"2.0","result":{"id":"asset"}}"#).unwrap();
+    assert_eq!(decoded, Some(json!({"id": "asset"})));
+}
+
+#[tokio::test]
+async fn test_get_asset_distinguishes_missing_result_from_null() {
+    for (body, expected_error) in [
+        ("", Some("RPC method 'getAsset' returned an empty response body")),
+        (
+            r#"{"jsonrpc":"2.0","id":"1"}"#,
+            Some("RPC method 'getAsset' returned neither a result nor an error"),
+        ),
+        (
+            r#"{"jsonrpc":"2.0","id":"1","error":null}"#,
+            Some("RPC method 'getAsset' returned neither a result nor an error"),
+        ),
+        (r#"{"jsonrpc":"2.0","id":"1","result":null}"#, None),
+    ] {
+        let mut server: Server = Server::new_with_opts_async(mockito::ServerOpts::default()).await;
+        let helius = mock_helius(&server.url());
+        let mock = server
+            .mock("POST", "/?api-key=fake_api_key")
+            .with_status(200)
+            .with_header("content-type", "application/json")
+            .with_body(body)
+            .create_async()
+            .await;
+
+        let response = helius
+            .rpc()
+            .get_asset(helius::types::GetAsset {
+                id: "asset".to_string(),
+                ..Default::default()
+            })
+            .await;
+        if let Some(message) = expected_error {
+            assert_rpc_error(response, message);
+        } else {
+            assert!(matches!(response, Ok(None)), "expected no asset, got {response:?}");
+        }
+        mock.assert_async().await;
+    }
+}
+
 /// A failure status is still mapped to an error on the raw path; the caller never sees an
 /// HTTP error body as `Bytes`.
 #[tokio::test]
