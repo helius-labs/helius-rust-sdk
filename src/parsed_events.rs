@@ -2,6 +2,7 @@ use crate::config::Config;
 use crate::error::{HeliusError, Result};
 use crate::types::parsed_events::{
     GetTransactionHistoryRequest, GetTransactionHistoryResponse, ParseTransactionsRequest, ParsedTransactionResult,
+    ScanRequest, ScanResponse,
 };
 use crate::types::Cluster;
 use crate::Helius;
@@ -19,7 +20,8 @@ impl Helius {
     /// Parsed Events decodes transactions and address history into instructions, transfers, and
     /// summaries using Helius's IDL catalog. It is the successor to the Enhanced Transactions API
     /// ([`Helius::parse_transactions`], [`Helius::parsed_transaction_history`]). Requires an API
-    /// key, and is mainnet only. Each request costs 10 credits.
+    /// key, and is mainnet only. Each request costs 10 credits, plus 1 per history page scanned
+    /// for [`ParsedEvents::scan`].
     ///
     /// # Example
     /// ```no_run
@@ -161,6 +163,96 @@ impl ParsedEvents<'_> {
     /// blocking thread.
     pub async fn get_transaction_history_raw(&self, request: GetTransactionHistoryRequest) -> Result<Bytes> {
         let url: Url = self.url("transaction-history")?;
+
+        self.helius
+            .rpc_client
+            .handler
+            .send_raw(Method::POST, url, Some(&request))
+            .await
+    }
+
+    /// Scans an address's history server-side and returns only the transactions that match
+    /// `criteria`, parsed
+    ///
+    /// Match on a program's instructions (by IDL name or data discriminator), on token mints,
+    /// or both. Use this instead of paging through
+    /// [`get_transaction_history`](Self::get_transaction_history) and filtering client-side.
+    /// Each item in `data` has the same shape as a
+    /// [`parse_transactions`](Self::parse_transactions) result.
+    ///
+    /// One request stops at the first of: `limit` matches, `budget.max_scanned_transactions`
+    /// scanned (10,000 by default), the end of the history or window, or the server's time
+    /// limit. `scan.stopped_on` says which. A stopped scan is still a success: call again with
+    /// the returned `pagination_token` while one is present, **even when `data` is empty**.
+    ///
+    /// Costs 10 credits plus 1 per history page scanned (up to 1,000 transactions each), so at
+    /// most 20 credits with the default budget. `scan.credits_charged` reports the charge.
+    ///
+    /// # Example
+    /// ```no_run
+    /// # use helius::error::Result;
+    /// # use helius::types::parsed_events::{ScanMatch, ScanProgramMatch, ScanRequest};
+    /// # use helius::Helius;
+    /// # async fn run(helius: Helius) -> Result<()> {
+    /// const PUMP_FUN: &str = "6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P";
+    ///
+    /// let mut pagination_token: Option<String> = None;
+    /// loop {
+    ///     let page = helius
+    ///         .parsed_events()
+    ///         .scan(ScanRequest {
+    ///             address: PUMP_FUN.to_string(),
+    ///             criteria: ScanMatch {
+    ///                 program: Some(ScanProgramMatch {
+    ///                     program_id: PUMP_FUN.to_string(),
+    ///                     instructions: Some(vec!["buy".to_string(), "sell".to_string()]),
+    ///                     ..Default::default()
+    ///                 }),
+    ///                 ..Default::default()
+    ///             },
+    ///             pagination_token,
+    ///             ..Default::default()
+    ///         })
+    ///         .await?;
+    ///
+    ///     for result in &page.data {
+    ///         println!("{}", result.signature);
+    ///     }
+    ///
+    ///     // Keep going while a token is returned, even when this page had no matches
+    ///     pagination_token = page.pagination_token;
+    ///     if pagination_token.is_none() {
+    ///         break;
+    ///     }
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
+    ///
+    /// # Errors
+    /// Returns `HeliusError::InvalidInput` if no API key is configured or the client is not on
+    /// mainnet. The server's `400` (e.g. `criteria` sets neither `program` nor `mints`, an
+    /// instruction name is not in the program's IDLs, or a limit is out of range) surfaces as
+    /// `HeliusError::BadRequest` with its message. A `503` (at capacity, or the first history
+    /// page missed the time limit) surfaces as `HeliusError::Unknown`; retry it
+    pub async fn scan(&self, request: ScanRequest) -> Result<ScanResponse> {
+        let url: Url = self.url("scan")?;
+
+        self.helius
+            .rpc_client
+            .handler
+            .send(Method::POST, url, Some(&request))
+            .await
+    }
+
+    /// Scans an address's history, returning the response body undecoded
+    ///
+    /// Identical to [`scan`](Self::scan) on the wire and in error handling, but the JSON is
+    /// handed back as `Bytes`. Decode it with
+    /// [`decode_response`](crate::request_handler::decode_response) on a blocking thread when
+    /// pages carry many parsed transactions.
+    pub async fn scan_raw(&self, request: ScanRequest) -> Result<Bytes> {
+        let url: Url = self.url("scan")?;
 
         self.helius
             .rpc_client

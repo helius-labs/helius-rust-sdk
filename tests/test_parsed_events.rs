@@ -6,11 +6,12 @@ use helius::rpc_client::RpcClient;
 use helius::types::parsed_events::{
     ComparisonBounds, GetTransactionHistoryRequest, GetTransactionHistoryResponse, ParseTransactionsRequest,
     ParsedEventsCommitment, ParsedEventsSortOrder, ParsedTransactionResult, ParsedTransactionStatus, ParserStatus,
+    ScanBudget, ScanMatch, ScanProgramMatch, ScanRequest, ScanResponse, ScanStatusFilter, ScanStopReason,
 };
 use helius::types::{ApiKey, Cluster, HeliusEndpoints};
 use helius::{Helius, HeliusBuilder};
 use mockito::{Matcher, Server};
-use reqwest::Client;
+use reqwest::{Client, StatusCode};
 use serde_json::json;
 use std::sync::Arc;
 
@@ -397,6 +398,324 @@ async fn test_parse_transactions_maps_gateway_auth_error() {
         HeliusError::Unauthorized { text, .. } => assert!(text.contains("invalid api key provided"), "{text}"),
         other => panic!("expected Unauthorized, got {other:?}"),
     }
+}
+
+const PUMP_FUN: &str = "6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P";
+const USDC: &str = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
+
+fn pump_fun_scan(instructions: &[&str]) -> ScanRequest {
+    ScanRequest {
+        address: PUMP_FUN.to_string(),
+        criteria: ScanMatch {
+            program: Some(ScanProgramMatch {
+                program_id: PUMP_FUN.to_string(),
+                instructions: Some(instructions.iter().map(|name| name.to_string()).collect()),
+                ..Default::default()
+            }),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+#[tokio::test]
+async fn test_scan_posts_match_criteria_and_returns_matches_with_a_summary() {
+    let mut server: Server = Server::new_with_opts_async(mockito::ServerOpts::default()).await;
+    let mock = server
+        .mock("POST", "/v1/parsed-events/scan?api-key=test-key")
+        .match_body(Matcher::Json(json!({
+            "address": PUMP_FUN,
+            "match": {
+                "program": { "programId": PUMP_FUN, "instructions": ["buy", "sell"] },
+                "mints": [USDC]
+            },
+            "limit": 1,
+            "budget": { "maxScannedTransactions": 2000 },
+            "sortOrder": "asc",
+            "commitment": "finalized",
+            "status": "any",
+            "minContextSlot": 460000000,
+            "time": { "gte": 1735689600 },
+            "paginationToken": "460869102:203"
+        })))
+        .with_status(200)
+        .with_body(
+            json!({
+                "data": parse_transactions_body().as_array().unwrap()[..1],
+                "paginationToken": "460869102:204",
+                "scan": {
+                    "stoppedOn": "limit",
+                    "scannedTransactions": 1,
+                    "matchedTransactions": 1,
+                    "scannedThrough": { "slot": 460869102, "blockTime": 1792848886 },
+                    "creditsCharged": 11
+                }
+            })
+            .to_string(),
+        )
+        .create();
+
+    let helius: Helius = helius_for(&server, Cluster::MainnetBeta, Some("test-key"));
+    let mut request: ScanRequest = pump_fun_scan(&["buy", "sell"]);
+    request.criteria.mints = Some(vec![USDC.to_string()]);
+    let page: ScanResponse = helius
+        .parsed_events()
+        .scan(ScanRequest {
+            limit: Some(1),
+            budget: Some(ScanBudget {
+                max_scanned_transactions: Some(2000),
+            }),
+            sort_order: Some(ParsedEventsSortOrder::Asc),
+            commitment: Some(ParsedEventsCommitment::Finalized),
+            status: Some(ScanStatusFilter::Any),
+            min_context_slot: Some(460_000_000),
+            time: Some(ComparisonBounds {
+                gte: Some(1_735_689_600),
+                ..Default::default()
+            }),
+            pagination_token: Some("460869102:203".to_string()),
+            ..request
+        })
+        .await
+        .expect("scan should succeed");
+
+    mock.assert();
+    assert_eq!(page.data.len(), 1);
+    assert_eq!(page.data[0].signature, SIG);
+    assert_eq!(page.data[0].parser_status, ParserStatus::Ok);
+    assert_eq!(page.pagination_token.as_deref(), Some("460869102:204"));
+    assert_eq!(page.scan.stopped_on, ScanStopReason::Limit);
+    assert_eq!(page.scan.scanned_transactions, 1);
+    assert_eq!(page.scan.matched_transactions, 1);
+    assert_eq!(page.scan.credits_charged, 11);
+    let through = page.scan.scanned_through.expect("scanned_through");
+    assert_eq!((through.slot, through.block_time), (460_869_102, Some(1_792_848_886)));
+}
+
+/// A budget stop with no matches is still a page to continue from, not the end
+#[tokio::test]
+async fn test_scan_budget_stop_returns_an_empty_page_with_a_token() {
+    let mut server: Server = Server::new_with_opts_async(mockito::ServerOpts::default()).await;
+    server
+        .mock("POST", "/v1/parsed-events/scan?api-key=test-key")
+        .with_status(200)
+        .with_body(
+            json!({
+                "data": [],
+                "paginationToken": "460903064:422",
+                "scan": {
+                    "stoppedOn": "budget",
+                    "scannedTransactions": 2000,
+                    "matchedTransactions": 0,
+                    "scannedThrough": { "slot": 460903064, "blockTime": 1792856105 },
+                    "creditsCharged": 12
+                }
+            })
+            .to_string(),
+        )
+        .create();
+
+    let helius: Helius = helius_for(&server, Cluster::MainnetBeta, Some("test-key"));
+    let page: ScanResponse = helius
+        .parsed_events()
+        .scan(pump_fun_scan(&["set_params"]))
+        .await
+        .unwrap();
+
+    assert!(page.data.is_empty());
+    assert_eq!(page.pagination_token.as_deref(), Some("460903064:422"));
+    assert_eq!(page.scan.stopped_on, ScanStopReason::Budget);
+    assert_eq!(page.scan.scanned_transactions, 2000);
+}
+
+#[tokio::test]
+async fn test_scan_window_end_has_no_token_and_tolerates_unknown_values() {
+    let mut server: Server = Server::new_with_opts_async(mockito::ServerOpts::default()).await;
+    server
+        .mock("POST", "/v1/parsed-events/scan?api-key=test-key")
+        .with_status(200)
+        .with_body(
+            json!({
+                "data": [],
+                "scan": { "stoppedOn": "windowEnd", "scannedTransactions": 0, "matchedTransactions": 0, "creditsCharged": 10 }
+            })
+            .to_string(),
+        )
+        .create();
+
+    let helius: Helius = helius_for(&server, Cluster::MainnetBeta, Some("test-key"));
+    let page: ScanResponse = helius.parsed_events().scan(pump_fun_scan(&["buy"])).await.unwrap();
+    assert_eq!(page.scan.stopped_on, ScanStopReason::WindowEnd);
+    assert_eq!(page.pagination_token, None);
+    assert_eq!(page.scan.scanned_through, None);
+
+    // A stop reason added to the API later does not fail the page
+    let page: ScanResponse = decode_response(
+        json!({ "data": [], "scan": { "stoppedOn": "somethingNew", "creditsCharged": 10 } })
+            .to_string()
+            .as_bytes(),
+    )
+    .unwrap();
+    assert_eq!(page.scan.stopped_on, ScanStopReason::Unknown);
+}
+
+/// Unset options and an empty cursor stay out of the body, since the server rejects unknown or
+/// null fields
+#[tokio::test]
+async fn test_scan_omits_unset_options_and_an_empty_pagination_token() {
+    let mut server: Server = Server::new_with_opts_async(mockito::ServerOpts::default()).await;
+    let mock = server
+        .mock("POST", "/v1/parsed-events/scan?api-key=test-key")
+        .match_body(Matcher::Json(json!({
+            "address": ADDRESS,
+            "match": { "mints": [USDC] }
+        })))
+        .with_status(200)
+        .with_body(r#"{"data":[],"scan":{"stoppedOn":"windowEnd"}}"#)
+        .expect(2)
+        .create();
+
+    let helius: Helius = helius_for(&server, Cluster::MainnetBeta, Some("test-key"));
+    for pagination_token in [None, Some(String::new())] {
+        helius
+            .parsed_events()
+            .scan(ScanRequest {
+                address: ADDRESS.to_string(),
+                criteria: ScanMatch {
+                    mints: Some(vec![USDC.to_string()]),
+                    ..Default::default()
+                },
+                pagination_token,
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+    }
+
+    mock.assert();
+}
+
+#[tokio::test]
+async fn test_scan_discriminators_serialize_without_instructions() {
+    let mut server: Server = Server::new_with_opts_async(mockito::ServerOpts::default()).await;
+    let mock = server
+        .mock("POST", "/v1/parsed-events/scan?api-key=test-key")
+        .match_body(Matcher::Json(json!({
+            "address": ADDRESS,
+            "match": { "program": { "programId": PUMP_FUN, "discriminators": ["0x66063d1201daebea"] } }
+        })))
+        .with_status(200)
+        .with_body(r#"{"data":[],"scan":{"stoppedOn":"windowEnd"}}"#)
+        .create();
+
+    let helius: Helius = helius_for(&server, Cluster::MainnetBeta, Some("test-key"));
+    helius
+        .parsed_events()
+        .scan(ScanRequest {
+            address: ADDRESS.to_string(),
+            criteria: ScanMatch {
+                program: Some(ScanProgramMatch {
+                    program_id: PUMP_FUN.to_string(),
+                    discriminators: Some(vec!["0x66063d1201daebea".to_string()]),
+                    ..Default::default()
+                }),
+                ..Default::default()
+            },
+            ..Default::default()
+        })
+        .await
+        .unwrap();
+
+    mock.assert();
+}
+
+#[tokio::test]
+async fn test_scan_maps_a_rejected_request_to_bad_request() {
+    let mut server: Server = Server::new_with_opts_async(mockito::ServerOpts::default()).await;
+    server
+        .mock("POST", "/v1/parsed-events/scan?api-key=test-key")
+        .with_status(400)
+        .with_body(
+            r#"{"error":"match.program.instructions not found in the IDLs of 6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P: not_a_real_ix"}"#,
+        )
+        .create();
+
+    let helius: Helius = helius_for(&server, Cluster::MainnetBeta, Some("test-key"));
+    let err: HeliusError = helius
+        .parsed_events()
+        .scan(pump_fun_scan(&["not_a_real_ix"]))
+        .await
+        .unwrap_err();
+
+    match err {
+        HeliusError::BadRequest { path, text } => {
+            assert_eq!(path, "/v1/parsed-events/scan");
+            assert!(text.contains("not_a_real_ix"), "{text}");
+        }
+        other => panic!("expected BadRequest, got {other:?}"),
+    }
+}
+
+#[tokio::test]
+async fn test_scan_surfaces_a_retryable_503() {
+    let mut server: Server = Server::new_with_opts_async(mockito::ServerOpts::default()).await;
+    server
+        .mock("POST", "/v1/parsed-events/scan?api-key=test-key")
+        .with_status(503)
+        .with_body(r#"{"error":"service unavailable"}"#)
+        .create();
+
+    let helius: Helius = helius_for(&server, Cluster::MainnetBeta, Some("test-key"));
+    let err: HeliusError = helius.parsed_events().scan(pump_fun_scan(&["buy"])).await.unwrap_err();
+
+    match err {
+        HeliusError::Unknown { code, text } => {
+            assert_eq!(code, StatusCode::SERVICE_UNAVAILABLE);
+            assert_eq!(text, "service unavailable");
+        }
+        other => panic!("expected Unknown, got {other:?}"),
+    }
+}
+
+#[tokio::test]
+async fn test_scan_raw_decodes_off_runtime() {
+    let mut server: Server = Server::new_with_opts_async(mockito::ServerOpts::default()).await;
+    server
+        .mock("POST", "/v1/parsed-events/scan?api-key=test-key")
+        .with_status(200)
+        .with_body(
+            json!({
+                "data": parse_transactions_body(),
+                "paginationToken": "next",
+                "scan": { "stoppedOn": "deadline", "scannedTransactions": 3000, "matchedTransactions": 2, "creditsCharged": 13 }
+            })
+            .to_string(),
+        )
+        .create();
+
+    let helius: Helius = helius_for(&server, Cluster::MainnetBeta, Some("test-key"));
+    let body: Bytes = helius.parsed_events().scan_raw(pump_fun_scan(&["buy"])).await.unwrap();
+
+    let page: ScanResponse = tokio::task::spawn_blocking(move || decode_response(&body))
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(page.data.len(), 2);
+    assert_eq!(page.scan.stopped_on, ScanStopReason::Deadline);
+    assert_eq!(page.scan.credits_charged, 13);
+}
+
+#[tokio::test]
+async fn test_scan_rejects_devnet_without_a_request() {
+    let mut server: Server = Server::new_with_opts_async(mockito::ServerOpts::default()).await;
+    let mock = server.mock("POST", Matcher::Any).expect(0).create();
+
+    let helius: Helius = helius_for(&server, Cluster::Devnet, Some("test-key"));
+    match helius.parsed_events().scan(pump_fun_scan(&["buy"])).await {
+        Err(HeliusError::InvalidInput(msg)) => assert_eq!(msg, "Parsed Events is only available on mainnet"),
+        other => panic!("expected InvalidInput, got {other:?}"),
+    }
+    mock.assert();
 }
 
 #[tokio::test]

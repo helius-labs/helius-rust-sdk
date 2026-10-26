@@ -301,10 +301,11 @@ Our SDK is designed to provide a seamless developer experience when building on 
 - [`get_validity_proof`](https://www.helius.dev/docs/api-reference/zk-compression/getvalidityproof) - Gets a validity proof for compressed data
 
 ### Parsed Events API
-[Parsed Events](https://www.helius.dev/docs/parsed-events) decodes transactions into instructions, transfers, and summaries using Helius's IDL catalog. It is the successor to the Enhanced Transactions API. Mainnet only (with a custom RPC URL, set `.with_cluster(Cluster::MainnetBeta)`); requires an API key; 10 credits per request. Available on `helius.parsed_events()`, with types in `helius::types::parsed_events`.
+[Parsed Events](https://www.helius.dev/docs/parsed-events) decodes transactions into instructions, transfers, and summaries using Helius's IDL catalog. It is the successor to the Enhanced Transactions API. Mainnet only (with a custom RPC URL, set `.with_cluster(Cluster::MainnetBeta)`); requires an API key; 10 credits per request, plus 1 per history page scanned for `scan`. Available on `helius.parsed_events()`, with types in `helius::types::parsed_events`.
 - [`parse_transactions`](https://www.helius.dev/docs/api-reference/parsed-events/transactions) - Parses up to 100 transaction signatures. Each result carries a `parser_status`, so a missing transaction comes back as an item-level `parser_error` instead of failing the request
 - [`get_transaction_history`](https://www.helius.dev/docs/api-reference/parsed-events/transaction-history) - Returns parsed transaction history for an address with slot and block-time bounds, paginated with `pagination_token`
-- `parse_transactions_raw` / `get_transaction_history_raw` - Same requests, with the response body returned as `Bytes` for decoding off the async runtime
+- [`scan`](https://www.helius.dev/docs/api-reference/parsed-events/scan) - Searches an address's history server-side for transactions that call a program's instructions (by IDL name or discriminator) or touch token mints, and returns only the parsed matches. Each request scans up to 10,000 transactions and reports why it stopped in `scan.stopped_on`; keep calling with `pagination_token` while one is returned, even when `data` is empty
+- `parse_transactions_raw` / `get_transaction_history_raw` / `scan_raw` - Same requests, with the response body returned as `Bytes` for decoding off the async runtime
 
 See `examples/parsed_events/`.
 

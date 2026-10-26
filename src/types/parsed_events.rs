@@ -151,6 +151,187 @@ pub struct GetTransactionHistoryResponse {
     pub pagination_token: Option<String>,
 }
 
+/// Request for [`ParsedEvents::scan`](crate::parsed_events::ParsedEvents::scan)
+/// (`POST /v1/parsed-events/scan`)
+///
+/// Walks one address's history and returns only the transactions that match `criteria`, parsed.
+/// One request scans at most `budget.max_scanned_transactions` transactions, so a scan for rare
+/// matches can return an empty page with a `pagination_token`; keep calling while one is returned
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct ScanRequest {
+    /// Address whose history is scanned. Scan the narrowest address you can: every transaction
+    /// in its history counts toward the budget
+    pub address: String,
+    /// What a transaction must match (serialized as `match`). Set `program`, `mints`, or both
+    #[serde(rename = "match")]
+    pub criteria: ScanMatch,
+    /// Most matches to return, from 1 to 100. Defaults to 100
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub limit: Option<u32>,
+    /// Limits on how much history one request scans
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub budget: Option<ScanBudget>,
+    /// Scan transactions before this signature
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub before_signature: Option<String>,
+    /// Scan transactions after this signature
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub after_signature: Option<String>,
+    /// Cursor returned by a previous scan. An empty string is treated as no cursor, so a
+    /// response's `pagination_token` can be passed straight back
+    #[serde(skip_serializing_if = "is_none_or_empty")]
+    pub pagination_token: Option<String>,
+    /// Order in which history is scanned and matches are returned. Defaults to `desc`
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sort_order: Option<ParsedEventsSortOrder>,
+    /// Commitment level for the history fetch. Defaults to `confirmed`
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub commitment: Option<ParsedEventsCommitment>,
+    /// Execution result to include. Defaults to `succeeded`. Excluded transactions do not count
+    /// toward the budget
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub status: Option<ScanStatusFilter>,
+    /// Minimum slot at which the request can be evaluated
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub min_context_slot: Option<u64>,
+    /// Include raw Solana transaction payloads as `raw_transaction`. Defaults to `false`
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub include_raw_transaction: Option<bool>,
+    /// Slot bounds
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub slot: Option<ComparisonBounds>,
+    /// Block-time bounds in whole Unix seconds
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub time: Option<ComparisonBounds>,
+}
+
+/// What a scanned transaction must match. Set `program`, `mints`, or both; with both, a
+/// transaction must match both. Setting neither is rejected by the server
+#[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ScanMatch {
+    /// Match transactions with an instruction of a program, top-level or inner (CPI)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub program: Option<ScanProgramMatch>,
+    /// Match transactions with one of these mints in their pre or post token balances. Max 20
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub mints: Option<Vec<String>>,
+}
+
+/// Matches transactions with an instruction of `program_id`. Set `instructions` or
+/// `discriminators` to narrow the match (not both), or neither to match any instruction of the
+/// program
+#[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ScanProgramMatch {
+    /// Program address
+    pub program_id: String,
+    /// Instruction names from any IDL version of the program, as the IDL spells them or in
+    /// snake_case. A name not in the program's IDLs is rejected. Max 50
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub instructions: Option<Vec<String>>,
+    /// Instruction data prefixes, each 1 to 8 hex-encoded bytes with an optional `0x` prefix,
+    /// for programs without an IDL. Max 50
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub discriminators: Option<Vec<String>>,
+}
+
+/// Limits on how much history one scan request covers
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ScanBudget {
+    /// Most transactions to scan in this request, from 1 to 10,000. Defaults to 10,000
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_scanned_transactions: Option<u32>,
+}
+
+/// Which execution results a scan includes
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum ScanStatusFilter {
+    /// Successful transactions only (the default)
+    Succeeded,
+    /// Failed transactions only
+    Failed,
+    /// Both
+    Any,
+}
+
+/// A page of scan matches, with a summary of how far the scan got
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct ScanResponse {
+    /// Parsed matches, each with the same shape as a
+    /// [`parse_transactions`](crate::parsed_events::ParsedEvents::parse_transactions) result.
+    /// Can be empty while `pagination_token` is set
+    #[serde(default)]
+    pub data: Vec<ParsedTransactionResult>,
+    /// Cursor where the next scan continues. `None` once the scan reached the end of the
+    /// history or window
+    #[serde(default)]
+    pub pagination_token: Option<String>,
+    /// How far this request scanned and why it stopped
+    #[serde(default)]
+    pub scan: ScanSummary,
+}
+
+/// How far a scan request got and why it stopped
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct ScanSummary {
+    /// Why the scan stopped
+    pub stopped_on: ScanStopReason,
+    /// Transactions scanned in this request
+    #[serde(default)]
+    pub scanned_transactions: u64,
+    /// Matches returned in this request
+    #[serde(default)]
+    pub matched_transactions: u64,
+    /// The last transaction scanned, or `None` when nothing was scanned
+    #[serde(default)]
+    pub scanned_through: Option<ScannedThrough>,
+    /// Credits charged: 10 per request plus 1 per history page scanned (up to 1,000
+    /// transactions each)
+    #[serde(default)]
+    pub credits_charged: u64,
+}
+
+/// Why a scan request stopped
+///
+/// Unrecognized values deserialize as `Unknown`, so a reason added to the API later does not
+/// fail the response
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+#[non_exhaustive]
+pub enum ScanStopReason {
+    /// Reached the end of the history or the requested window. No `pagination_token`
+    WindowEnd,
+    /// Returned `limit` matches. The token resumes right after the last match
+    Limit,
+    /// Scanned `budget.max_scanned_transactions` transactions. The token resumes at the next
+    /// history page
+    Budget,
+    /// Reached the request time limit. The token resumes at the next history page
+    Deadline,
+    /// A value this SDK does not recognize, or a response without a summary. It serializes as
+    /// `"unknown"`, so the original value is not preserved through a round trip
+    #[default]
+    #[serde(other)]
+    Unknown,
+}
+
+/// Position of the last transaction a scan request covered
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ScannedThrough {
+    /// Slot of the last transaction scanned
+    pub slot: u64,
+    /// Block time of the last transaction scanned, in Unix seconds, when available
+    #[serde(default)]
+    pub block_time: Option<i64>,
+}
+
 /// The result for one signature.
 ///
 /// A missing or unparseable transaction does not fail the request: its item has
