@@ -5,8 +5,10 @@ use helius::request_handler::decode_response;
 use helius::rpc_client::RpcClient;
 use helius::types::parsed_events::{
     ComparisonBounds, GetTransactionHistoryRequest, GetTransactionHistoryResponse, ParseTransactionsRequest,
-    ParsedEventsCommitment, ParsedEventsSortOrder, ParsedTransactionResult, ParsedTransactionStatus, ParserStatus,
-    ScanBudget, ScanMatch, ScanProgramMatch, ScanRequest, ScanResponse, ScanStatusFilter, ScanStopReason,
+    ParsedEventsCommitment, ParsedEventsSortOrder, ParsedEventsStatusFilter, ParsedTransactionResult,
+    ParsedTransactionStatus, ParserStatus, RawTransactionEncoding, ScanBudget, ScanCountResponse, ScanMatch,
+    ScanProgramMatch, ScanRequest, ScanResponse, ScanSignature, ScanSignaturesResponse, ScanStopReason,
+    TokenAccountsFilter,
 };
 use helius::types::{ApiKey, Cluster, HeliusEndpoints};
 use helius::{Helius, HeliusBuilder};
@@ -108,7 +110,7 @@ async fn test_parse_transactions_posts_signatures_and_returns_per_item_results()
         .match_body(Matcher::Json(json!({
             "transactions": [SIG, "missing"],
             "commitment": "finalized",
-            "includeRawTransaction": true
+            "rawTransaction": "jsonParsed"
         })))
         .with_status(200)
         .with_header("Content-Type", "application/json")
@@ -121,7 +123,7 @@ async fn test_parse_transactions_posts_signatures_and_returns_per_item_results()
         .parse_transactions(ParseTransactionsRequest {
             transactions: vec![SIG.to_string(), "missing".to_string()],
             commitment: Some(ParsedEventsCommitment::Finalized),
-            include_raw_transaction: Some(true),
+            raw_transaction: Some(RawTransactionEncoding::JsonParsed),
         })
         .await
         .expect("parse_transactions should succeed");
@@ -198,6 +200,25 @@ async fn test_parse_transactions_tolerates_an_unknown_status() {
     assert_eq!(serde_json::to_value(ParserStatus::Unknown).unwrap(), "UNKNOWN");
 }
 
+#[test]
+fn test_raw_transaction_encodings_use_the_api_spelling() {
+    for (encoding, wire) in [
+        (RawTransactionEncoding::None, "none"),
+        (RawTransactionEncoding::Json, "json"),
+        (RawTransactionEncoding::JsonParsed, "jsonParsed"),
+        (RawTransactionEncoding::Base64, "base64"),
+    ] {
+        assert_eq!(serde_json::to_value(encoding).unwrap(), wire);
+    }
+    for (filter, wire) in [
+        (TokenAccountsFilter::None, "none"),
+        (TokenAccountsFilter::BalanceChanged, "balanceChanged"),
+        (TokenAccountsFilter::All, "all"),
+    ] {
+        assert_eq!(serde_json::to_value(filter).unwrap(), wire);
+    }
+}
+
 #[tokio::test]
 async fn test_get_transaction_history_posts_address_and_filters() {
     let mut server: Server = Server::new_with_opts_async(mockito::ServerOpts::default()).await;
@@ -207,6 +228,10 @@ async fn test_get_transaction_history_posts_address_and_filters() {
             "address": ADDRESS,
             "limit": 50,
             "sortOrder": "asc",
+            "status": "any",
+            "tokenAccounts": "balanceChanged",
+            "minContextSlot": 433000000,
+            "rawTransaction": "base64",
             "slot": { "gte": 433000000 },
             "time": { "lt": 1784487060 },
             "paginationToken": "433000000:0"
@@ -232,6 +257,10 @@ async fn test_get_transaction_history_posts_address_and_filters() {
             address: ADDRESS.to_string(),
             limit: Some(50),
             sort_order: Some(ParsedEventsSortOrder::Asc),
+            status: Some(ParsedEventsStatusFilter::Any),
+            token_accounts: Some(TokenAccountsFilter::BalanceChanged),
+            min_context_slot: Some(433_000_000),
+            raw_transaction: Some(RawTransactionEncoding::Base64),
             slot: Some(ComparisonBounds {
                 gte: Some(433_000_000),
                 ..Default::default()
@@ -407,11 +436,11 @@ fn pump_fun_scan(instructions: &[&str]) -> ScanRequest {
     ScanRequest {
         address: PUMP_FUN.to_string(),
         criteria: ScanMatch {
-            program: Some(ScanProgramMatch {
+            programs: Some(vec![ScanProgramMatch {
                 program_id: PUMP_FUN.to_string(),
                 instructions: Some(instructions.iter().map(|name| name.to_string()).collect()),
                 ..Default::default()
-            }),
+            }]),
             ..Default::default()
         },
         ..Default::default()
@@ -426,7 +455,7 @@ async fn test_scan_posts_match_criteria_and_returns_matches_with_a_summary() {
         .match_body(Matcher::Json(json!({
             "address": PUMP_FUN,
             "match": {
-                "program": { "programId": PUMP_FUN, "instructions": ["buy", "sell"] },
+                "programs": [{ "programId": PUMP_FUN, "instructions": ["buy", "sell"] }],
                 "mints": [USDC]
             },
             "limit": 1,
@@ -434,7 +463,9 @@ async fn test_scan_posts_match_criteria_and_returns_matches_with_a_summary() {
             "sortOrder": "asc",
             "commitment": "finalized",
             "status": "any",
+            "tokenAccounts": "all",
             "minContextSlot": 460000000,
+            "rawTransaction": "json",
             "time": { "gte": 1735689600 },
             "paginationToken": "460869102:203"
         })))
@@ -467,8 +498,10 @@ async fn test_scan_posts_match_criteria_and_returns_matches_with_a_summary() {
             }),
             sort_order: Some(ParsedEventsSortOrder::Asc),
             commitment: Some(ParsedEventsCommitment::Finalized),
-            status: Some(ScanStatusFilter::Any),
+            status: Some(ParsedEventsStatusFilter::Any),
+            token_accounts: Some(TokenAccountsFilter::All),
             min_context_slot: Some(460_000_000),
+            raw_transaction: Some(RawTransactionEncoding::Json),
             time: Some(ComparisonBounds {
                 gte: Some(1_735_689_600),
                 ..Default::default()
@@ -595,14 +628,21 @@ async fn test_scan_omits_unset_options_and_an_empty_pagination_token() {
     mock.assert();
 }
 
+/// Several programs, each with names, discriminators, both, or neither
 #[tokio::test]
-async fn test_scan_discriminators_serialize_without_instructions() {
+async fn test_scan_serializes_several_programs() {
+    const JUPITER: &str = "JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4";
     let mut server: Server = Server::new_with_opts_async(mockito::ServerOpts::default()).await;
     let mock = server
         .mock("POST", "/v1/parsed-events/scan?api-key=test-key")
         .match_body(Matcher::Json(json!({
             "address": ADDRESS,
-            "match": { "program": { "programId": PUMP_FUN, "discriminators": ["0x66063d1201daebea"] } }
+            "match": {
+                "programs": [
+                    { "programId": PUMP_FUN, "instructions": ["buy"], "discriminators": ["0x66063d1201daebea"] },
+                    { "programId": JUPITER }
+                ]
+            }
         })))
         .with_status(200)
         .with_body(r#"{"data":[],"scan":{"stoppedOn":"windowEnd"}}"#)
@@ -614,11 +654,17 @@ async fn test_scan_discriminators_serialize_without_instructions() {
         .scan(ScanRequest {
             address: ADDRESS.to_string(),
             criteria: ScanMatch {
-                program: Some(ScanProgramMatch {
-                    program_id: PUMP_FUN.to_string(),
-                    discriminators: Some(vec!["0x66063d1201daebea".to_string()]),
-                    ..Default::default()
-                }),
+                programs: Some(vec![
+                    ScanProgramMatch {
+                        program_id: PUMP_FUN.to_string(),
+                        instructions: Some(vec!["buy".to_string()]),
+                        discriminators: Some(vec!["0x66063d1201daebea".to_string()]),
+                    },
+                    ScanProgramMatch {
+                        program_id: JUPITER.to_string(),
+                        ..Default::default()
+                    },
+                ]),
                 ..Default::default()
             },
             ..Default::default()
@@ -627,6 +673,118 @@ async fn test_scan_discriminators_serialize_without_instructions() {
         .unwrap();
 
     mock.assert();
+}
+
+/// The signatures shape sends the same request plus `returnShape`, and returns signature rows
+#[tokio::test]
+async fn test_scan_signatures_sends_the_shape_and_returns_signature_rows() {
+    let mut server: Server = Server::new_with_opts_async(mockito::ServerOpts::default()).await;
+    let mock = server
+        .mock("POST", "/v1/parsed-events/scan?api-key=test-key")
+        .match_body(Matcher::Json(json!({
+            "address": PUMP_FUN,
+            "match": { "programs": [{ "programId": PUMP_FUN, "instructions": ["buy"] }] },
+            "tokenAccounts": "balanceChanged",
+            "returnShape": "signatures"
+        })))
+        .with_status(200)
+        .with_body(
+            json!({
+                "data": [
+                    { "signature": "sig-a", "slot": 460869102, "transactionIndex": 203, "blockTime": 1792848886 },
+                    { "signature": "sig-b", "slot": 460869090, "transactionIndex": 7, "blockTime": null }
+                ],
+                "paginationToken": "460868000:0",
+                "scan": {
+                    "stoppedOn": "budget",
+                    "scannedTransactions": 10000,
+                    "matchedTransactions": 2,
+                    "scannedThrough": { "slot": 460868000, "blockTime": 1792848000 },
+                    "creditsCharged": 20
+                }
+            })
+            .to_string(),
+        )
+        .create();
+
+    let helius: Helius = helius_for(&server, Cluster::MainnetBeta, Some("test-key"));
+    let page: ScanSignaturesResponse = helius
+        .parsed_events()
+        .scan_signatures(ScanRequest {
+            token_accounts: Some(TokenAccountsFilter::BalanceChanged),
+            ..pump_fun_scan(&["buy"])
+        })
+        .await
+        .unwrap();
+
+    mock.assert();
+    assert_eq!(
+        page.data,
+        vec![
+            ScanSignature {
+                signature: "sig-a".to_string(),
+                slot: 460_869_102,
+                transaction_index: 203,
+                block_time: Some(1_792_848_886),
+            },
+            ScanSignature {
+                signature: "sig-b".to_string(),
+                slot: 460_869_090,
+                transaction_index: 7,
+                block_time: None,
+            },
+        ]
+    );
+    assert_eq!(page.pagination_token.as_deref(), Some("460868000:0"));
+    assert_eq!(page.scan.stopped_on, ScanStopReason::Budget);
+    assert_eq!(page.scan.matched_transactions, 2);
+}
+
+/// The count shape has no `data`; the count is `scan.matched_transactions`
+#[tokio::test]
+async fn test_scan_count_sends_the_shape_and_reads_the_count() {
+    let mut server: Server = Server::new_with_opts_async(mockito::ServerOpts::default()).await;
+    let mock = server
+        .mock("POST", "/v1/parsed-events/scan?api-key=test-key")
+        .match_body(Matcher::Json(json!({
+            "address": ADDRESS,
+            "match": { "mints": [USDC] },
+            "returnShape": "count"
+        })))
+        .with_status(200)
+        .with_body(
+            json!({
+                "scan": {
+                    "stoppedOn": "windowEnd",
+                    "scannedTransactions": 812,
+                    "matchedTransactions": 37,
+                    "scannedThrough": { "slot": 460000000, "blockTime": 1792000000 },
+                    "creditsCharged": 11
+                }
+            })
+            .to_string(),
+        )
+        .create();
+
+    let helius: Helius = helius_for(&server, Cluster::MainnetBeta, Some("test-key"));
+    let page: ScanCountResponse = helius
+        .parsed_events()
+        .scan_count(ScanRequest {
+            address: ADDRESS.to_string(),
+            criteria: ScanMatch {
+                mints: Some(vec![USDC.to_string()]),
+                ..Default::default()
+            },
+            ..Default::default()
+        })
+        .await
+        .unwrap();
+
+    mock.assert();
+    assert_eq!(page.pagination_token, None);
+    assert_eq!(page.scan.stopped_on, ScanStopReason::WindowEnd);
+    assert_eq!(page.scan.matched_transactions, 37);
+    assert_eq!(page.scan.scanned_transactions, 812);
 }
 
 #[tokio::test]

@@ -9,7 +9,9 @@ const PUMP_FUN: &str = "6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P";
 ///
 /// Each request scans up to 10,000 transactions and returns only the parsed matches. A request
 /// that runs out of budget before finding a match returns an empty page with a
-/// `pagination_token`, so keep calling while one is returned. Parsed Events is mainnet only.
+/// `pagination_token`, so keep calling while one is returned. `scan_signatures` and `scan_count`
+/// take the same request when you need only the signatures or the number of matches. Parsed
+/// Events is mainnet only.
 #[tokio::main]
 async fn main() -> Result<()> {
     let api_key: &str = "your_api_key";
@@ -24,11 +26,11 @@ async fn main() -> Result<()> {
             .scan(ScanRequest {
                 address: PUMP_FUN.to_string(),
                 criteria: ScanMatch {
-                    program: Some(ScanProgramMatch {
+                    programs: Some(vec![ScanProgramMatch {
                         program_id: PUMP_FUN.to_string(),
                         instructions: Some(vec!["buy".to_string(), "sell".to_string()]),
                         ..Default::default()
-                    }),
+                    }]),
                     ..Default::default()
                 },
                 limit: Some(100),

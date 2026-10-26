@@ -472,16 +472,18 @@ let page = helius.parsed_events().get_transaction_history(GetTransactionHistoryR
 }).await?;
 
 // Server-side search of an address's history: only matching transactions come back, parsed.
-// `criteria` is serialized as `match`: a program's instructions (IDL names or hex discriminators),
-// token mints, or both. 10 credits + 1 per 1,000-transaction history page scanned.
+// `criteria` is serialized as `match`: up to 20 programs (each narrowed by IDL instruction names
+// and/or hex discriminators), token mints, or both. 10 credits + 1 per 1,000-transaction history
+// page scanned. scan_signatures / scan_count take the same request and return only signatures
+// or only the number of matches (no limit; every match in the scanned range).
 let page = helius.parsed_events().scan(ScanRequest {
     address: "6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P".to_string(),
     criteria: ScanMatch {
-        program: Some(ScanProgramMatch {
+        programs: Some(vec![ScanProgramMatch {
             program_id: "6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P".to_string(),
             instructions: Some(vec!["buy".to_string(), "sell".to_string()]),
             ..Default::default()
-        }),
+        }]),
         ..Default::default()
     },
     ..Default::default()
@@ -490,7 +492,7 @@ let page = helius.parsed_events().scan(ScanRequest {
 // page.pagination_token while it is Some, even when page.data is empty.
 ```
 
-`parse_transactions_raw`, `get_transaction_history_raw`, and `scan_raw` return the body as `Bytes` for decoding off the runtime, like the enhanced `_raw` methods below.
+`parse_transactions_raw`, `get_transaction_history_raw`, and `scan_raw` return the body as `Bytes` for decoding off the runtime, like the enhanced `_raw` methods below. Set `raw_transaction: Some(RawTransactionEncoding::Json | JsonParsed | Base64)` on any request to also get each original transaction in the `getTransaction` shape. History and scan take `token_accounts: Some(TokenAccountsFilter::BalanceChanged)` to include transactions that touch only the address's token accounts.
 
 ### Parsed Streams
 

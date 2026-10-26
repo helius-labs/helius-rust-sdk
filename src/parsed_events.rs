@@ -2,13 +2,14 @@ use crate::config::Config;
 use crate::error::{HeliusError, Result};
 use crate::types::parsed_events::{
     GetTransactionHistoryRequest, GetTransactionHistoryResponse, ParseTransactionsRequest, ParsedTransactionResult,
-    ScanRequest, ScanResponse,
+    ScanCountResponse, ScanRequest, ScanResponse, ScanSignaturesResponse,
 };
 use crate::types::Cluster;
 use crate::Helius;
 
 use bytes::Bytes;
 use reqwest::{Method, Url};
+use serde::{de::DeserializeOwned, Serialize};
 use url::Host;
 
 /// Base URL for Parsed Events endpoints. Parsed Events is mainnet-only.
@@ -174,11 +175,13 @@ impl ParsedEvents<'_> {
     /// Scans an address's history server-side and returns only the transactions that match
     /// `criteria`, parsed
     ///
-    /// Match on a program's instructions (by IDL name or data discriminator), on token mints,
+    /// Match on programs' instructions (by IDL name and/or data discriminator), on token mints,
     /// or both. Use this instead of paging through
     /// [`get_transaction_history`](Self::get_transaction_history) and filtering client-side.
     /// Each item in `data` has the same shape as a
-    /// [`parse_transactions`](Self::parse_transactions) result.
+    /// [`parse_transactions`](Self::parse_transactions) result. For just the matching
+    /// signatures, or only how many matched, use [`scan_signatures`](Self::scan_signatures) or
+    /// [`scan_count`](Self::scan_count) with the same request.
     ///
     /// One request stops at the first of: `limit` matches, `budget.max_scanned_transactions`
     /// scanned (10,000 by default), the end of the history or window, or the server's time
@@ -203,11 +206,11 @@ impl ParsedEvents<'_> {
     ///         .scan(ScanRequest {
     ///             address: PUMP_FUN.to_string(),
     ///             criteria: ScanMatch {
-    ///                 program: Some(ScanProgramMatch {
+    ///                 programs: Some(vec![ScanProgramMatch {
     ///                     program_id: PUMP_FUN.to_string(),
     ///                     instructions: Some(vec!["buy".to_string(), "sell".to_string()]),
     ///                     ..Default::default()
-    ///                 }),
+    ///                 }]),
     ///                 ..Default::default()
     ///             },
     ///             pagination_token,
@@ -231,10 +234,11 @@ impl ParsedEvents<'_> {
     ///
     /// # Errors
     /// Returns `HeliusError::InvalidInput` if no API key is configured or the client is not on
-    /// mainnet. The server's `400` (e.g. `criteria` sets neither `program` nor `mints`, an
-    /// instruction name is not in the program's IDLs, or a limit is out of range) surfaces as
-    /// `HeliusError::BadRequest` with its message. A `503` (at capacity, or the first history
-    /// page missed the time limit) surfaces as `HeliusError::Unknown`; retry it
+    /// mainnet. The server's `400` (e.g. `criteria` sets neither `programs` nor `mints`, a
+    /// program is listed twice, an instruction name is not in the program's IDLs, or a limit is
+    /// out of range) surfaces as `HeliusError::BadRequest` with its message. A `503` (at
+    /// capacity, or the first history page missed the time limit) surfaces as
+    /// `HeliusError::Unknown`; retry it
     pub async fn scan(&self, request: ScanRequest) -> Result<ScanResponse> {
         let url: Url = self.url("scan")?;
 
@@ -242,6 +246,58 @@ impl ParsedEvents<'_> {
             .rpc_client
             .handler
             .send(Method::POST, url, Some(&request))
+            .await
+    }
+
+    /// Scans an address's history like [`scan`](Self::scan), returning the signature, slot,
+    /// position, and block time of every match instead of parsed transactions
+    ///
+    /// Takes the same request, but returns every match in the scanned range: `limit` and
+    /// `raw_transaction` are ignored, and a request stops only at the end of the history or
+    /// window, the budget, or the time limit. Paginate with `pagination_token` as for `scan`.
+    /// Costs the same as `scan`.
+    ///
+    /// # Errors
+    /// The same as [`scan`](Self::scan)
+    pub async fn scan_signatures(&self, request: ScanRequest) -> Result<ScanSignaturesResponse> {
+        self.scan_with_shape(&request, "signatures").await
+    }
+
+    /// Scans an address's history like [`scan`](Self::scan), returning only how many
+    /// transactions matched, as `scan.matched_transactions`
+    ///
+    /// Takes the same request, but counts every match in the scanned range: `limit` and
+    /// `raw_transaction` are ignored, and a request stops only at the end of the history or
+    /// window, the budget, or the time limit. When `pagination_token` is returned, the count
+    /// covers only the range scanned so far; keep calling and add up the counts for a total.
+    /// Costs the same as `scan`.
+    ///
+    /// # Errors
+    /// The same as [`scan`](Self::scan)
+    pub async fn scan_count(&self, request: ScanRequest) -> Result<ScanCountResponse> {
+        self.scan_with_shape(&request, "count").await
+    }
+
+    /// Sends a scan with `returnShape` set. [`scan`](Self::scan) leaves it out, since
+    /// `transactions` is the default
+    async fn scan_with_shape<T>(&self, request: &ScanRequest, return_shape: &'static str) -> Result<T>
+    where
+        T: DeserializeOwned + Default,
+    {
+        #[derive(Serialize, Debug)]
+        #[serde(rename_all = "camelCase")]
+        struct ShapedScanRequest<'a> {
+            #[serde(flatten)]
+            request: &'a ScanRequest,
+            return_shape: &'static str,
+        }
+
+        let url: Url = self.url("scan")?;
+
+        self.helius
+            .rpc_client
+            .handler
+            .send(Method::POST, url, Some(&ShapedScanRequest { request, return_shape }))
             .await
     }
 
