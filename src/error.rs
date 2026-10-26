@@ -97,7 +97,8 @@ pub enum HeliusError {
     /// including any structured `data` the server supplied
     ///
     /// A `code` of `0` is a client-side sentinel (not a server code) used when a response
-    /// contained neither a `result` nor an `error` object
+    /// contained neither a `result` nor an `error` object, a `result` of the wrong type, or an
+    /// `error` object without a code
     #[error("RPC error (code {code}): {message}")]
     RpcError { code: i64, message: String },
 

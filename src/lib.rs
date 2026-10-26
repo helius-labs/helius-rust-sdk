@@ -7,6 +7,7 @@ pub mod error;
 pub mod factory;
 pub mod optimized_transaction;
 pub mod parsed_events;
+pub mod parsed_streams;
 pub mod preconf;
 pub mod request_handler;
 pub mod rpc_client;

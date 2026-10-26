@@ -83,6 +83,8 @@ examples/
 ├── parsed_events/                            # Parsed Events transaction parsing (mainnet)
 │   ├── parse_transactions.rs                 #   Parse transactions by signature
 │   ├── get_transaction_history.rs            #   Paginated parsed history for an address
+├── parsed_streams/                           # Parsed Streams real-time decoded transactions
+│   └── subscribe.rs                          #   Stream decoded Jupiter swaps
 ├── enhanced/                                 # Enhanced transaction parsing (deprecated API)
 │   ├── get_parse_transactions.rs             #   Parse transactions by signature
 │   ├── get_parsed_transaction_history.rs     #   Parsed tx history for address
@@ -469,6 +471,38 @@ let page = helius.parsed_events().get_transaction_history(GetTransactionHistoryR
 ```
 
 `parse_transactions_raw` and `get_transaction_history_raw` return the body as `Bytes` for decoding off the runtime, like the enhanced `_raw` methods below.
+
+### Parsed Streams
+
+Decoded transactions pushed over WebSocket, filtered on the server by program, instruction name, account, or account role. Same transfer and summary types as Parsed Events. 1 credit per delivered event. `helius.parsed_streams()?` (mainnet only, requires an API key) or `ParsedStreamsClient::new(api_key)`. One client is one connection (up to 25 subscriptions); clone it rather than creating more.
+
+```rust
+use futures_util::StreamExt;
+use helius::parsed_streams::ParsedStreamsOptions;
+use helius::types::parsed_streams::{ParsedTransactionFilter, ParsedTransactionSubscribeOptions, ParsedStreamDetails};
+
+let streams = helius.parsed_streams_with_options(
+    ParsedStreamsOptions::default()
+        .with_on_reconnect(|info| eprintln!("backfill after slot {:?}", info.last_slot)),
+)?;
+
+let mut sub = streams.parsed_transaction_subscribe(
+    ParsedTransactionFilter {
+        programs: Some(vec!["JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4".to_string()]),
+        instruction_names: Some(vec!["route".to_string()]),
+        ..Default::default()
+    },
+    Some(ParsedTransactionSubscribeOptions { details: Some(ParsedStreamDetails::Matched), ..Default::default() }),
+).await?;
+
+// Stream of Result<ParsedTransactionNotification>; dropping it unsubscribes
+while let Some(notification) = sub.next().await {
+    let notification = notification?;
+    println!("slot {} {}", notification.context.slot, notification.value.transaction.signature);
+}
+```
+
+Delivery is at most once. The client reconnects with backoff and resubscribes automatically; `on_reconnect` gives `{ close_code, last_slot }` for backfilling from RPC. A subscription ends with an error (never silent drops) on a slow consumer, a 1008 policy close (slow consumer, or API key or plan changed), a filter rejected on resubscribe, or exhausted reconnect attempts. The client pings every 30s to keep the connection open. `raw_transaction_subscribe(filter)` streams base58 instruction data only.
 
 ### Enhanced Transactions (Deprecated)
 
