@@ -19,10 +19,9 @@ use super::parsed_events::{DecodedInstruction, ParsedNativeTransfer, ParsedSumma
 /// Which instructions a subscription matches
 ///
 /// At least one of `programs` or `accounts.include` is required. The fields you set combine
-/// with AND: an instruction must satisfy all of them to match. Take instruction and role names
-/// from [`ParsedStreamsClient::describe_program`](crate::parsed_streams::ParsedStreamsClient::describe_program),
-/// since a guessed name is valid but matches nothing. The server rejects unknown fields and
-/// filters over its limits with a JSON-RPC error
+/// with AND: an instruction must satisfy all of them to match. A misspelled instruction or role
+/// name is valid but matches nothing. The server rejects unknown fields and filters over its
+/// limits with a JSON-RPC error
 #[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct ParsedTransactionFilter {
@@ -266,26 +265,6 @@ pub struct RawStreamInstruction {
     pub program_id: String,
     /// Instruction data as it appears on chain, base58
     pub data: String,
-}
-
-/// A program's names as the Parsed Streams matcher compares them, from
-/// [`ParsedStreamsClient::describe_program`](crate::parsed_streams::ParsedStreamsClient::describe_program)
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
-pub struct ProgramDescription {
-    /// Program address (base58). Check it when you looked the program up by name
-    pub id: String,
-    /// Catalog name
-    pub name: String,
-    /// Decoded instruction names, for `instruction_names`
-    #[serde(default)]
-    pub instructions: Vec<String>,
-    /// Event names the parser recognizes
-    #[serde(default)]
-    pub events: Vec<String>,
-    /// Account role names, for the keys of `accounts.roles`
-    #[serde(default)]
-    pub roles: Vec<String>,
 }
 
 /// Passed to the `on_reconnect` callback once subscriptions are restored on a new connection

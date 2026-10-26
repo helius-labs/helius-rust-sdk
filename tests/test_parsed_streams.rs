@@ -103,8 +103,8 @@ fn docs_notification(subscription: u64) -> Value {
 }
 
 /// Starts a local WebSocket server that acks subscribe with id 23, then sends `notification`,
-/// answers unsubscribe with `true`, and answers `describeProgram`. Each request it receives is
-/// forwarded on the returned channel
+/// and answers unsubscribe with `true`. Each request it receives is forwarded on the returned
+/// channel
 async fn start_server() -> (String, mpsc::UnboundedReceiver<Value>) {
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let url = format!("ws://{}", listener.local_addr().unwrap());
@@ -126,17 +126,6 @@ async fn start_server() -> (String, mpsc::UnboundedReceiver<Value>) {
                             vec![json!({"jsonrpc": "2.0", "id": id, "result": 23}), docs_notification(23)]
                         }
                         "parsedTransactionUnsubscribe" => vec![json!({"jsonrpc": "2.0", "id": id, "result": true})],
-                        "describeProgram" => vec![json!({
-                            "jsonrpc": "2.0",
-                            "id": id,
-                            "result": {
-                                "id": JUPITER,
-                                "name": "jupiter",
-                                "instructions": ["route", "shared_accounts_route", "exact_out_route"],
-                                "events": ["SwapEvent"],
-                                "roles": ["user_transfer_authority", "destination_token_account"]
-                            }
-                        })],
                         other => panic!("unexpected method {other}"),
                     };
                     for reply in replies {
@@ -153,19 +142,7 @@ async fn start_server() -> (String, mpsc::UnboundedReceiver<Value>) {
 #[tokio::test]
 async fn test_parsed_streams_over_a_real_websocket() {
     let (url, mut requests) = start_server().await;
-    let options = ParsedStreamsOptions::default()
-        .with_url(url.clone())
-        .with_discovery_url(url);
-    let streams = ParsedStreamsClient::with_options("test-key", options).unwrap();
-
-    let program = streams.describe_program(JUPITER).await.unwrap();
-    assert_eq!(program.id, JUPITER);
-    assert_eq!(
-        program.roles,
-        vec!["user_transfer_authority", "destination_token_account"]
-    );
-    let request = requests.recv().await.unwrap();
-    assert_eq!(request["params"], json!([{ "program": JUPITER }]));
+    let streams = ParsedStreamsClient::with_options("test-key", ParsedStreamsOptions::default().with_url(url)).unwrap();
 
     let mut subscription = streams
         .parsed_transaction_subscribe(

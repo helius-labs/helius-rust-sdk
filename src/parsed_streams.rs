@@ -15,9 +15,10 @@
 //! [`ParsedStreamsOptions::with_on_reconnect`] so you can backfill the gap from RPC.
 //!
 //! A subscription fails, rather than silently dropping data, when it cannot be kept alive: the
-//! server closed the connection because the client fell more than 2048 notifications behind
-//! (close code 1008), [`SUBSCRIPTION_BUFFER_LIMIT`] notifications sit unread, the server rejects
-//! its filter on resubscribe, or the reconnect attempts run out.
+//! server closed the connection with a policy violation (close code 1008, sent when the client
+//! fell more than 2048 notifications behind, or when the API key or plan changed),
+//! [`SUBSCRIPTION_BUFFER_LIMIT`] notifications sit unread, the server rejects its filter on
+//! resubscribe, or the reconnect attempts run out.
 //!
 //! # Transport & wire format
 //!
@@ -28,9 +29,10 @@
 //! - `parsedTransactionUnsubscribe` — unsubscribe. Responds with a boolean.
 //! - `parsedTransactionNotification` — one per matching transaction per subscription.
 //!
-//! `describeProgram` is served from a separate endpoint (`wss://fs-beta.helius-rpc.com`) and
-//! runs on its own short-lived connection. Client messages are paced to the server's limit of 10
-//! per second, and each connection holds up to 25 subscriptions.
+//! Client messages are paced to the server's limit of 10 per second, and each connection holds
+//! up to 25 subscriptions. The server drops a connection the client has not written to for 5
+//! minutes, even while it streams, so the client sends a WebSocket ping every 30 seconds; the
+//! pongs also tell it the connection is alive.
 
 use std::collections::{BTreeMap, HashMap, VecDeque};
 use std::fmt;
@@ -63,7 +65,7 @@ use crate::error::{HeliusError, Result};
 use crate::parsed_events::ensure_mainnet;
 use crate::types::parsed_streams::{
     ParsedStreamsReconnectInfo, ParsedTransactionFilter, ParsedTransactionNotification,
-    ParsedTransactionSubscribeOptions, ParsedTransactionValue, ProgramDescription, RawTransactionValue,
+    ParsedTransactionSubscribeOptions, ParsedTransactionValue, RawTransactionValue,
 };
 use crate::types::ApiKey;
 use crate::Helius;
@@ -71,16 +73,12 @@ use crate::Helius;
 /// Gatekeeper endpoint that serves Parsed Streams subscriptions. The API key is appended
 pub const PARSED_STREAMS_URL: &str = "wss://beta.helius-rpc.com/?api-key=";
 
-/// Endpoint that currently serves `describeProgram`. The API key is appended
-pub const PARSED_STREAMS_DISCOVERY_URL: &str = "wss://fs-beta.helius-rpc.com/?api-key=";
-
 /// Unread notifications a subscription buffers before it fails as too slow
 pub const SUBSCRIPTION_BUFFER_LIMIT: usize = 10_000;
 
 const SUBSCRIBE_METHOD: &str = "parsedTransactionSubscribe";
 const UNSUBSCRIBE_METHOD: &str = "parsedTransactionUnsubscribe";
 const NOTIFICATION_METHOD: &str = "parsedTransactionNotification";
-const DESCRIBE_PROGRAM_METHOD: &str = "describeProgram";
 
 /// Gap between client messages. The server allows 10 per second
 const MIN_SEND_INTERVAL: Duration = Duration::from_millis(100);
@@ -88,7 +86,11 @@ const BACKOFF_BASE: Duration = Duration::from_secs(1);
 const BACKOFF_MAX: Duration = Duration::from_secs(30);
 /// How long a request, or a connection handshake, may go unanswered
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(15);
-/// Silence after which the connection is presumed dead. The server pings every 15 seconds
+/// How often the client pings. The server drops a connection the client has not written to for
+/// 5 minutes, even while it streams
+const PING_INTERVAL: Duration = Duration::from_secs(30);
+/// Silence after which the connection is presumed dead. Every frame counts, including the pongs
+/// that answer the client's pings, since the server does not ping on its own
 const LIVENESS_TIMEOUT: Duration = Duration::from_secs(60);
 /// Uptime after a reconnect that restores the full reconnect budget
 const STABLE_CONNECTION: Duration = Duration::from_secs(30);
@@ -96,8 +98,9 @@ const STABLE_CONNECTION: Duration = Duration::from_secs(30);
 const CLOSE_TIMEOUT: Duration = Duration::from_secs(1);
 const DEFAULT_MAX_RECONNECT_ATTEMPTS: u32 = 10;
 
-/// The server closed the connection because the client fell more than 2048 notifications behind
-const SLOW_CONSUMER_CLOSE_CODE: u16 = 1008;
+/// Policy violation. The server sends it when the client fell more than 2048 notifications behind,
+/// and also when the API key is deleted or the plan changes, so reconnecting would not help
+const POLICY_VIOLATION_CLOSE_CODE: u16 = 1008;
 /// Reported for a connection that dropped without a close frame
 const ABNORMAL_CLOSE_CODE: u16 = 1006;
 /// Reported for a close frame without a code
@@ -131,8 +134,6 @@ pub type ReconnectCallback = Arc<dyn Fn(ParsedStreamsReconnectInfo) + Send + Syn
 pub struct ParsedStreamsOptions {
     /// Override the subscription endpoint (full URL, including the API key)
     pub url: Option<String>,
-    /// Override the `describeProgram` endpoint (full URL, including the API key)
-    pub discovery_url: Option<String>,
     /// Reconnect and resubscribe when the connection closes. Defaults to `true`
     pub reconnect: bool,
     /// Consecutive failed reconnect attempts before giving up. Defaults to 10
@@ -145,7 +146,6 @@ impl Default for ParsedStreamsOptions {
     fn default() -> Self {
         Self {
             url: None,
-            discovery_url: None,
             reconnect: true,
             max_reconnect_attempts: DEFAULT_MAX_RECONNECT_ATTEMPTS,
             on_reconnect: None,
@@ -157,12 +157,6 @@ impl ParsedStreamsOptions {
     /// Overrides the subscription endpoint (full URL, including the API key)
     pub fn with_url(mut self, url: impl Into<String>) -> Self {
         self.url = Some(url.into());
-        self
-    }
-
-    /// Overrides the `describeProgram` endpoint (full URL, including the API key)
-    pub fn with_discovery_url(mut self, discovery_url: impl Into<String>) -> Self {
-        self.discovery_url = Some(discovery_url.into());
         self
     }
 
@@ -198,11 +192,10 @@ impl ParsedStreamsOptions {
 }
 
 impl fmt::Debug for ParsedStreamsOptions {
-    // The URLs carry the API key, so only report whether they are set
+    // The URL carries the API key, so only report whether it is set
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("ParsedStreamsOptions")
             .field("url", &self.url.as_ref().map(|_| "<set>"))
-            .field("discovery_url", &self.discovery_url.as_ref().map(|_| "<set>"))
             .field("reconnect", &self.reconnect)
             .field("max_reconnect_attempts", &self.max_reconnect_attempts)
             .field("on_reconnect", &self.on_reconnect.as_ref().map(|_| "<callback>"))
@@ -280,8 +273,6 @@ struct Inner {
     commands: mpsc::UnboundedSender<Command>,
     /// The background task, until the first call that needs it starts it
     idle_actor: Mutex<Option<Actor>>,
-    discovery_url: String,
-    connector: Connector,
     next_key: AtomicU64,
     closed: AtomicBool,
 }
@@ -314,24 +305,18 @@ impl ParsedStreamsClient {
             .url
             .clone()
             .unwrap_or_else(|| format!("{PARSED_STREAMS_URL}{}", api_key.as_str()));
-        let discovery_url = options
-            .discovery_url
-            .clone()
-            .unwrap_or_else(|| format!("{PARSED_STREAMS_DISCOVERY_URL}{}", api_key.as_str()));
 
-        Ok(Self::with_connector(url, discovery_url, options, websocket_connector()))
+        Ok(Self::with_connector(url, options, websocket_connector()))
     }
 
-    fn with_connector(url: String, discovery_url: String, options: ParsedStreamsOptions, connector: Connector) -> Self {
+    fn with_connector(url: String, options: ParsedStreamsOptions, connector: Connector) -> Self {
         let (commands, receiver) = mpsc::unbounded_channel();
-        let actor = Actor::new(url, options, connector.clone(), receiver);
+        let actor = Actor::new(url, options, connector, receiver);
 
         Self {
             inner: Arc::new(Inner {
                 commands,
                 idle_actor: Mutex::new(Some(actor)),
-                discovery_url,
-                connector,
                 next_key: AtomicU64::new(0),
                 closed: AtomicBool::new(false),
             }),
@@ -391,46 +376,6 @@ impl ParsedStreamsClient {
             return false;
         }
         response.await.unwrap_or(false)
-    }
-
-    /// Lists a program's decoded instruction names, events, and account roles: the exact names
-    /// the filter matcher compares against
-    ///
-    /// Pass the program address. A catalog name also works, but names can be ambiguous across
-    /// program versions, so check `id` in the result. Opens a short-lived connection to the
-    /// discovery endpoint.
-    ///
-    /// # Errors
-    /// Returns `HeliusError::RpcError` if the server rejects the request (e.g. an unknown
-    /// program), `HeliusError::Tungstenite` if the connection fails, and
-    /// `HeliusError::WebsocketClosed` if no answer arrives within 15 seconds
-    pub async fn describe_program(&self, program: &str) -> Result<ProgramDescription> {
-        let connect = (self.inner.connector)(&self.inner.discovery_url);
-        let request: String = json!({
-            "jsonrpc": "2.0",
-            "id": 1,
-            "method": DESCRIBE_PROGRAM_METHOD,
-            "params": [{ "program": program }],
-        })
-        .to_string();
-
-        let exchange = async {
-            let mut ws: Transport = connect.await?;
-            ws.send(Message::Text(request.into())).await?;
-            let result = read_program_description(&mut ws).await;
-            Ok::<_, HeliusError>((ws, result))
-        };
-
-        match timeout(REQUEST_TIMEOUT, exchange).await {
-            Ok(Ok((mut ws, result))) => {
-                let _ = timeout(CLOSE_TIMEOUT, ws.close()).await;
-                result
-            }
-            Ok(Err(err)) => Err(err),
-            Err(_) => Err(HeliusError::WebsocketClosed(
-                "Parsed Streams describeProgram timed out".to_string(),
-            )),
-        }
     }
 
     /// Closes the connection and ends every subscription's stream. Later subscribe calls fail
@@ -505,8 +450,9 @@ impl ParsedStreamsClient {
 /// - `Ok(notification)` for each matching transaction
 /// - `Err(HeliusError::SerdeJson)` for a notification that did not decode into `V`. The stream
 ///   continues after it
-/// - one final `Err` when the subscription cannot be kept alive (slow consumer, filter rejected
-///   on resubscribe, reconnect attempts exhausted, or reconnects turned off), followed by `None`
+/// - one final `Err` when the subscription cannot be kept alive (slow consumer, a policy close,
+///   filter rejected on resubscribe, reconnect attempts exhausted, or reconnects turned off),
+///   followed by `None`
 ///
 /// It ends with `None` and no error when you unsubscribe or close the client. Dropping it
 /// unsubscribes.
@@ -588,35 +534,20 @@ fn websocket_connector() -> Connector {
     })
 }
 
-/// Reads frames until the `describeProgram` response (request id 1) arrives
-async fn read_program_description(ws: &mut Transport) -> Result<ProgramDescription> {
-    while let Some(message) = ws.next().await {
-        let Message::Text(text) = message? else { continue };
-        let Ok(mut response) = serde_json::from_str::<Map<String, Value>>(text.as_str()) else {
-            continue;
-        };
-        if response.get("id").and_then(Value::as_u64) != Some(1) {
-            continue;
-        }
-        if let Some(error) = response.get("error").filter(|error| !error.is_null()) {
-            return Err(RpcFailure::from_value(error).into());
-        }
-        return Ok(serde_json::from_value(
-            response.remove("result").unwrap_or(Value::Null),
-        )?);
-    }
-
-    Err(HeliusError::WebsocketClosed(
-        "Parsed Streams describeProgram connection closed before a response".to_string(),
-    ))
-}
-
 fn client_closed() -> HeliusError {
     HeliusError::WebsocketClosed("Parsed Streams client closed".to_string())
 }
 
 fn closed_reason(code: u16) -> String {
     format!("Parsed Streams connection closed (code {code})")
+}
+
+/// Like [`closed_reason`], with the reason text from the server's close frame when it sent one
+fn closed_reason_with(code: u16, server_reason: &str) -> String {
+    match server_reason.trim() {
+        "" => closed_reason(code),
+        server_reason => format!("Parsed Streams connection closed (code {code}: {server_reason})"),
+    }
 }
 
 fn invalid_ack(result: &Value) -> HeliusError {
@@ -715,6 +646,9 @@ enum Request {
     Unsubscribe {
         reply: Option<oneshot::Sender<bool>>,
     },
+    /// A request that timed out. It stays pending so that a late subscribe ack, whose
+    /// server-side subscription nothing will read, is still released
+    Abandoned,
 }
 
 impl Request {
@@ -725,7 +659,7 @@ impl Request {
                 let _ = reply.send(Err(error));
             }
             // The subscription stays open and is resubscribed on the next connection
-            Request::Resubscribe { .. } => {}
+            Request::Resubscribe { .. } | Request::Abandoned => {}
             Request::Unsubscribe { reply } => {
                 if let Some(reply) = reply {
                     let _ = reply.send(false);
@@ -738,7 +672,7 @@ impl Request {
 struct Pending {
     method: &'static str,
     request: Request,
-    /// Set once the request is sent
+    /// Set once the request is sent, and cleared once it times out
     deadline: Option<Instant>,
 }
 
@@ -754,6 +688,7 @@ struct Actor {
     ws: Option<Transport>,
     connecting: Option<BoxFuture<'static, Result<Transport>>>,
     last_frame_at: Instant,
+    next_ping_at: Instant,
 
     next_request_id: u64,
     /// Requests waiting for their send slot
@@ -794,6 +729,7 @@ impl Actor {
             ws: None,
             connecting: None,
             last_frame_at: now,
+            next_ping_at: now,
             next_request_id: 0,
             outbox: VecDeque::new(),
             next_send_at: now,
@@ -840,6 +776,7 @@ impl Actor {
                 },
                 frame = next_frame(&mut self.ws) => self.handle_frame(frame),
                 () = sleep_until(self.next_send_at), if can_send => self.send_next().await,
+                () = sleep_until(self.next_ping_at), if connected => self.send_ping().await,
                 () = sleep_until_some(request_deadline) => self.time_out_requests(),
                 () = sleep_until_some(self.reconnect_at) => {
                     self.reconnect_at = None;
@@ -914,6 +851,7 @@ impl Actor {
         self.ws = Some(ws);
         self.last_frame_at = now;
         self.next_send_at = now;
+        self.next_ping_at = now + PING_INTERVAL;
 
         // Subscription ids do not survive a connection, so every open subscription is restored
         let restore: Vec<(u64, Value)> = self.subs.iter().map(|(key, sub)| (*key, sub.params.clone())).collect();
@@ -924,7 +862,7 @@ impl Actor {
     }
 
     fn handle_frame(&mut self, frame: Option<WsResult<Message>>) {
-        let code: u16 = match frame {
+        let (code, reason): (u16, String) = match frame {
             Some(Ok(message)) => {
                 self.last_frame_at = Instant::now();
                 match message {
@@ -932,19 +870,23 @@ impl Actor {
                         self.handle_text(text.as_str());
                         return;
                     }
-                    Message::Close(frame) => frame.map_or(NO_STATUS_CLOSE_CODE, |frame| u16::from(frame.code)),
-                    // Pings count toward liveness; tungstenite answers them itself
+                    Message::Close(Some(frame)) => {
+                        let code = u16::from(frame.code);
+                        (code, closed_reason_with(code, frame.reason.as_str()))
+                    }
+                    Message::Close(None) => (NO_STATUS_CLOSE_CODE, closed_reason(NO_STATUS_CLOSE_CODE)),
+                    // Pongs to the client's pings count toward liveness; tungstenite answers pings
                     _ => return,
                 }
             }
             Some(Err(err)) => {
                 log::warn!("Parsed Streams connection error: {err}");
-                ABNORMAL_CLOSE_CODE
+                (ABNORMAL_CLOSE_CODE, closed_reason(ABNORMAL_CLOSE_CODE))
             }
-            None => ABNORMAL_CLOSE_CODE,
+            None => (ABNORMAL_CLOSE_CODE, closed_reason(ABNORMAL_CLOSE_CODE)),
         };
 
-        self.connection_lost(code, closed_reason(code));
+        self.connection_lost(code, reason);
     }
 
     fn handle_text(&mut self, text: &str) {
@@ -967,7 +909,6 @@ impl Actor {
             log::debug!("Ignoring unrecognized Parsed Streams frame: {text}");
             return;
         };
-        // Absent if the request already timed out
         let Some(pending) = self.pending.remove(&id) else {
             return;
         };
@@ -1072,6 +1013,12 @@ impl Actor {
                     let _ = reply.send(matches!(outcome, Ok(Value::Bool(true))));
                 }
             }
+            // A subscribe that timed out was accepted after all, and nothing will read it
+            Request::Abandoned => {
+                if let Some(id) = outcome.ok().and_then(|result| result.as_u64()) {
+                    self.cancel(id);
+                }
+            }
         }
     }
 
@@ -1131,6 +1078,31 @@ impl Actor {
         }
     }
 
+    async fn send_ping(&mut self) {
+        let Some(ws) = self.ws.as_mut() else {
+            return;
+        };
+
+        match timeout(REQUEST_TIMEOUT, ws.send(Message::Ping(Default::default()))).await {
+            Ok(Ok(())) => {
+                let now = Instant::now();
+                self.next_ping_at = now + PING_INTERVAL;
+                // Count the ping against the message rate, in case the server does
+                self.next_send_at = self.next_send_at.max(now + MIN_SEND_INTERVAL);
+            }
+            Ok(Err(err)) => {
+                log::warn!("Parsed Streams ping failed: {err}");
+                self.connection_lost(ABNORMAL_CLOSE_CODE, closed_reason(ABNORMAL_CLOSE_CODE));
+            }
+            Err(_) => {
+                log::warn!("Parsed Streams ping timed out");
+                self.connection_lost(ABNORMAL_CLOSE_CODE, closed_reason(ABNORMAL_CLOSE_CODE));
+            }
+        }
+    }
+
+    /// Fails each request that went unanswered, leaving the connection and every other
+    /// subscription alone. A dead connection is caught by the liveness check instead
     fn time_out_requests(&mut self) {
         let now = Instant::now();
         let expired: Vec<u64> = self
@@ -1141,16 +1113,31 @@ impl Actor {
             .collect();
 
         for id in expired {
-            if let Some(pending) = self.pending.remove(&id) {
-                pending.request.fail(HeliusError::WebsocketClosed(format!(
-                    "Parsed Streams {} timed out",
-                    pending.method
-                )));
+            let Some(pending) = self.pending.get_mut(&id) else {
+                continue;
+            };
+            let method: &'static str = pending.method;
+            pending.deadline = None;
+            let request = std::mem::replace(&mut pending.request, Request::Abandoned);
+            log::warn!("Parsed Streams {method} timed out");
+
+            match request {
+                // Retry on this connection. A late ack for the abandoned attempt is released
+                Request::Resubscribe { key } => match self.subs.get(&key).map(|sub| sub.params.clone()) {
+                    Some(params) => self.request(SUBSCRIBE_METHOD, params, Request::Resubscribe { key }),
+                    // Unsubscribed meanwhile: nothing left to restore
+                    None => {
+                        self.restoring = self.restoring.saturating_sub(1);
+                        if self.restoring == 0 {
+                            self.finish_restore();
+                        }
+                    }
+                },
+                request => request.fail(HeliusError::WebsocketClosed(format!(
+                    "Parsed Streams {method} timed out; the connection stays open"
+                ))),
             }
         }
-
-        // No answer: treat the connection as dead
-        self.connection_lost(ABNORMAL_CLOSE_CODE, closed_reason(ABNORMAL_CLOSE_CODE));
     }
 
     fn unsubscribe(&mut self, key: u64, reply: Option<oneshot::Sender<bool>>) {
@@ -1216,12 +1203,11 @@ impl Actor {
         if self.subs.is_empty() {
             return;
         }
-        if code == SLOW_CONSUMER_CLOSE_CODE {
-            self.end_all(Some(
-                "Parsed Streams closed the connection because this client fell more than 2048 notifications \
-                 behind (code 1008). Narrow the filter, use matched or raw details, or process notifications faster"
-                    .to_string(),
-            ));
+        if code == POLICY_VIOLATION_CLOSE_CODE {
+            self.end_all(Some(format!(
+                "{reason}. The server sends 1008 when the client falls more than 2048 notifications \
+                 behind, or when the API key or plan changes, so the client does not reconnect"
+            )));
             return;
         }
         if !self.reconnect {
@@ -1315,7 +1301,7 @@ mod tests {
     use super::*;
     use crate::types::parsed_streams::{ParsedStreamDetails, ParsedStreamTransactionStatus};
     use std::sync::atomic::AtomicUsize;
-    use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
+    use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender, WeakUnboundedSender};
     use tokio::task::JoinHandle;
     use tokio::time::sleep;
 
@@ -1325,6 +1311,9 @@ mod tests {
     struct MockTransport {
         incoming: UnboundedReceiver<WsResult<Message>>,
         outgoing: UnboundedSender<Message>,
+        /// Answers the client's pings, as a real server does. Weak, so that dropping the
+        /// server's end still ends the stream
+        pong: Option<WeakUnboundedSender<WsResult<Message>>>,
     }
 
     impl Stream for MockTransport {
@@ -1343,6 +1332,10 @@ mod tests {
         }
 
         fn start_send(self: Pin<&mut Self>, message: Message) -> WsResult<()> {
+            if let (Message::Ping(payload), Some(pong)) = (&message, self.pong.as_ref().and_then(|pong| pong.upgrade()))
+            {
+                let _ = pong.send(Ok(Message::Pong(payload.clone())));
+            }
             self.outgoing.send(message).map_err(|_| WsError::ConnectionClosed)
         }
 
@@ -1401,27 +1394,34 @@ mod tests {
             self.send(notification(subscription, slot));
         }
 
-        fn ping(&self) {
-            if let Some(to_client) = &self.to_client {
-                let _ = to_client.send(Ok(Message::Ping(Default::default())));
-            }
-        }
-
         /// A server-initiated close with `code`
         fn close(&mut self, code: u16) {
+            self.close_with_reason(code, "");
+        }
+
+        fn close_with_reason(&mut self, code: u16, reason: &str) {
             if let Some(to_client) = self.to_client.take() {
                 let frame = CloseFrame {
                     code: CloseCode::from(code),
-                    reason: "".into(),
+                    reason: reason.into(),
                 };
                 let _ = to_client.send(Ok(Message::Close(Some(frame))));
             }
+        }
+
+        /// How many pings the client has sent, reading everything it sent so far
+        fn pings_received(&mut self) -> usize {
+            std::iter::from_fn(|| self.from_client.try_recv().ok())
+                .filter(|message| matches!(message, Message::Ping(_)))
+                .count()
         }
     }
 
     #[derive(Clone, Copy)]
     enum Plan {
         Open,
+        /// Opens, but never answers the client's pings
+        Mute,
         Fail,
         /// The upgrade never answers
         Hang,
@@ -1449,15 +1449,20 @@ mod tests {
                     let connections = connections_sender.clone();
                     async move {
                         match plan {
-                            Plan::Open => {
+                            Plan::Open | Plan::Mute => {
                                 let (to_client, incoming) = unbounded_channel();
                                 let (outgoing, from_client) = unbounded_channel();
+                                let pong = matches!(plan, Plan::Open).then(|| to_client.downgrade());
                                 let _ = connections.send(ServerConn {
                                     url,
                                     from_client,
                                     to_client: Some(to_client),
                                 });
-                                Ok(Box::pin(MockTransport { incoming, outgoing }) as Transport)
+                                Ok(Box::pin(MockTransport {
+                                    incoming,
+                                    outgoing,
+                                    pong,
+                                }) as Transport)
                             }
                             Plan::Fail => Err(HeliusError::WebsocketClosed("refused".to_string())),
                             Plan::Hang => pending().await,
@@ -1499,12 +1504,7 @@ mod tests {
 
     fn client(options: ParsedStreamsOptions) -> (ParsedStreamsClient, Mock) {
         let (mock, connector) = Mock::new();
-        let client = ParsedStreamsClient::with_connector(
-            "wss://stream/?api-key=KEY".to_string(),
-            "wss://discover/?api-key=KEY".to_string(),
-            options,
-            connector,
-        );
+        let client = ParsedStreamsClient::with_connector("wss://stream/?api-key=KEY".to_string(), options, connector);
         (client, mock)
     }
 
@@ -1905,16 +1905,28 @@ mod tests {
     }
 
     #[tokio::test(start_paused = true)]
-    async fn fails_the_stream_on_a_slow_consumer_close_without_reconnecting() {
+    async fn fails_the_stream_on_a_policy_close_without_reconnecting() {
+        let (client, mut mock) = client(ParsedStreamsOptions::default());
+        let (mut conn, mut sub) = first_subscription(&client, &mut mock, 1).await;
+        conn.close_with_reason(1008, "api key deleted");
+
+        // Not only slow consumers get 1008, so the server's reason is passed along
+        let err = next_error(&mut sub).await;
+        assert!(err.contains("code 1008: api key deleted"), "{err}");
+        assert!(err.contains("or when the API key or plan changes"), "{err}");
+        assert!(next(&mut sub).await.is_none());
+        sleep(Duration::from_secs(60)).await;
+        assert!(mock.no_new_connection());
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn reports_a_policy_close_without_a_reason() {
         let (client, mut mock) = client(ParsedStreamsOptions::default());
         let (mut conn, mut sub) = first_subscription(&client, &mut mock, 1).await;
         conn.close(1008);
 
         let err = next_error(&mut sub).await;
-        assert!(err.contains("fell more than 2048 notifications behind"), "{err}");
-        assert!(next(&mut sub).await.is_none());
-        sleep(Duration::from_secs(60)).await;
-        assert!(mock.no_new_connection());
+        assert!(err.contains("(code 1008)."), "{err}");
     }
 
     #[tokio::test(start_paused = true)]
@@ -2068,22 +2080,52 @@ mod tests {
     }
 
     #[tokio::test(start_paused = true)]
-    async fn times_out_an_unanswered_request_and_reconnects_the_dead_connection() {
+    async fn times_out_only_the_unanswered_request() {
         let (client, mut mock) = client(ParsedStreamsOptions::default());
-        let (mut conn, sub) = first_subscription(&client, &mut mock, 1).await;
+        let (mut conn, mut sub) = first_subscription(&client, &mut mock, 1).await;
 
         let hung = spawn_subscribe(&client, "B");
-        conn.request().await; // never answered
+        let late = conn.request().await;
         let err = hung.await.unwrap().unwrap_err().to_string();
         assert!(err.contains("parsedTransactionSubscribe timed out"), "{err}");
 
-        // The silent connection is dropped and the existing subscription restored
-        assert!(conn.hung_up().await);
-        let mut conn = mock.connection().await;
+        // The connection and the existing subscription carry on
+        conn.notify(1, 5);
+        assert_eq!(next_slot(&mut sub).await, 5);
+        assert!(mock.no_new_connection());
+        assert_eq!(mock.attempts(), 1);
+
+        // An ack that arrives after all creates a subscription nothing reads, so it is released
+        conn.reply(&late, json!(9));
         let request = conn.request().await;
-        assert_eq!(request["params"][0]["programs"], json!(["P1"]));
-        conn.reply(&request, json!(3));
-        until(|| sub.subscription_id() == Some(3)).await;
+        assert_eq!(request["method"], "parsedTransactionUnsubscribe");
+        assert_eq!(request["params"], json!([9]));
+        client.close();
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn resends_a_resubscribe_that_times_out_on_the_same_connection() {
+        let (options, calls) = recorder();
+        let (client, mut mock) = client(options);
+        let (mut conn, sub) = first_subscription(&client, &mut mock, 1).await;
+        conn.close(1001);
+
+        let mut conn = mock.connection().await;
+        let first = conn.request().await; // never answered in time
+        let second = conn.request().await;
+        assert_eq!(second["method"], "parsedTransactionSubscribe");
+        assert_eq!(second["params"], first["params"]);
+        assert_ne!(second["id"], first["id"]);
+
+        // The first attempt's late ack is released, and the retry restores the subscription
+        conn.reply(&first, json!(70));
+        let request = conn.request().await;
+        assert_eq!(request["method"], "parsedTransactionUnsubscribe");
+        assert_eq!(request["params"], json!([70]));
+        conn.reply(&second, json!(71));
+        until(|| sub.subscription_id() == Some(71)).await;
+        until(|| calls.lock().unwrap().len() == 1).await;
+        assert_eq!(mock.attempts(), 2);
         client.close();
     }
 
@@ -2130,8 +2172,9 @@ mod tests {
     }
 
     #[tokio::test(start_paused = true)]
-    async fn treats_silence_as_a_dead_connection() {
+    async fn treats_unanswered_pings_as_a_dead_connection() {
         let (client, mut mock) = client(ParsedStreamsOptions::default());
+        mock.plan(Plan::Mute, 1);
         let (mut conn, sub) = first_subscription(&client, &mut mock, 1).await;
 
         let start = Instant::now();
@@ -2145,15 +2188,20 @@ mod tests {
         client.close();
     }
 
+    /// The server sends no pings and drops a connection the client has not written to for 5
+    /// minutes, so a quiet filter stays up only on the client's own pings and their pongs
     #[tokio::test(start_paused = true)]
-    async fn stays_connected_while_the_server_keeps_pinging() {
+    async fn keeps_a_quiet_connection_alive_with_pings() {
         let (client, mut mock) = client(ParsedStreamsOptions::default());
-        let (conn, _sub) = first_subscription(&client, &mut mock, 1).await;
+        let (mut conn, _sub) = first_subscription(&client, &mut mock, 1).await;
 
-        for _ in 0..8 {
-            sleep(Duration::from_secs(15)).await;
-            conn.ping();
-        }
+        sleep(PING_INTERVAL - Duration::from_millis(10)).await;
+        assert_eq!(conn.pings_received(), 0);
+        sleep(Duration::from_millis(20)).await;
+        assert_eq!(conn.pings_received(), 1);
+
+        sleep(Duration::from_secs(10 * 60)).await;
+        assert_eq!(conn.pings_received(), 20);
         assert!(mock.no_new_connection());
         assert_eq!(mock.attempts(), 1);
         client.close();
@@ -2323,107 +2371,24 @@ mod tests {
         assert_eq!(mock.attempts(), 0);
     }
 
-    // ── describe_program ──────────────────────────────────────────────
-
-    fn description() -> Value {
-        json!({
-            "id": "JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4",
-            "name": "jupiter",
-            "instructions": ["route"],
-            "events": ["SwapEvent"],
-            "roles": ["user_transfer_authority"]
-        })
-    }
-
-    #[tokio::test(start_paused = true)]
-    async fn describe_program_queries_the_discovery_endpoint_on_its_own_connection() {
-        let (client, mut mock) = client(ParsedStreamsOptions::default());
-        let pending = {
-            let client = client.clone();
-            tokio::spawn(async move {
-                client
-                    .describe_program("JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4")
-                    .await
-            })
-        };
-
-        let mut conn = mock.connection().await;
-        assert_eq!(conn.url, "wss://discover/?api-key=KEY");
-        let request = conn.request().await;
-        assert_eq!(request["method"], "describeProgram");
-        assert_eq!(
-            request["params"],
-            json!([{"program": "JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4"}])
-        );
-        conn.reply(&request, description());
-
-        let program = pending.await.unwrap().unwrap();
-        assert_eq!(program.name, "jupiter");
-        assert_eq!(program.instructions, vec!["route"]);
-        assert_eq!(program.roles, vec!["user_transfer_authority"]);
-        assert!(conn.hung_up().await);
-    }
-
-    #[tokio::test(start_paused = true)]
-    async fn describe_program_returns_the_json_rpc_error() {
-        let (client, mut mock) = client(ParsedStreamsOptions::default());
-        let pending = {
-            let client = client.clone();
-            tokio::spawn(async move { client.describe_program("nope").await })
-        };
-        let mut conn = mock.connection().await;
-        let request = conn.request().await;
-        conn.reply_error(&request, -32602, "unknown program");
-
-        assert!(matches!(
-            pending.await.unwrap(),
-            Err(HeliusError::RpcError { code: -32602, .. })
-        ));
-    }
-
-    #[tokio::test(start_paused = true)]
-    async fn describe_program_times_out_when_the_endpoint_never_answers() {
-        let (client, mut mock) = client(ParsedStreamsOptions::default());
-        let pending = {
-            let client = client.clone();
-            tokio::spawn(async move { client.describe_program("slow").await })
-        };
-        let mut conn = mock.connection().await;
-        conn.request().await;
-
-        let err = pending.await.unwrap().unwrap_err().to_string();
-        assert!(err.contains("describeProgram timed out"), "{err}");
-    }
-
     // ── URLs ──────────────────────────────────────────────────────────
 
-    fn urls(client: &ParsedStreamsClient) -> (String, String) {
+    fn url(client: &ParsedStreamsClient) -> String {
         let actor = client.inner.idle_actor.lock().unwrap();
-        (actor.as_ref().unwrap().url.clone(), client.inner.discovery_url.clone())
+        actor.as_ref().unwrap().url.clone()
     }
 
     #[test]
-    fn urls_default_to_helius_with_the_api_key() {
+    fn url_defaults_to_helius_with_the_api_key() {
         let client = ParsedStreamsClient::new("KEY").unwrap();
-        assert_eq!(
-            urls(&client),
-            (
-                "wss://beta.helius-rpc.com/?api-key=KEY".to_string(),
-                "wss://fs-beta.helius-rpc.com/?api-key=KEY".to_string()
-            )
-        );
+        assert_eq!(url(&client), "wss://beta.helius-rpc.com/?api-key=KEY");
     }
 
     #[test]
-    fn urls_can_be_overridden() {
-        let options = ParsedStreamsOptions::default()
-            .with_url("wss://custom/stream")
-            .with_discovery_url("wss://custom/discover");
+    fn url_can_be_overridden() {
+        let options = ParsedStreamsOptions::default().with_url("wss://custom/stream");
         let client = ParsedStreamsClient::with_options("KEY", options).unwrap();
-        assert_eq!(
-            urls(&client),
-            ("wss://custom/stream".to_string(), "wss://custom/discover".to_string())
-        );
+        assert_eq!(url(&client), "wss://custom/stream");
     }
 
     #[test]

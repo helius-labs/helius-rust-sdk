@@ -84,7 +84,7 @@ examples/
 │   ├── parse_transactions.rs                 #   Parse transactions by signature
 │   ├── get_transaction_history.rs            #   Paginated parsed history for an address
 ├── parsed_streams/                           # Parsed Streams real-time decoded transactions
-│   └── subscribe.rs                          #   describe_program, then stream Jupiter swaps
+│   └── subscribe.rs                          #   Stream decoded Jupiter swaps
 ├── enhanced/                                 # Enhanced transaction parsing (deprecated API)
 │   ├── get_parse_transactions.rs             #   Parse transactions by signature
 │   ├── get_parsed_transaction_history.rs     #   Parsed tx history for address
@@ -486,12 +486,9 @@ let streams = helius.parsed_streams_with_options(
         .with_on_reconnect(|info| eprintln!("backfill after slot {:?}", info.last_slot)),
 )?;
 
-// Exact instruction and role names for filters
-let jupiter = streams.describe_program("JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4").await?;
-
 let mut sub = streams.parsed_transaction_subscribe(
     ParsedTransactionFilter {
-        programs: Some(vec![jupiter.id.clone()]),
+        programs: Some(vec!["JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4".to_string()]),
         instruction_names: Some(vec!["route".to_string()]),
         ..Default::default()
     },
@@ -505,7 +502,7 @@ while let Some(notification) = sub.next().await {
 }
 ```
 
-Delivery is at most once. The client reconnects with backoff and resubscribes automatically; `on_reconnect` gives `{ close_code, last_slot }` for backfilling from RPC. A subscription ends with an error (never silent drops) on a slow consumer, a filter rejected on resubscribe, or exhausted reconnect attempts. `raw_transaction_subscribe(filter)` streams base58 instruction data only.
+Delivery is at most once. The client reconnects with backoff and resubscribes automatically; `on_reconnect` gives `{ close_code, last_slot }` for backfilling from RPC. A subscription ends with an error (never silent drops) on a slow consumer, a 1008 policy close (slow consumer, or API key or plan changed), a filter rejected on resubscribe, or exhausted reconnect attempts. The client pings every 30s to keep the connection open. `raw_transaction_subscribe(filter)` streams base58 instruction data only.
 
 ### Enhanced Transactions (Deprecated)
 
