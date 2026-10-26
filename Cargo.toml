@@ -50,6 +50,7 @@ wincode = "0.6.1"
 
 [dev-dependencies]
 mockito = "1.4.0"
+tokio = { version = "1.37.0", features = ["test-util"] }
 
 [features]
 default = ["native-tls"]
@@ -87,6 +88,11 @@ path = "examples/parsed_events/parse_transactions.rs"
 [[example]]
 name = "parsed_events_get_transaction_history"
 path = "examples/parsed_events/get_transaction_history.rs"
+
+# Parsed Streams examples
+[[example]]
+name = "parsed_streams_subscribe"
+path = "examples/parsed_streams/subscribe.rs"
 
 # Enhanced transaction examples (deprecated API, plus get_transactions_for_address)
 [[example]]

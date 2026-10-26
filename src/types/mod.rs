@@ -4,6 +4,7 @@ pub mod enums;
 pub mod inner;
 pub mod options;
 pub mod parsed_events;
+pub mod parsed_streams;
 pub mod zk_compression_types;
 
 pub use self::enhanced_transaction_types::*;

@@ -202,6 +202,41 @@ client.shutdown().await?;
 
 `preconfSubscribe` takes no filter parameters — it streams **all** scheduled transactions. Notifications are **binary** frames (the subscribe ack is a JSON text frame); the layout is little-endian `version:u8 | slot:u64_le | transaction_index:u64_le | status:u8 | bincode(VersionedTransaction)`. The leading `version` byte is checked first (currently `1`); unknown versions are dropped. `status` is exposed as the `PreconfStatus` enum (`Failed = 0`, `Success = 1`, `Unknown = 2`). Each notification exposes the decoded `VersionedTransaction` plus the raw `transaction_bytes`. See [`examples/websockets/preconf_subscribe.rs`](examples/websockets/preconf_subscribe.rs).
 
+### Parsed Streams
+[Parsed Streams](https://www.helius.dev/docs/parsed-streams) pushes decoded transactions in real time, filtered on the server by program, instruction name, account, or account role. It is the streaming counterpart to Parsed Events and the successor to enhanced transaction webhooks; notifications use the same transfer, summary, and decoded-instruction types as Parsed Events. Available on all plans at 1 credit per delivered event. Create a client with `helius.parsed_streams()?` (requires an API key; mainnet only) or the standalone `ParsedStreamsClient::new(api_key)`, with types in `helius::types::parsed_streams`.
+
+```rust
+use futures_util::StreamExt;
+use helius::types::parsed_streams::ParsedTransactionFilter;
+
+let streams = helius.parsed_streams()?;
+let mut subscription = streams
+    .parsed_transaction_subscribe(
+        ParsedTransactionFilter {
+            programs: Some(vec!["JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4".to_string()]),
+            ..Default::default()
+        },
+        None,
+    )
+    .await?;
+
+while let Some(notification) = subscription.next().await {
+    let value = notification?.value;
+    for &i in value.matched_indexes.as_deref().unwrap_or_default() {
+        let instruction = &value.instructions[i];
+        println!("{} {:?}", value.transaction.signature, instruction.instruction_name);
+    }
+}
+```
+
+- `parsed_transaction_subscribe(filter, options)` - Subscribes with a filter (`programs`, `instruction_names`, `accounts.include`, `accounts.roles`, `include_failed`, `include_cpi`). `options.details` is `Full` (the default: the whole transaction plus `matched_indexes`) or `Matched` (only the matching instructions). Returns a `Stream` of `Result<ParsedTransactionNotification>`; dropping it unsubscribes
+- `raw_transaction_subscribe(filter)` - Same, with `raw` details: matching instructions as base58 data only
+- `parsed_transaction_unsubscribe(subscription_id)` - Unsubscribes by current id
+- `describe_program(program)` - Lists a program's exact instruction names, events, and account roles, so filters match what you expect. Pass the program address rather than a name
+- `close()` - Closes the connection and ends every subscription
+
+Delivery is **at most once**: the server doesn't replay what confirmed while a connection was down, and it closes connections routinely (10 minutes without a match, deploys, network edge recycling). The client reconnects with backoff and resubscribes every filter on its own; `ParsedStreamsOptions::with_on_reconnect` reports the close code and the last slot delivered so you can backfill the gap from RPC. A subscription ends with an error rather than silently dropping data when it can't be kept alive: a slow consumer (more than 2048 notifications behind on the server, close code 1008, or 10,000 unread in the client), a filter rejected on resubscribe, or reconnect attempts exhausted. Client messages are paced to the server's 10-per-second limit, and each connection holds up to 25 subscriptions. See [`examples/parsed_streams/subscribe.rs`](examples/parsed_streams/subscribe.rs).
+
 ### Examples
 More examples of how to use the SDK can be found in the [`examples`](https://github.com/helius-labs/helius-rust-sdk/tree/dev/examples) directory.
 

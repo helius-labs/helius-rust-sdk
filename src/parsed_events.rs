@@ -1,3 +1,4 @@
+use crate::config::Config;
 use crate::error::{HeliusError, Result};
 use crate::types::parsed_events::{
     GetTransactionHistoryRequest, GetTransactionHistoryResponse, ParseTransactionsRequest, ParsedTransactionResult,
@@ -170,11 +171,6 @@ impl ParsedEvents<'_> {
 
     /// Builds the URL for a Parsed Events endpoint, after checking the API key and network
     ///
-    /// The network check fails closed, so a non-mainnet client never silently gets mainnet data:
-    /// the cluster must be a mainnet one, and the RPC host must not name another network. A
-    /// custom URL defaults the cluster to `Devnet`, so a mainnet custom URL needs an explicit
-    /// `with_cluster(Cluster::MainnetBeta)`.
-    ///
     /// Requests always go to Helius mainnet, as in the TS SDK, whatever the configured RPC URL.
     /// The one exception is a hand-built [`Config`](crate::config::Config) (no `custom_url`)
     /// whose RPC endpoint is a loopback address, which is used as-is so the endpoints can be
@@ -182,24 +178,8 @@ impl ParsedEvents<'_> {
     fn url(&self, path: &str) -> Result<Url> {
         let config = &self.helius.config;
         let api_key = config.require_api_key("Parsed Events")?;
+        ensure_mainnet(config, "Parsed Events")?;
         let rpc_url: Url = Url::parse(&config.endpoints.rpc)?;
-
-        if config.cluster == Cluster::Devnet {
-            let hint = if config.custom_url.is_some() {
-                ". For a mainnet custom URL, set .with_cluster(Cluster::MainnetBeta) on HeliusBuilder"
-            } else {
-                ""
-            };
-            return Err(HeliusError::InvalidInput(format!(
-                "Parsed Events is only available on mainnet{hint}"
-            )));
-        }
-        if is_non_mainnet_host(&rpc_url) {
-            return Err(HeliusError::InvalidInput(format!(
-                "Parsed Events is only available on mainnet, but the RPC URL host {} names another network",
-                rpc_url.host_str().unwrap_or_default()
-            )));
-        }
 
         let mut url: Url = if config.custom_url.is_none() && is_loopback_host(&rpc_url) {
             let mut url = rpc_url;
@@ -214,6 +194,35 @@ impl ParsedEvents<'_> {
 
         Ok(url)
     }
+}
+
+/// Fails unless `config` is on mainnet, for a mainnet-only `product`
+///
+/// The check fails closed, so a non-mainnet client never silently gets mainnet data: the cluster
+/// must be a mainnet one, and the RPC host must not name another network. A custom URL defaults
+/// the cluster to `Devnet`, so a mainnet custom URL needs an explicit
+/// `with_cluster(Cluster::MainnetBeta)`.
+pub(crate) fn ensure_mainnet(config: &Config, product: &str) -> Result<()> {
+    let rpc_url: Url = Url::parse(&config.endpoints.rpc)?;
+
+    if config.cluster == Cluster::Devnet {
+        let hint = if config.custom_url.is_some() {
+            ". For a mainnet custom URL, set .with_cluster(Cluster::MainnetBeta) on HeliusBuilder"
+        } else {
+            ""
+        };
+        return Err(HeliusError::InvalidInput(format!(
+            "{product} is only available on mainnet{hint}"
+        )));
+    }
+    if is_non_mainnet_host(&rpc_url) {
+        return Err(HeliusError::InvalidInput(format!(
+            "{product} is only available on mainnet, but the RPC URL host {} names another network",
+            rpc_url.host_str().unwrap_or_default()
+        )));
+    }
+
+    Ok(())
 }
 
 /// Whether a hostname label is `devnet` or `testnet` (e.g. `devnet.helius-rpc.com`,
