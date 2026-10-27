@@ -176,7 +176,11 @@ impl ParsedEvents<'_> {
     /// `criteria`, parsed
     ///
     /// Match on programs' instructions (by IDL name and/or data discriminator), on token mints,
-    /// or both. Use this instead of paging through
+    /// or both. By default only instructions and token balances involving `address` count; set a
+    /// program's or mint's `scope` to
+    /// [`ScanMatchScope::Transaction`](crate::types::parsed_events::ScanMatchScope::Transaction)
+    /// to count any in the
+    /// transaction. Use this instead of paging through
     /// [`get_transaction_history`](Self::get_transaction_history) and filtering client-side.
     /// Each item in `data` has the same shape as a
     /// [`parse_transactions`](Self::parse_transactions) result. For just the matching
@@ -235,7 +239,7 @@ impl ParsedEvents<'_> {
     /// # Errors
     /// Returns `HeliusError::InvalidInput` if no API key is configured or the client is not on
     /// mainnet. The server's `400` (e.g. `criteria` sets neither `programs` nor `mints`, a
-    /// program is listed twice, an instruction name is not in the program's IDLs, or a limit is
+    /// program or mint is listed twice, an instruction name is not in the program's IDLs, or a limit is
     /// out of range) surfaces as `HeliusError::BadRequest` with its message. A `503` (at
     /// capacity, or the first history page missed the time limit) surfaces as
     /// `HeliusError::Unknown`; retry it

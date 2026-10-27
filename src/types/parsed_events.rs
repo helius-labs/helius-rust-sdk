@@ -268,16 +268,47 @@ pub struct ScanMatch {
     /// (CPI). Max 20, each program at most once
     #[serde(skip_serializing_if = "Option::is_none")]
     pub programs: Option<Vec<ScanProgramMatch>>,
-    /// Match transactions with one of these mints in their pre or post token balances. Max 20
+    /// Match transactions with a pre or post token balance of one of these mints. Max 20, each
+    /// mint at most once
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub mints: Option<Vec<String>>,
+    pub mints: Option<Vec<ScanMintMatch>>,
+}
+
+/// The native SOL mint, `So11111111111111111111111111111111111111111` (wrapped SOL is `...112`).
+///
+/// Native SOL has no token balances, so as a [`ScanMintMatch::mint`] it matches on lamport
+/// changes instead, not counting the fee payer's fee: with [`ScanMatchScope::Address`] when the
+/// scanned address's lamports changed, with [`ScanMatchScope::Transaction`] when any account's
+/// did. Each account is compared on its own, so lamports that leave and come back within the
+/// transaction do not count. This catches SOL a program pays out without a transfer instruction
+/// (a pump.fun sell, for example), but also incidental movements such as Jito tips and rent
+pub const NATIVE_SOL_MINT: &str = "So11111111111111111111111111111111111111111";
+
+/// Which of a transaction's instructions or token balances count toward a
+/// [`ScanProgramMatch`] or [`ScanMintMatch`]
+///
+/// Token account ownership comes from the token balances' `owner`; in older transactions that
+/// do not record it, only the scanned address itself counts
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum ScanMatchScope {
+    /// Only those involving the scanned address (the default). An instruction involves it when
+    /// one of the instruction's accounts is the address, a token account it owns, or a token
+    /// account whose mint is the address, or when the address is the program. A token balance
+    /// involves it when its token account is the address or is owned by it, or its mint is the
+    /// address
+    #[default]
+    Address,
+    /// Any in the transaction, e.g. when the scanned address only pays the fee, executes a
+    /// multisig transaction, or is absent from an Anchor event CPI
+    Transaction,
 }
 
 /// Matches transactions with an instruction of `program_id`
 ///
 /// Narrow the match with `instructions`, `discriminators`, or both: an instruction matches when
 /// it is one of the named instructions or its data starts with one of the discriminators. With
-/// neither, any instruction of the program matches
+/// neither, any instruction of the program matches. Only instructions in `scope` count
 #[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct ScanProgramMatch {
@@ -291,6 +322,24 @@ pub struct ScanProgramMatch {
     /// for programs without an IDL. Max 50
     #[serde(skip_serializing_if = "Option::is_none")]
     pub discriminators: Option<Vec<String>>,
+    /// Which of the program's instructions count. Defaults to [`ScanMatchScope::Address`]: only
+    /// instructions involving the scanned address
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub scope: Option<ScanMatchScope>,
+}
+
+/// Matches transactions with a pre or post token balance of `mint`, among those in `scope`
+///
+/// Pass [`NATIVE_SOL_MINT`] to match on lamport changes instead
+#[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ScanMintMatch {
+    /// Mint address
+    pub mint: String,
+    /// Which of the mint's token balances count. Defaults to [`ScanMatchScope::Address`]: only
+    /// balances belonging to the scanned address
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub scope: Option<ScanMatchScope>,
 }
 
 /// Limits on how much history one scan request covers

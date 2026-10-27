@@ -473,9 +473,12 @@ let page = helius.parsed_events().get_transaction_history(GetTransactionHistoryR
 
 // Server-side search of an address's history: only matching transactions come back, parsed.
 // `criteria` is serialized as `match`: up to 20 programs (each narrowed by IDL instruction names
-// and/or hex discriminators), token mints, or both. 10 credits + 1 per 1,000-transaction history
-// page scanned. scan_signatures / scan_count take the same request and return only signatures
-// or only the number of matches (no limit; every match in the scanned range).
+// and/or hex discriminators), token mints (ScanMintMatch { mint, scope }), or both. Each program
+// and mint takes `scope`: ScanMatchScope::Address (default; the instruction or token balance must
+// involve `address`) or ScanMatchScope::Transaction (anywhere in the transaction). NATIVE_SOL_MINT
+// as a mint matches on lamport changes. 10 credits + 1 per 1,000-transaction history page
+// scanned. scan_signatures / scan_count take the same request and return only signatures or
+// only the number of matches (no limit; every match in the scanned range).
 let page = helius.parsed_events().scan(ScanRequest {
     address: "6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P".to_string(),
     criteria: ScanMatch {

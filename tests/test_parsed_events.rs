@@ -7,8 +7,8 @@ use helius::types::parsed_events::{
     ComparisonBounds, GetTransactionHistoryRequest, GetTransactionHistoryResponse, ParseTransactionsRequest,
     ParsedEventsCommitment, ParsedEventsSortOrder, ParsedEventsStatusFilter, ParsedTransactionResult,
     ParsedTransactionStatus, ParserStatus, RawTransactionEncoding, ScanBudget, ScanCountResponse, ScanMatch,
-    ScanProgramMatch, ScanRequest, ScanResponse, ScanSignature, ScanSignaturesResponse, ScanStopReason,
-    TokenAccountsFilter,
+    ScanMatchScope, ScanMintMatch, ScanProgramMatch, ScanRequest, ScanResponse, ScanSignature, ScanSignaturesResponse,
+    ScanStopReason, TokenAccountsFilter, NATIVE_SOL_MINT,
 };
 use helius::types::{ApiKey, Cluster, HeliusEndpoints};
 use helius::{Helius, HeliusBuilder};
@@ -447,6 +447,13 @@ fn pump_fun_scan(instructions: &[&str]) -> ScanRequest {
     }
 }
 
+fn mint_match(mint: &str) -> ScanMintMatch {
+    ScanMintMatch {
+        mint: mint.to_string(),
+        ..Default::default()
+    }
+}
+
 #[tokio::test]
 async fn test_scan_posts_match_criteria_and_returns_matches_with_a_summary() {
     let mut server: Server = Server::new_with_opts_async(mockito::ServerOpts::default()).await;
@@ -456,7 +463,7 @@ async fn test_scan_posts_match_criteria_and_returns_matches_with_a_summary() {
             "address": PUMP_FUN,
             "match": {
                 "programs": [{ "programId": PUMP_FUN, "instructions": ["buy", "sell"] }],
-                "mints": [USDC]
+                "mints": [{ "mint": USDC, "scope": "transaction" }]
             },
             "limit": 1,
             "budget": { "maxScannedTransactions": 2000 },
@@ -488,7 +495,10 @@ async fn test_scan_posts_match_criteria_and_returns_matches_with_a_summary() {
 
     let helius: Helius = helius_for(&server, Cluster::MainnetBeta, Some("test-key"));
     let mut request: ScanRequest = pump_fun_scan(&["buy", "sell"]);
-    request.criteria.mints = Some(vec![USDC.to_string()]);
+    request.criteria.mints = Some(vec![ScanMintMatch {
+        mint: USDC.to_string(),
+        scope: Some(ScanMatchScope::Transaction),
+    }]);
     let page: ScanResponse = helius
         .parsed_events()
         .scan(ScanRequest {
@@ -601,7 +611,7 @@ async fn test_scan_omits_unset_options_and_an_empty_pagination_token() {
         .mock("POST", "/v1/parsed-events/scan?api-key=test-key")
         .match_body(Matcher::Json(json!({
             "address": ADDRESS,
-            "match": { "mints": [USDC] }
+            "match": { "mints": [{ "mint": USDC }] }
         })))
         .with_status(200)
         .with_body(r#"{"data":[],"scan":{"stoppedOn":"windowEnd"}}"#)
@@ -615,7 +625,7 @@ async fn test_scan_omits_unset_options_and_an_empty_pagination_token() {
             .scan(ScanRequest {
                 address: ADDRESS.to_string(),
                 criteria: ScanMatch {
-                    mints: Some(vec![USDC.to_string()]),
+                    mints: Some(vec![mint_match(USDC)]),
                     ..Default::default()
                 },
                 pagination_token,
@@ -628,7 +638,7 @@ async fn test_scan_omits_unset_options_and_an_empty_pagination_token() {
     mock.assert();
 }
 
-/// Several programs, each with names, discriminators, both, or neither
+/// Several programs, each with names, discriminators, both, or neither, and an optional scope
 #[tokio::test]
 async fn test_scan_serializes_several_programs() {
     const JUPITER: &str = "JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4";
@@ -639,8 +649,8 @@ async fn test_scan_serializes_several_programs() {
             "address": ADDRESS,
             "match": {
                 "programs": [
-                    { "programId": PUMP_FUN, "instructions": ["buy"], "discriminators": ["0x66063d1201daebea"] },
-                    { "programId": JUPITER }
+                    { "programId": PUMP_FUN, "instructions": ["buy"], "discriminators": ["0x66063d1201daebea"], "scope": "address" },
+                    { "programId": JUPITER, "scope": "transaction" }
                 ]
             }
         })))
@@ -659,9 +669,11 @@ async fn test_scan_serializes_several_programs() {
                         program_id: PUMP_FUN.to_string(),
                         instructions: Some(vec!["buy".to_string()]),
                         discriminators: Some(vec!["0x66063d1201daebea".to_string()]),
+                        scope: Some(ScanMatchScope::Address),
                     },
                     ScanProgramMatch {
                         program_id: JUPITER.to_string(),
+                        scope: Some(ScanMatchScope::Transaction),
                         ..Default::default()
                     },
                 ]),
@@ -748,7 +760,7 @@ async fn test_scan_count_sends_the_shape_and_reads_the_count() {
         .mock("POST", "/v1/parsed-events/scan?api-key=test-key")
         .match_body(Matcher::Json(json!({
             "address": ADDRESS,
-            "match": { "mints": [USDC] },
+            "match": { "mints": [{ "mint": USDC }, { "mint": "So11111111111111111111111111111111111111111" }] },
             "returnShape": "count"
         })))
         .with_status(200)
@@ -772,7 +784,7 @@ async fn test_scan_count_sends_the_shape_and_reads_the_count() {
         .scan_count(ScanRequest {
             address: ADDRESS.to_string(),
             criteria: ScanMatch {
-                mints: Some(vec![USDC.to_string()]),
+                mints: Some(vec![mint_match(USDC), mint_match(NATIVE_SOL_MINT)]),
                 ..Default::default()
             },
             ..Default::default()
