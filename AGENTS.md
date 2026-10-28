@@ -17,9 +17,9 @@ Get an API key from https://dashboard.helius.dev, or sign up programmatically vi
 ```toml
 # Cargo.toml
 [dependencies]
-helius = "1.0.0"
+helius = "3.1"
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
-solana-sdk = "3.0.0"
+solana-sdk = "4"
 ```
 
 ```rust
@@ -463,8 +463,19 @@ helius.warm_sender_connection(region)                                    // Warm
 // Types: helius::types::parsed_events::*. Mainnet only.
 helius.parsed_events().parse_transactions(ParseTransactionsRequest { transactions, .. })              // Parse by signatures
 helius.parsed_events().get_transaction_history(GetTransactionHistoryRequest { address, .. })          // Parse address history
+helius.parsed_events().scan(ScanRequest { address, criteria: ScanMatch { programs, mints }, .. })      // Server-side search; page while pagination_token is Some
+helius.parsed_events().scan_signatures(request) / scan_count(request)                                 // Same request, signatures or count only
 helius.parse_transactions(ParseTransactionsRequest { transactions })                                  // Deprecated: use parsed_events()
 helius.parsed_transaction_history(ParsedTransactionHistoryRequest { address, .. })                    // Deprecated: use parsed_events()
+```
+
+### Parsed Streams
+
+```rust
+// Types: helius::types::parsed_streams::*. Mainnet only. One client = one reconnecting WebSocket.
+let client = helius.parsed_streams()?;                                   // Or ParsedStreamsClient::new(api_key)
+client.parsed_transaction_subscribe(filter, options).await?              // Stream of Result<ParsedTransactionNotification>
+client.raw_transaction_subscribe(filter).await?                          // Raw instruction data
 ```
 
 ### Webhooks

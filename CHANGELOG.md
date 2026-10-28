@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+## [3.1.0] - 2026-10-28
+
 ### Added
 - **Raw response access, so JSON decoding can run off the async runtime.** Every SDK method deserializes its response on the task that awaited it. For large payloads — a full page of parsed transaction history, a `getProgramAccountsV2` page — that decode is CPU work that parks a tokio worker for its duration and shows up as latency on everything else scheduled there. Callers with a throughput-sensitive pipeline can now fetch and decode separately:
   - `RequestHandler::send_raw` returns the body of a successful response as `bytes::Bytes` without decoding it. Status handling and error mapping are identical to `send`; a non-2xx response is still returned as the matching `HeliusError` and never as bytes.
@@ -48,6 +50,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ### Fixed
 - Error messages from failed requests no longer collapse to `"Unknown error"`. The shared handler now takes, in order, the first non-empty value of `error` (a string, or an object rendered as `key: value` pairs, as before), then a top-level `message`, then the HTTP status reason. This follows the TS SDK's order, except that an `error` object keeps all its fields rather than only `message`. Gateway errors such as `{"message": "Plan does not include this endpoint"}` now surface their message, and a JSON body with neither field, or an empty body, reports the status reason (e.g. `Forbidden`) instead of `"Unknown error"` or an empty string. A body that is a JSON string, or not JSON at all, is used as the message as-is, and whitespace-only values count as empty. Applies to every endpoint that goes through `RequestHandler` and to the Sender `/fast`, `/ping`, and bundle error paths (which keep their 200-character limit); error variants are unchanged.
+- **A malformed or empty RPC response no longer reads as "not found".** `post_rpc_request`, and so every DAS and RPC V2 method, returned `Ok(None)` (e.g. from `get_asset`) for an HTTP 200 body that was empty or carried neither `result` nor `error`, so a broken response looked like a missing asset and could be cached or left unretried. Both cases now return `HeliusError::RpcError`. An explicit `"result": null` still returns `Ok(None)`.
 
 ### Deprecated
 - The Enhanced Transactions API methods `Helius::parse_transactions`, `parse_transactions_raw`, `parsed_transaction_history`, and `parsed_transaction_history_raw` are deprecated in favor of `Helius::parsed_events()`. The API is in maintenance mode. They keep working, and devnet code should keep using them, since Parsed Events is mainnet only. See the [migration guide](https://www.helius.dev/docs/parsed-events/guides/migrate-from-enhanced-transactions). In short, `parse_transactions` maps to `parsed_events().parse_transactions` and `parsed_transaction_history` to `parsed_events().get_transaction_history`, with these differences:
@@ -358,7 +361,8 @@ Dependency-only release. There are no source changes; 3.0.1 exists so that a fre
 - Integration test suite using `mockito`
 - GitHub Actions CI workflow
 
-[Unreleased]: https://github.com/helius-labs/helius-rust-sdk/compare/v3.0.1...HEAD
+[Unreleased]: https://github.com/helius-labs/helius-rust-sdk/compare/v3.1.0...HEAD
+[3.1.0]: https://github.com/helius-labs/helius-rust-sdk/compare/v3.0.1...v3.1.0
 [3.0.1]: https://github.com/helius-labs/helius-rust-sdk/compare/v3.0.0...v3.0.1
 [3.0.0]: https://github.com/helius-labs/helius-rust-sdk/compare/v2.0.0...v3.0.0
 [2.0.0]: https://github.com/helius-labs/helius-rust-sdk/compare/v1.1.0...v2.0.0
