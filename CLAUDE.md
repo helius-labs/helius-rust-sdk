@@ -25,7 +25,7 @@ cargo publish                  # Publish to crates.io
 - `src/error.rs` — `HeliusError` enum & `Result<T>` type alias
 
 ### Features
-- `src/parsed_events.rs` — Parsed Events API via `helius.parsed_events()` (`parse_transactions`, `get_transaction_history`)
+- `src/parsed_events.rs` — Parsed Events API via `helius.parsed_events()` (`parse_transactions`, `get_transaction_history`, `scan`, `scan_signatures`, `scan_count`)
 - `src/parsed_streams.rs` — Parsed Streams WebSocket client (`ParsedStreamsClient`, via `helius.parsed_streams()` or standalone): reconnecting subscriptions
 - `src/enhanced_transactions.rs` — `parse_transactions`, `parsed_transaction_history` (deprecated; replaced by Parsed Events)
 - `src/optimized_transaction.rs` — Smart transactions, Helius Sender, priority fees

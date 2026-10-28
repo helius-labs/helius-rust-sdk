@@ -83,6 +83,7 @@ examples/
 ├── parsed_events/                            # Parsed Events transaction parsing (mainnet)
 │   ├── parse_transactions.rs                 #   Parse transactions by signature
 │   ├── get_transaction_history.rs            #   Paginated parsed history for an address
+│   └── scan.rs                               #   Server-side search of history by instruction or mint
 ├── parsed_streams/                           # Parsed Streams real-time decoded transactions
 │   └── subscribe.rs                          #   Stream decoded Jupiter swaps
 ├── enhanced/                                 # Enhanced transaction parsing (deprecated API)
@@ -448,7 +449,8 @@ Parse transactions into decoded instructions, transfers, and summaries (mainnet 
 
 ```rust
 use helius::types::parsed_events::{
-    ComparisonBounds, GetTransactionHistoryRequest, ParseTransactionsRequest, ParserStatus,
+    ComparisonBounds, GetTransactionHistoryRequest, ParseTransactionsRequest, ParserStatus, ScanMatch,
+    ScanProgramMatch, ScanRequest,
 };
 
 // One result per signature, in order. Check parser_status before reading parsed.
@@ -468,9 +470,32 @@ let page = helius.parsed_events().get_transaction_history(GetTransactionHistoryR
     time: Some(ComparisonBounds { gte: Some(1_767_225_600), ..Default::default() }),
     ..Default::default()
 }).await?;
+
+// Server-side search of an address's history: only matching transactions come back, parsed.
+// `criteria` is serialized as `match`: up to 20 programs (each narrowed by IDL instruction names
+// and/or hex discriminators), token mints (ScanMintMatch { mint, scope }), or both. Each program
+// and mint takes `scope`: ScanMatchScope::Address (default; the instruction or token balance must
+// involve `address`) or ScanMatchScope::Transaction (anywhere in the transaction). NATIVE_SOL_MINT
+// as a mint matches on lamport changes. 10 credits + 1 per 1,000-transaction history page
+// scanned. scan_signatures / scan_count take the same request and return only signatures or
+// only the number of matches (no limit; every match in the scanned range).
+let page = helius.parsed_events().scan(ScanRequest {
+    address: "6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P".to_string(),
+    criteria: ScanMatch {
+        programs: Some(vec![ScanProgramMatch {
+            program_id: "6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P".to_string(),
+            instructions: Some(vec!["buy".to_string(), "sell".to_string()]),
+            ..Default::default()
+        }]),
+        ..Default::default()
+    },
+    ..Default::default()
+}).await?;
+// page.scan.stopped_on: WindowEnd (done) | Limit | Budget | Deadline. Keep calling with
+// page.pagination_token while it is Some, even when page.data is empty.
 ```
 
-`parse_transactions_raw` and `get_transaction_history_raw` return the body as `Bytes` for decoding off the runtime, like the enhanced `_raw` methods below.
+`parse_transactions_raw`, `get_transaction_history_raw`, and `scan_raw` return the body as `Bytes` for decoding off the runtime, like the enhanced `_raw` methods below. Set `raw_transaction: Some(RawTransactionEncoding::Json | JsonParsed | Base64)` on any request to also get each original transaction in the `getTransaction` shape. History and scan take `token_accounts: Some(TokenAccountsFilter::BalanceChanged)` to include transactions that touch only the address's token accounts.
 
 ### Parsed Streams
 
