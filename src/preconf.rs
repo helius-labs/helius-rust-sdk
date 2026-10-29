@@ -471,7 +471,7 @@ mod tests {
         );
     }
 
-    /* Wire regression fixture helpers. */
+    /// Legacy, v0, and v1 transactions with the same payer, instruction, and blockhash
     fn wire_transactions() -> Vec<VersionedTransaction> {
         use solana_sdk::{hash::Hash, message::v0, pubkey::Pubkey};
 
@@ -479,7 +479,7 @@ mod tests {
         let instruction = system_instruction::transfer(&payer.pubkey(), &Pubkey::new_from_array([9; 32]), 1);
         let legacy = VersionedTransaction::try_new(
             VersionedMessage::Legacy(LegacyMessage::new_with_blockhash(
-                &[instruction.clone()],
+                std::slice::from_ref(&instruction),
                 Some(&payer.pubkey()),
                 &Hash::new_from_array([11; 32]),
             )),
@@ -490,7 +490,7 @@ mod tests {
             VersionedMessage::V0(
                 v0::Message::try_compile(
                     &payer.pubkey(),
-                    &[instruction.clone()],
+                    std::slice::from_ref(&instruction),
                     &[],
                     Hash::new_from_array([11; 32]),
                 )
@@ -520,7 +520,6 @@ mod tests {
         frame.extend_from_slice(&wincode::serialize(transaction).unwrap());
         frame
     }
-    /* End wire regression fixture helpers. */
 
     #[test]
     fn decodes_validator_wire_for_every_transaction_version() {
