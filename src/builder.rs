@@ -1,4 +1,4 @@
-use crate::config::Config;
+use crate::config::{validate_rebate_address, Config};
 use crate::error::{HeliusError, Result};
 use crate::types::{validate_rpc_url, validate_ws_url, ApiKey, Cluster, HeliusEndpoints};
 use crate::websocket::EnhancedWebsocket;
@@ -67,6 +67,8 @@ pub struct HeliusBuilder {
     http_client: Option<Client>,
     enable_async: bool,
     ws_config: Option<(Option<u64>, Option<u64>)>, // (ping_interval, pong_timeout)
+    mev_protect: bool,
+    rebate_address: Option<String>,
 }
 
 impl HeliusBuilder {
@@ -245,6 +247,56 @@ impl HeliusBuilder {
         self
     }
 
+    /// Opts in to [MEV Protect](https://www.helius.dev/docs/sending-transactions/mev-protect).
+    ///
+    /// Routes transactions away from validators statistically linked to sandwich attacks by
+    /// adding `mev-protect=true` to the RPC URL. Every send through the client is protected,
+    /// and the Sender helpers use it as their default, which
+    /// [`SenderSendOptions::with_mev_protect`](crate::types::SenderSendOptions::with_mev_protect)
+    /// can override per call. WebSocket connections are unaffected. See
+    /// [`Config::with_mev_protect`] for details.
+    ///
+    /// Off by default. Passing `false` only leaves it off; it does not strip a
+    /// `mev-protect=true` already present in a custom URL.
+    ///
+    /// # Examples
+    ///
+    /// ```ignore
+    /// let helius = HeliusBuilder::new()
+    ///     .with_api_key("your-api-key")?
+    ///     .with_cluster(Cluster::MainnetBeta)
+    ///     .with_mev_protect(true)
+    ///     .build()
+    ///     .await?;
+    /// ```
+    pub fn with_mev_protect(mut self, enabled: bool) -> Self {
+        self.mev_protect = enabled;
+        self
+    }
+
+    /// Sets the wallet that receives rebates for RPC usage through this client.
+    ///
+    /// Adds `rebate-address=<address>` to the RPC URL, replacing any already in a custom URL.
+    /// WebSocket and Sender requests are unaffected. See [`Config::with_rebate_address`].
+    ///
+    /// # Errors
+    /// Returns `HeliusError::InvalidInput` if `address` is not a valid Solana address.
+    ///
+    /// # Examples
+    ///
+    /// ```ignore
+    /// let helius = HeliusBuilder::new()
+    ///     .with_api_key("your-api-key")?
+    ///     .with_cluster(Cluster::MainnetBeta)
+    ///     .with_rebate_address("your-wallet-address")?
+    ///     .build()
+    ///     .await?;
+    /// ```
+    pub fn with_rebate_address(mut self, address: impl AsRef<str>) -> Result<Self> {
+        self.rebate_address = Some(validate_rebate_address(address.as_ref())?.to_string());
+        Ok(self)
+    }
+
     /// Uses a custom reqwest HTTP client.
     ///
     /// Useful for configuring:
@@ -353,9 +405,21 @@ impl HeliusBuilder {
 
     /// Internal: Builds the Config from builder settings.
     fn build_config(&self) -> Result<Arc<Config>> {
+        let mut config = self.build_base_config()?;
+        if self.mev_protect {
+            config = config.with_mev_protect(true);
+        }
+        if let Some(ref address) = self.rebate_address {
+            config = config.with_rebate_address(address)?;
+        }
+        Ok(Arc::new(config))
+    }
+
+    /// Internal: Builds the Config's cluster, endpoints, and API key.
+    fn build_base_config(&self) -> Result<Config> {
         // Case 1: Custom URL provided
         if let Some(ref rpc_url) = self.custom_rpc_url {
-            return Ok(Arc::new(Config {
+            return Ok(Config {
                 api_key: self.api_key.clone(),
                 cluster: self.cluster.clone().unwrap_or(Cluster::Devnet), // Default for custom URLs
                 endpoints: HeliusEndpoints {
@@ -367,7 +431,7 @@ impl HeliusBuilder {
                     rpc: rpc_url.to_string(),
                 },
                 custom_url: Some(rpc_url.to_string()),
-            }));
+            });
         }
 
         // Case 2: Standard Helius endpoints
@@ -389,11 +453,11 @@ impl HeliusBuilder {
 
         let endpoints = HeliusEndpoints::for_cluster(&cluster);
 
-        Ok(Arc::new(Config {
+        Ok(Config {
             api_key: self.api_key.clone(),
             cluster,
             endpoints,
             custom_url: None,
-        }))
+        })
     }
 }

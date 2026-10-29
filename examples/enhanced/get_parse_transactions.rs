@@ -1,3 +1,6 @@
+//! Deprecated: the Enhanced Transactions API is in maintenance mode. See examples/parsed_events/.
+#![allow(deprecated)]
+
 use helius::error::Result;
 use helius::types::*;
 use helius::Helius;

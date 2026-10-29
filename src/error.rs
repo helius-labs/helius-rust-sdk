@@ -97,7 +97,8 @@ pub enum HeliusError {
     /// including any structured `data` the server supplied
     ///
     /// A `code` of `0` is a client-side sentinel (not a server code) used when a response
-    /// contained neither a `result` nor an `error` object
+    /// contained neither a `result` nor an `error` object, a `result` of the wrong type, or an
+    /// `error` object without a code
     #[error("RPC error (code {code}): {message}")]
     RpcError { code: i64, message: String },
 
@@ -234,6 +235,22 @@ impl From<SerdeJsonError> for HeliusError {
 impl From<simd_json::Error> for HeliusError {
     fn from(err: simd_json::Error) -> HeliusError {
         HeliusError::SimdJson(err.to_string())
+    }
+}
+
+impl From<tokio::task::JoinError> for HeliusError {
+    /// Converts a `tokio::task::JoinError` into [`HeliusError::Unknown`]
+    ///
+    /// A `JoinError` means a task handed to `tokio::task::spawn_blocking` did not complete, either
+    /// because it panicked or because the runtime is shutting down. It carries no HTTP status, so
+    /// it is reported as an internal error. This lets the result of a `spawn_blocking` decode
+    /// (see `request_handler::decode_response`) be unwrapped with `??` inside a function
+    /// returning the SDK's [`Result`]
+    fn from(err: tokio::task::JoinError) -> Self {
+        HeliusError::Unknown {
+            code: StatusCode::INTERNAL_SERVER_ERROR,
+            text: format!("Blocking task failed to complete: {err}"),
+        }
     }
 }
 

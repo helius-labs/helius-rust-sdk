@@ -154,6 +154,16 @@ async fn main() {
         .build()
         .await
         .expect("Failed to build client");
+
+    // Send RPC rebates to a wallet (adds rebate-address=<wallet> to the RPC URL).
+    // The address is validated, so replace the placeholder with your base58 wallet address first
+    let helius = HeliusBuilder::new()
+        .with_api_key("YOUR_API_KEY").unwrap()
+        .with_cluster(Cluster::MainnetBeta)
+        .with_rebate_address("YOUR_WALLET_ADDRESS").unwrap()
+        .build()
+        .await
+        .expect("Failed to build client");
 }
 ```
 
@@ -190,7 +200,41 @@ while let Some(event) = stream.next().await {
 client.shutdown().await?;
 ```
 
-`preconfSubscribe` takes no filter parameters — it streams **all** scheduled transactions. Notifications are **binary** frames (the subscribe ack is a JSON text frame); the layout is little-endian `version:u8 | slot:u64_le | transaction_index:u64_le | status:u8 | bincode(VersionedTransaction)`. The leading `version` byte is checked first (currently `1`); unknown versions are dropped. `status` is exposed as the `PreconfStatus` enum (`Failed = 0`, `Success = 1`, `Unknown = 2`). Each notification exposes the decoded `VersionedTransaction` plus the raw `transaction_bytes`. See [`examples/websockets/preconf_subscribe.rs`](examples/websockets/preconf_subscribe.rs).
+`preconfSubscribe` takes no filter parameters — it streams **all** scheduled transactions. Notifications are **binary** frames (the subscribe ack is a JSON text frame); the layout is little-endian `version:u8 | slot:u64_le | transaction_index:u64_le | status:u8 | transaction wire bytes`, where the transaction is legacy, v0, or v1 and is decoded with `wincode` (`bincode` cannot read v1). The leading `version` byte is checked first (currently `1`); unknown versions are dropped. `status` is exposed as the `PreconfStatus` enum (`Failed = 0`, `Success = 1`, `Unknown = 2`). Each notification exposes the decoded `VersionedTransaction` plus the raw `transaction_bytes`. See [`examples/websockets/preconf_subscribe.rs`](examples/websockets/preconf_subscribe.rs).
+
+### Parsed Streams
+[Parsed Streams](https://www.helius.dev/docs/parsed-streams) pushes decoded transactions in real time, filtered on the server by program, instruction name, account, or account role. It is the streaming counterpart to Parsed Events and the successor to enhanced transaction webhooks; notifications use the same transfer, summary, and decoded-instruction types as Parsed Events. Available on all plans at 1 credit per delivered event. Create a client with `helius.parsed_streams()?` (requires an API key; mainnet only) or the standalone `ParsedStreamsClient::new(api_key)`, with types in `helius::types::parsed_streams`.
+
+```rust
+use futures_util::StreamExt;
+use helius::types::parsed_streams::ParsedTransactionFilter;
+
+let streams = helius.parsed_streams()?;
+let mut subscription = streams
+    .parsed_transaction_subscribe(
+        ParsedTransactionFilter {
+            programs: Some(vec!["JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4".to_string()]),
+            ..Default::default()
+        },
+        None,
+    )
+    .await?;
+
+while let Some(notification) = subscription.next().await {
+    let value = notification?.value;
+    for &i in value.matched_indexes.as_deref().unwrap_or_default() {
+        let instruction = &value.instructions[i];
+        println!("{} {:?}", value.transaction.signature, instruction.instruction_name);
+    }
+}
+```
+
+- `parsed_transaction_subscribe(filter, options)` - Subscribes with a filter (`programs`, `instruction_names`, `accounts.include`, `accounts.roles`, `include_failed`, `include_cpi`). `options.details` is `Full` (the default: the whole transaction plus `matched_indexes`) or `Matched` (only the matching instructions). Returns a `Stream` of `Result<ParsedTransactionNotification>`; dropping it unsubscribes
+- `raw_transaction_subscribe(filter)` - Same, with `raw` details: matching instructions as base58 data only
+- `parsed_transaction_unsubscribe(subscription_id)` - Unsubscribes by current id
+- `close()` - Closes the connection and ends every subscription
+
+Delivery is **at most once**: the server doesn't replay what confirmed while a connection was down, and it closes connections routinely (10 minutes without a match, deploys, network edge recycling). The client reconnects with backoff and resubscribes every filter on its own; `ParsedStreamsOptions::with_on_reconnect` reports the close code and the last slot delivered so you can backfill the gap from RPC. A subscription ends with an error rather than silently dropping data when it can't be kept alive: a policy close from the server (code 1008, sent when the client falls more than 2048 notifications behind or the API key or plan changes; the error includes the server's reason), 10,000 unread notifications in the client, a filter rejected on resubscribe, or reconnect attempts exhausted. Client messages are paced to the server's 10-per-second limit, and each connection holds up to 25 subscriptions. The client pings every 30 seconds, since the server drops a connection the client hasn't written to for 5 minutes, and treats 60 seconds without a frame (pongs included) as a dead connection. See [`examples/parsed_streams/subscribe.rs`](examples/parsed_streams/subscribe.rs).
 
 ### Examples
 More examples of how to use the SDK can be found in the [`examples`](https://github.com/helius-labs/helius-rust-sdk/tree/dev/examples) directory.
@@ -256,9 +300,30 @@ Our SDK is designed to provide a seamless developer experience when building on 
 - [`get_transaction_with_compression_info`](https://www.helius.dev/docs/api-reference/zk-compression/gettransactionwithcompressioninfo) - Gets transaction details including compression-specific metadata
 - [`get_validity_proof`](https://www.helius.dev/docs/api-reference/zk-compression/getvalidityproof) - Gets a validity proof for compressed data
 
-### Enhanced Transactions API
+### Parsed Events API
+[Parsed Events](https://www.helius.dev/docs/parsed-events) decodes transactions into instructions, transfers, and summaries using Helius's IDL catalog. It is the successor to the Enhanced Transactions API. Mainnet only (with a custom RPC URL, set `.with_cluster(Cluster::MainnetBeta)`); requires an API key; 10 credits per request, plus 1 per history page scanned for `scan`. Available on `helius.parsed_events()`, with types in `helius::types::parsed_events`.
+- [`parse_transactions`](https://www.helius.dev/docs/api-reference/parsed-events/transactions) - Parses up to 100 transaction signatures. Each result carries a `parser_status`, so a missing transaction comes back as an item-level `parser_error` instead of failing the request
+- [`get_transaction_history`](https://www.helius.dev/docs/api-reference/parsed-events/transaction-history) - Returns parsed transaction history for an address with slot and block-time bounds, paginated with `pagination_token`
+- [`scan`](https://www.helius.dev/docs/api-reference/parsed-events/scan) - Searches an address's history server-side for transactions that call up to 20 programs' instructions (by IDL name and/or discriminator) or touch token mints (or native SOL, via `NATIVE_SOL_MINT`), and returns only the parsed matches. Each program and mint takes a `scope`: `Address` (the default) counts only instructions and balances involving the scanned address, `Transaction` counts any in the transaction. Each request scans up to 10,000 transactions and reports why it stopped in `scan.stopped_on`; keep calling with `pagination_token` while one is returned, even when `data` is empty
+- `scan_signatures` / `scan_count` - The same scan, returning only each match's signature, slot, and block time, or only the number of matches
+- `parse_transactions_raw` / `get_transaction_history_raw` / `scan_raw` - Same requests, with the response body returned as `Bytes` for decoding off the async runtime
+
+Every request takes `raw_transaction` (`RawTransactionEncoding::Json`, `JsonParsed`, or `Base64`) to also return each original transaction, and history and scan take `token_accounts` (`TokenAccountsFilter::BalanceChanged` or `All`) to include transactions that touch only the address's token accounts.
+
+See `examples/parsed_events/`.
+
+### Enhanced Transactions API (Deprecated)
+> **Deprecated:** the Enhanced Transactions API is in maintenance mode. Use `helius.parsed_events()` for new mainnet code; see the [migration guide](https://www.helius.dev/docs/parsed-events/guides/migrate-from-enhanced-transactions).
+> `parse_transactions` maps to `parsed_events().parse_transactions` and `parsed_transaction_history` to `parsed_events().get_transaction_history`, with these differences:
+> - `commitment` defaults to `confirmed` (was `finalized`); pass `ParsedEventsCommitment::Finalized` to keep the old behavior.
+> - `limit` defaults to 100 (was 10).
+> - History requires a wallet address; program-wide scans and the `source` / `transaction_type` filters are not supported (filter client-side on `parsed.summary`).
+> - Results are wrapped: `{ signature, parser_status, parsed, parser_error }`, and history pages are `{ data, pagination_token }`.
+> - Parsed Events is mainnet only, so devnet code should stay on the enhanced methods for now.
+
 - [`parse_transactions`](https://www.helius.dev/docs/api-reference/enhanced-transactions/gettransactions) - Parses transactions given an array of transaction IDs
 - [`parsed_transaction_history`](https://www.helius.dev/docs/api-reference/enhanced-transactions/gettransactionsbyaddress) - Retrieves a parsed transaction history for a specific address
+- `parse_transactions_raw` / `parsed_transaction_history_raw` - Same requests, but the response body is returned as `Bytes` for decoding elsewhere (e.g. on tokio's blocking pool with `helius::request_handler::decode_response`), so a large page never parks an async worker. See `examples/enhanced/get_parsed_transaction_history_raw.rs`
 
 ### Webhooks
 - [`append_addresses_to_webhook`](https://github.com/helius-labs/helius-rust-sdk/blob/2d161e1ebf6d06df686d9e248ea80de215457b40/src/webhook.rs#L50-L73) - Appends a set of addresses to a given webhook
@@ -292,6 +357,22 @@ Admin API access is feature-gated per project and served from `https://admin-api
 - [`send_smart_transaction_with_sender`](https://github.com/helius-labs/helius-rust-sdk/blob/dev/src/optimized_transaction.rs) - Builds an optimized tx and sends it via Sender
 - [`send_bundle_with_sender`](https://github.com/helius-labs/helius-rust-sdk/blob/dev/src/optimized_transaction.rs) - Submits a bundle of up to 5 transactions to Sender Max via `sendBundle`. The caller includes only the 0.001 SOL Sender tip in ≥1 transaction; Helius adds any pathway tips. Landing is tracked per-transaction by signature (not bundle IDs)
 - [`warm_sender_connection`](https://github.com/helius-labs/helius-rust-sdk/blob/47d68afcf644938bc474f609368b214170423bba/src/optimized_transaction.rs#L1009-L1021) - Warms Sender connection by hitting `/ping`
+
+**[MEV Protect](https://www.helius.dev/docs/sending-transactions/mev-protect)** routes transactions away from validators statistically linked to sandwich attacks. It's off by default. Turn it on for a whole client with `HeliusBuilder::with_mev_protect(true)` (or `Config::with_mev_protect(true)`): every send through that client is protected, including `send_transaction`, `send_smart_transaction`, and the Sender helpers. Or set it per call on the Sender helpers, which overrides the client setting:
+
+```rust
+let helius = HeliusBuilder::new()
+    .with_api_key("YOUR_API_KEY")?
+    .with_cluster(Cluster::MainnetBeta)
+    .with_mev_protect(true)
+    .build()
+    .await?;
+
+// Per-call override for send_smart_transaction_with_sender, send_and_confirm_via_sender, send_bundle_with_sender
+let opts = SenderSendOptions::new().with_region("US_EAST").with_mev_protect(true);
+```
+
+Only a small fraction of stake is excluded, so the effect on landing rate is small; for the most latency-sensitive flows, measure with and without it first.
 
 ### Transaction v1 (Larger Transactions)
 
@@ -327,6 +408,7 @@ v1 differs from legacy/v0: the compute-unit limit and **total** priority fee (in
 ### RPC Methods
 - [`get_priority_fee_estimate`](https://www.helius.dev/docs/api-reference/priority-fee/getpriorityfeeestimate#getpriorityfeeestimate) - Gets an estimate of the priority fees required for a transaction to be processed more quickly
 - [`get_transactions_for_address`](https://www.helius.dev/docs/api-reference/rpc/http/gettransactionsforaddress) - Gets transaction history for a specific address with advanced filtering, sorting, and pagination. Optionally include transactions from associated token accounts
+- `rpc().post_rpc_request_raw` - Sends any DAS / RPC V2 method and returns the JSON-RPC envelope as `Bytes` instead of decoding it, for callers who want to run deserialization of large pages (`getProgramAccountsV2`, `getAssetsByOwner`) on tokio's blocking pool. Pair with `helius::rpc_client::decode_rpc_response`, which unwraps `result` and surfaces a JSON-RPC `error` exactly as the typed methods do
 - [`get_transfers_by_address`](https://www.helius.dev/docs/api-reference/rpc/http/gettransfersbyaddress) - Gets token and native SOL transfers for a specific address with counterparty, mint, direction, amount, slot, block time, sorting, and cursor pagination filters
 
 ### Helper Methods

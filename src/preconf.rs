@@ -28,7 +28,7 @@
 //! with this exact layout:
 //!
 //! ```text
-//! version:u8 (1) | slot:u64_le (8) | transaction_index:u64_le (8) | status:u8 (1) | bincode(VersionedTransaction)
+//! version:u8 (1) | slot:u64_le (8) | transaction_index:u64_le (8) | status:u8 (1) | transaction wire bytes
 //! ```
 //!
 //! The leading `version` byte is read and checked **first**: it is `1` today and
@@ -39,7 +39,6 @@
 use std::pin::Pin;
 use std::task::{Context, Poll};
 
-use bincode::deserialize;
 use futures_util::{
     future::{BoxFuture, FutureExt},
     sink::SinkExt,
@@ -77,7 +76,7 @@ const UNSUBSCRIBE_METHOD: &str = "preconfUnsubscribe";
 /// version in byte 0 are rejected (dropped) rather than misparsed.
 pub const CURRENT_VERSION: u8 = 1;
 
-/// Fixed-size header before the bincode payload:
+/// Fixed-size header before the transaction payload:
 /// `version(1) + slot(8) + transaction_index(8) + status(1)`.
 const HEADER_LEN: usize = 18;
 
@@ -122,9 +121,9 @@ pub struct PreconfNotification {
     pub transaction_index: u64,
     /// The reported landed status of the transaction.
     pub status: PreconfStatus,
-    /// The decoded transaction (deserialized from bincode).
+    /// The decoded transaction (legacy, v0, or v1 wire format).
     pub transaction: VersionedTransaction,
-    /// The raw `bincode(VersionedTransaction)` bytes, exposed alongside the
+    /// The raw transaction wire bytes, exposed alongside the
     /// decoded form for callers that want the original payload.
     pub transaction_bytes: Vec<u8>,
 }
@@ -133,7 +132,7 @@ impl PreconfNotification {
     /// Parse a raw Pre Confirmations binary WebSocket frame.
     ///
     /// Expected layout:
-    /// `version:u8 | slot:u64_le | transaction_index:u64_le | status:u8 | bincode(VersionedTransaction)`.
+    /// `version:u8 | slot:u64_le | transaction_index:u64_le | status:u8 | transaction wire bytes`.
     ///
     /// The leading `version` byte is checked first; a frame with an unrecognized
     /// version is rejected so future format changes fail loudly instead of being
@@ -159,7 +158,8 @@ impl PreconfNotification {
         let status = PreconfStatus::from_u8(buf[17]);
         let transaction_bytes = buf[HEADER_LEN..].to_vec();
 
-        let transaction: VersionedTransaction = deserialize(&transaction_bytes)
+        // v1 puts the message first and signatures last; bincode only handles legacy/v0.
+        let transaction: VersionedTransaction = wincode::deserialize(&transaction_bytes)
             .map_err(|e| HeliusError::InvalidInput(format!("failed to deserialize VersionedTransaction: {e}")))?;
 
         Ok(Self {
@@ -469,5 +469,119 @@ mod tests {
             PreconfClient::get_url("key123"),
             "wss://beta.helius-rpc.com/?api-key=key123"
         );
+    }
+
+    /// Legacy, v0, and v1 transactions with the same payer, instruction, and blockhash
+    fn wire_transactions() -> Vec<VersionedTransaction> {
+        use solana_sdk::{hash::Hash, message::v0, pubkey::Pubkey};
+
+        let payer = Keypair::new_from_array([7; 32]);
+        let instruction = system_instruction::transfer(&payer.pubkey(), &Pubkey::new_from_array([9; 32]), 1);
+        let legacy = VersionedTransaction::try_new(
+            VersionedMessage::Legacy(LegacyMessage::new_with_blockhash(
+                std::slice::from_ref(&instruction),
+                Some(&payer.pubkey()),
+                &Hash::new_from_array([11; 32]),
+            )),
+            &[&payer],
+        )
+        .unwrap();
+        let v0 = VersionedTransaction::try_new(
+            VersionedMessage::V0(
+                v0::Message::try_compile(
+                    &payer.pubkey(),
+                    std::slice::from_ref(&instruction),
+                    &[],
+                    Hash::new_from_array([11; 32]),
+                )
+                .unwrap(),
+            ),
+            &[&payer],
+        )
+        .unwrap();
+        let v1 = crate::optimized_transaction::build_v1_transaction(
+            &payer.pubkey(),
+            &[instruction],
+            &[&payer],
+            Hash::new_from_array([11; 32]),
+            Some(10_000),
+            Some(200_000),
+            None,
+        )
+        .unwrap();
+        vec![legacy, v0, v1]
+    }
+
+    fn wire_frame(transaction: &VersionedTransaction) -> Vec<u8> {
+        let mut frame = vec![CURRENT_VERSION];
+        frame.extend_from_slice(&123u64.to_le_bytes());
+        frame.extend_from_slice(&7u64.to_le_bytes());
+        frame.push(1);
+        frame.extend_from_slice(&wincode::serialize(transaction).unwrap());
+        frame
+    }
+
+    #[test]
+    fn decodes_validator_wire_for_every_transaction_version() {
+        for transaction in wire_transactions() {
+            let frame = wire_frame(&transaction);
+            let notification = PreconfNotification::from_frame(&frame)
+                .expect("a supported validator wire transaction must not be dropped");
+            assert_eq!(notification.transaction, transaction);
+            assert_eq!(notification.transaction_bytes, frame[HEADER_LEN..]);
+            assert_eq!(
+                (notification.version, notification.slot, notification.transaction_index),
+                (1, 123, 7)
+            );
+            assert_eq!(notification.status, PreconfStatus::Success);
+        }
+    }
+
+    #[tokio::test]
+    async fn websocket_delivers_all_wire_versions_without_dropping_v1() {
+        use tokio::{
+            net::TcpListener,
+            time::{timeout, Duration},
+        };
+        use tokio_tungstenite::accept_async;
+
+        let transactions = wire_transactions();
+        let frames: Vec<_> = transactions.iter().map(wire_frame).collect();
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (socket, _) = listener.accept().await.unwrap();
+            let mut ws = accept_async(socket).await.unwrap();
+            let request = ws.next().await.unwrap().unwrap();
+            let request: serde_json::Value = serde_json::from_str(request.to_text().unwrap()).unwrap();
+            assert_eq!(request["method"], SUBSCRIBE_METHOD);
+            ws.send(Message::Text(
+                serde_json::json!({"jsonrpc":"2.0", "id":1, "result":24040})
+                    .to_string()
+                    .into(),
+            ))
+            .await
+            .unwrap();
+            for frame in frames {
+                ws.send(Message::Binary(frame.into())).await.unwrap();
+            }
+            // Keep the connection open so an omitted notification is observed as a timeout.
+            assert!(matches!(ws.next().await, Some(Ok(Message::Close(_)))));
+        });
+
+        let (client, mut stream) = PreconfClient::connect(&format!("ws://{address}")).await.unwrap();
+        for transaction in transactions {
+            let notification = timeout(Duration::from_secs(2), stream.next())
+                .await
+                .expect("the client dropped a valid transaction wire frame")
+                .expect("the stream ended before delivering all versions");
+            assert_eq!(notification.transaction, transaction);
+            assert_eq!(
+                notification.transaction_bytes,
+                wincode::serialize(&transaction).unwrap()
+            );
+        }
+        client.shutdown().await.unwrap();
+        timeout(Duration::from_secs(2), server).await.unwrap().unwrap();
     }
 }

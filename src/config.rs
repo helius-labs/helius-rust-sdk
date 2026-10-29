@@ -1,12 +1,19 @@
 use crate::error::{HeliusError, Result};
 use crate::rpc_client::RpcClient;
 use crate::types::{ApiKey, Cluster, HeliusEndpoints, MintApiAuthority};
+use crate::utils::is_valid_solana_address;
 use crate::websocket::EnhancedWebsocket;
 use crate::Helius;
 use reqwest::Client;
 use solana_client::nonblocking::rpc_client::RpcClient as AsyncSolanaRpcClient;
 use std::sync::Arc;
 use url::Url;
+
+/// Query parameter that opts an RPC or Sender request in to MEV Protect.
+const MEV_PROTECT_PARAM: &str = "mev-protect";
+
+/// Query parameter naming the wallet that receives RPC rebates.
+const REBATE_ADDRESS_PARAM: &str = "rebate-address";
 
 /// Configuration settings for the Helius client
 ///
@@ -23,6 +30,28 @@ pub struct Config {
     pub endpoints: HeliusEndpoints,
     /// Custom RPC URL if provided (for debugging/logging)
     pub custom_url: Option<String>,
+}
+
+/// Checks that `address` is a Solana address, returning it trimmed.
+///
+/// A rebate address is validated because a mistyped one would otherwise lose the rebates without
+/// any error.
+pub(crate) fn validate_rebate_address(address: &str) -> Result<&str> {
+    let address = address.trim();
+    if is_valid_solana_address(address) {
+        Ok(address)
+    } else {
+        Err(HeliusError::InvalidInput(format!(
+            "Invalid rebate address {address:?}: expected a base58 Solana wallet address"
+        )))
+    }
+}
+
+/// Whether a raw `key=value` query segment names `key`, comparing the decoded key
+fn query_segment_has_key(segment: &str, key: &str) -> bool {
+    url::form_urlencoded::parse(segment.as_bytes())
+        .next()
+        .is_some_and(|(k, _)| k == key)
 }
 
 impl Config {
@@ -80,6 +109,134 @@ impl Config {
                 feature
             ))
         })
+    }
+
+    /// Turns [MEV Protect](https://www.helius.dev/docs/sending-transactions/mev-protect) on or off
+    /// for this configuration.
+    ///
+    /// MEV Protect routes transactions away from validators statistically linked to sandwich
+    /// attacks. Enabling it sets `mev-protect=true` on the RPC endpoint, so it covers every send
+    /// made through a client built from this config (`send_transaction`, `send_smart_transaction`,
+    /// and friends), and it becomes the default for the Sender helpers
+    /// (`send_smart_transaction_with_sender`, `send_and_confirm_via_sender`,
+    /// `send_bundle_with_sender`), which can override it per call with
+    /// [`SenderSendOptions::with_mev_protect`](crate::types::SenderSendOptions::with_mev_protect).
+    /// WebSocket connections are unaffected. Off by default.
+    ///
+    /// The setting is stored on `endpoints.rpc` rather than in a field of its own, so call this
+    /// after any change to `endpoints`. Disabling it removes the parameter from that URL.
+    ///
+    /// # Example
+    /// ```rust
+    /// use helius::config::Config;
+    /// use helius::types::Cluster;
+    ///
+    /// let config = Config::new("your_api_key", Cluster::MainnetBeta)
+    ///     .unwrap()
+    ///     .with_mev_protect(true);
+    /// assert!(config.mev_protect());
+    /// ```
+    pub fn with_mev_protect(mut self, enabled: bool) -> Self {
+        self.set_rpc_query_param(MEV_PROTECT_PARAM, enabled.then_some("true"));
+        self
+    }
+
+    /// Whether MEV Protect is on, i.e. whether the RPC endpoint carries `mev-protect=true`.
+    ///
+    /// This is also true for a custom RPC URL that already includes the parameter.
+    pub fn mev_protect(&self) -> bool {
+        Url::parse(&self.endpoints.rpc)
+            .map(|url| {
+                url.query_pairs()
+                    .any(|(key, value)| key == MEV_PROTECT_PARAM && value == "true")
+            })
+            .unwrap_or(false)
+    }
+
+    /// Sets the wallet that receives rebates for RPC usage through this configuration.
+    ///
+    /// Sets `rebate-address=<address>` on the RPC endpoint, replacing any rebate address already
+    /// there, so every RPC request made through a client built from this config carries it.
+    /// WebSocket and Sender requests are unaffected. Matches the TS SDK's `rebateAddress` option.
+    ///
+    /// Like [`with_mev_protect`](Self::with_mev_protect), the setting is stored on
+    /// `endpoints.rpc`, so call this after any change to `endpoints`.
+    ///
+    /// # Errors
+    /// Returns `HeliusError::InvalidInput` if `address` is not a valid Solana address, since a
+    /// mistyped address would otherwise lose the rebates without any error.
+    ///
+    /// # Example
+    /// ```rust
+    /// use helius::config::Config;
+    /// use helius::types::Cluster;
+    ///
+    /// let config = Config::new("your_api_key", Cluster::MainnetBeta)
+    ///     .unwrap()
+    ///     .with_rebate_address("he1iusunGwqrNtafDtLdhsUQDFvo13z9sUa36PauBtk")
+    ///     .unwrap();
+    /// assert_eq!(config.rebate_address().as_deref(), Some("he1iusunGwqrNtafDtLdhsUQDFvo13z9sUa36PauBtk"));
+    /// ```
+    pub fn with_rebate_address(mut self, address: impl AsRef<str>) -> Result<Self> {
+        let address = validate_rebate_address(address.as_ref())?;
+        self.set_rpc_query_param(REBATE_ADDRESS_PARAM, Some(address));
+        Ok(self)
+    }
+
+    /// The wallet that receives RPC rebates, i.e. the `rebate-address` on the RPC endpoint.
+    ///
+    /// This also reads a rebate address already present in a custom RPC URL. If such a URL
+    /// repeats the parameter, the first value is returned.
+    ///
+    /// # Example
+    /// ```rust
+    /// use helius::config::Config;
+    /// use helius::types::Cluster;
+    ///
+    /// let config = Config::new("your_api_key", Cluster::MainnetBeta).unwrap();
+    /// assert_eq!(config.rebate_address(), None);
+    /// ```
+    pub fn rebate_address(&self) -> Option<String> {
+        Url::parse(&self.endpoints.rpc).ok().and_then(|url| {
+            url.query_pairs()
+                .find(|(key, _)| key == REBATE_ADDRESS_PARAM)
+                .map(|(_, value)| value.into_owned())
+        })
+    }
+
+    /// Sets `key` on the RPC endpoint's query to `value`, or removes it when `value` is `None`.
+    ///
+    /// Every other parameter of a custom URL's query is left exactly as written: existing `key`
+    /// segments are dropped from the raw query string rather than the query being re-encoded,
+    /// and the new value is appended. A query that already holds `key=value` once is left
+    /// untouched.
+    fn set_rpc_query_param(&mut self, key: &str, value: Option<&str>) {
+        let mut url = Url::parse(&self.endpoints.rpc).expect("Config endpoints should always be valid URLs");
+
+        let existing: Vec<String> = url
+            .query_pairs()
+            .filter(|(k, _)| k == key)
+            .map(|(_, v)| v.into_owned())
+            .collect();
+        if existing.iter().map(String::as_str).eq(value) {
+            return;
+        }
+
+        if !existing.is_empty() {
+            let kept: String = url
+                .query()
+                .unwrap_or_default()
+                .split('&')
+                .filter(|segment| !segment.is_empty() && !query_segment_has_key(segment, key))
+                .collect::<Vec<&str>>()
+                .join("&");
+            url.set_query((!kept.is_empty()).then_some(kept.as_str()));
+        }
+        if let Some(value) = value {
+            url.query_pairs_mut().append_pair(key, value);
+        }
+
+        self.endpoints.rpc = url.to_string();
     }
 
     /// Builds an RPC URL with authentication.
