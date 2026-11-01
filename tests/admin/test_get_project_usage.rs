@@ -96,3 +96,18 @@ async fn test_get_project_usage_requires_api_key() {
         response
     );
 }
+
+#[tokio::test]
+async fn test_get_project_usage_rejects_empty_or_invalid_project_id() {
+    let helius = create_test_helius("http://localhost:8899/");
+
+    for invalid_id in ["", "   ", "proj/123", "proj?foo=bar", "proj#frag"] {
+        let response: Result<ProjectUsage> = helius.get_project_usage(invalid_id).await;
+        assert!(
+            matches!(response, Err(HeliusError::InvalidInput(ref text)) if text.contains("project_id")),
+            "Expected InvalidInput for project_id {:?}, got: {:?}",
+            invalid_id,
+            response
+        );
+    }
+}

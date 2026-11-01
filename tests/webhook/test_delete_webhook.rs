@@ -76,3 +76,26 @@ async fn test_delete_webhook_failure() {
     let response: Result<()> = helius.delete_webhook("0e8250a1-ceec-4757-ad69").await;
     assert!(response.is_err(), "Expected an error due to server failure");
 }
+
+#[tokio::test]
+async fn test_webhook_methods_reject_empty_or_invalid_webhook_id() {
+    let helius = Helius::new("fake_api_key", Cluster::Devnet).unwrap();
+
+    for invalid_id in ["", "   ", "id/with/slash", "id?query=1"] {
+        let get_res = helius.get_webhook_by_id(invalid_id).await;
+        assert!(
+            matches!(get_res, Err(helius::error::HeliusError::InvalidInput(ref text)) if text.contains("webhook_id")),
+            "Expected InvalidInput for get_webhook_by_id({:?}), got: {:?}",
+            invalid_id,
+            get_res
+        );
+
+        let del_res = helius.delete_webhook(invalid_id).await;
+        assert!(
+            matches!(del_res, Err(helius::error::HeliusError::InvalidInput(ref text)) if text.contains("webhook_id")),
+            "Expected InvalidInput for delete_webhook({:?}), got: {:?}",
+            invalid_id,
+            del_res
+        );
+    }
+}

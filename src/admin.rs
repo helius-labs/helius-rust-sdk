@@ -1,10 +1,20 @@
-use crate::error::Result;
+use crate::error::{HeliusError, Result};
 use crate::types::ProjectUsage;
 use crate::Helius;
 
 use reqwest::{Method, Url};
 
 const ADMIN_API_BASE_URL: &str = "https://admin-api.helius.xyz/";
+
+fn validate_project_id(project_id: &str) -> Result<&str> {
+    let trimmed = project_id.trim();
+    if trimmed.is_empty() || trimmed.contains(['/', '?', '#', '\\']) {
+        return Err(HeliusError::InvalidInput(
+            "project_id cannot be empty or contain URL path/query separators".to_string(),
+        ));
+    }
+    Ok(trimmed)
+}
 
 impl Helius {
     /// Get the appropriate base URL for Admin API calls.
@@ -58,6 +68,7 @@ impl Helius {
     /// }
     /// ```
     pub async fn get_project_usage(&self, project_id: &str) -> Result<ProjectUsage> {
+        let project_id = validate_project_id(project_id)?;
         let api_key = self.config.require_api_key("admin project usage")?;
         let base_url = self.get_admin_api_base_url();
         let url: String = format!(
