@@ -1,18 +1,9 @@
-use crate::error::{HeliusError, Result};
+use crate::config::validate_path_id;
+use crate::error::Result;
 use crate::types::{CreateWebhookRequest, EditWebhookRequest, ToggleWebhookRequest, Webhook};
 use crate::Helius;
 
 use reqwest::{Method, Url};
-
-fn validate_webhook_id(webhook_id: &str) -> Result<&str> {
-    let trimmed = webhook_id.trim();
-    if trimmed.is_empty() || trimmed.contains(['/', '?', '#', '\\']) {
-        return Err(HeliusError::InvalidInput(
-            "webhook_id cannot be empty or contain URL path/query separators".to_string(),
-        ));
-    }
-    Ok(trimmed)
-}
 
 impl Helius {
     /// Creates a webhook given account addresses
@@ -41,7 +32,7 @@ impl Helius {
     /// # Returns
     /// A `Result` wrapping the updated `Webhook`, or a `HeliusError` if the edit request fails
     pub async fn edit_webhook(&self, request: EditWebhookRequest) -> Result<Webhook> {
-        let webhook_id = validate_webhook_id(&request.webhook_id)?;
+        let webhook_id = validate_path_id(&request.webhook_id, "webhook_id")?;
         let api_key = self.config.require_api_key("webhook operations")?;
         let url: String = format!(
             "{}v0/webhooks/{}?api-key={}",
@@ -122,7 +113,7 @@ impl Helius {
     /// # Returns
     /// A `Result` wrapping the `Webhook` queried, if it exists
     pub async fn get_webhook_by_id(&self, webhook_id: &str) -> Result<Webhook> {
-        let webhook_id = validate_webhook_id(webhook_id)?;
+        let webhook_id = validate_path_id(webhook_id, "webhook_id")?;
         let api_key = self.config.require_api_key("webhook operations")?;
         let url: String = format!(
             "{}v0/webhooks/{}?api-key={}",
@@ -161,7 +152,7 @@ impl Helius {
     /// # Returns
     /// A `Result` wrapping the updated `Webhook`, or a `HeliusError` if the request fails
     pub async fn toggle_webhook(&self, request: ToggleWebhookRequest) -> Result<Webhook> {
-        let webhook_id = validate_webhook_id(&request.webhook_id)?;
+        let webhook_id = validate_path_id(&request.webhook_id, "webhook_id")?;
         let api_key = self.config.require_api_key("webhook operations")?;
         let url: String = format!(
             "{}v0/webhooks/{}?api-key={}",
@@ -185,7 +176,7 @@ impl Helius {
     /// # Returns
     /// A unit since there isn't any response
     pub async fn delete_webhook(&self, webhook_id: &str) -> Result<()> {
-        let webhook_id = validate_webhook_id(webhook_id)?;
+        let webhook_id = validate_path_id(webhook_id, "webhook_id")?;
         let api_key = self.config.require_api_key("webhook operations")?;
         let url: String = format!(
             "{}v0/webhooks/{}?api-key={}",

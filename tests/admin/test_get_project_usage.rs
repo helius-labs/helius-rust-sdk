@@ -101,7 +101,21 @@ async fn test_get_project_usage_requires_api_key() {
 async fn test_get_project_usage_rejects_empty_or_invalid_project_id() {
     let helius = create_test_helius("http://localhost:8899/");
 
-    for invalid_id in ["", "   ", "proj/123", "proj?foo=bar", "proj#frag"] {
+    for invalid_id in [
+        "",
+        "   ",
+        " proj-123 ",
+        "a\tb",
+        ".",
+        "..",
+        "%2e",
+        "%2e%2e",
+        "proj%2F123",
+        "proj/123",
+        "proj?foo=bar",
+        "proj#frag",
+        "proj\\123",
+    ] {
         let response: Result<ProjectUsage> = helius.get_project_usage(invalid_id).await;
         assert!(
             matches!(response, Err(HeliusError::InvalidInput(ref text)) if text.contains("project_id")),
