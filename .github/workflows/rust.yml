@@ -10,6 +10,22 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
+  # Stable check required by the organization CI ruleset.
+  ci-checks:
+    name: ci-checks
+    needs: [build]
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions: {}
+    steps:
+      - name: Verify required job results
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+        run: |
+          echo "$RESULTS"
+          echo "$RESULTS" | jq -e 'length > 0 and all(.[]; .result == "success")'
+
   build:
 
     runs-on: ubuntu-latest
@@ -19,7 +35,7 @@ jobs:
       pull-requests: write
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v7
       with:
         fetch-depth: '0'
 
@@ -48,12 +64,9 @@ jobs:
           restore-keys: ${{ runner.os }}-target- || echo 'Cache target step failed or timed out.'"
     
     - name: Set up Rust
-      uses: actions-rs/toolchain@v1
-      with:
-        toolchain: stable
-        profile: minimal
-        override: true
-        components: clippy, rustfmt
+      run: |
+        rustup toolchain install stable --profile minimal --component clippy --component rustfmt
+        rustup default stable
 
     - name: Install Protobuf Compiler
       run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
