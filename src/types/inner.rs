@@ -1378,7 +1378,6 @@ pub struct Uses {
 /// Tracks the print supply for Metaplex master edition NFTs. A master edition
 /// can produce a limited or unlimited number of prints (editions).
 #[derive(Serialize, Deserialize, Debug, Default)]
-#[serde(rename_all = "camelCase")]
 pub struct Supply {
     /// Maximum number of editions that can be printed (`None` or `0` = unlimited)
     pub print_max_supply: Option<u64>,
