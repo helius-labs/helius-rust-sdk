@@ -1,3 +1,4 @@
+use crate::config::validate_path_id;
 use crate::error::Result;
 use crate::types::ProjectUsage;
 use crate::Helius;
@@ -58,6 +59,7 @@ impl Helius {
     /// }
     /// ```
     pub async fn get_project_usage(&self, project_id: &str) -> Result<ProjectUsage> {
+        let project_id = validate_path_id(project_id, "project_id")?;
         let api_key = self.config.require_api_key("admin project usage")?;
         let base_url = self.get_admin_api_base_url();
         let url: String = format!(
