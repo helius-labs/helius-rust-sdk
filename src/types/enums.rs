@@ -18,7 +18,7 @@ pub enum Interface {
     Custom,
     #[serde(rename = "V1_PRINT")]
     V1Print,
-    #[serde(rename = "Legacy_NFT")]
+    #[serde(rename = "LEGACY_NFT")]
     LegacyNFT,
     #[serde(rename = "V2_NFT")]
     V2NFT,
@@ -36,6 +36,10 @@ pub enum Interface {
     MplCoreAsset,
     #[serde(rename = "MplCoreCollection")]
     MplCoreCollection,
+    #[serde(rename = "MplCoreGroup")]
+    MplCoreGroup,
+    #[serde(rename = "MplBubblegumV2")]
+    MplBubblegumV2,
 }
 
 /// The ownership model for an asset.
