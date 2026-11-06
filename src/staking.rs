@@ -346,23 +346,28 @@ impl Helius {
         let state: StakeStateV2 = bincode::deserialize(&account.data)
             .map_err(|_| HeliusError::InvalidInput("Failed to parse stake account".into()))?;
 
-        let deactivation_epoch = match state {
-            StakeStateV2::Stake(_, stake, _) => stake.delegation.deactivation_epoch,
+        let deactivation_epoch: Option<u64> = match state {
+            StakeStateV2::Stake(_, stake, _) => Some(stake.delegation.deactivation_epoch),
+            // Initialized but never delegated: nothing is active or cooling down, so the stake
+            // program lets the withdraw authority take the whole balance
+            StakeStateV2::Initialized(_) => None,
             _ => {
                 return Err(HeliusError::InvalidInput(
-                    "Account is not a valid delegated stake account".into(),
+                    "Account is not an initialized or delegated stake account".into(),
                 ));
             }
         };
 
-        let current_epoch = self.run_blocking_rpc(|client| client.get_epoch_info()).await??.epoch;
+        if let Some(deactivation_epoch) = deactivation_epoch {
+            let current_epoch = self.run_blocking_rpc(|client| client.get_epoch_info()).await??.epoch;
 
-        // A stake deactivated in epoch N is only withdrawable once epoch N has fully passed
-        // (i.e. current_epoch > deactivation_epoch). During the deactivation epoch itself it is
-        // still cooling down, so `>=` is required here. Active stakes use a sentinel
-        // deactivation_epoch of u64::MAX and are likewise reported as not withdrawable.
-        if deactivation_epoch >= current_epoch {
-            return Ok(0); // Still active or cooling down
+            // A stake deactivated in epoch N is only withdrawable once epoch N has fully passed
+            // (i.e. current_epoch > deactivation_epoch). During the deactivation epoch itself it is
+            // still cooling down, so `>=` is required here. Active stakes use a sentinel
+            // deactivation_epoch of u64::MAX and are likewise reported as not withdrawable.
+            if deactivation_epoch >= current_epoch {
+                return Ok(0); // Still active or cooling down
+            }
         }
 
         if include_rent_exempt {
