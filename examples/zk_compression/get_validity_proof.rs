@@ -23,9 +23,9 @@ async fn main() -> Result<()> {
 
             let proof = &result.value;
             println!("Proof components:");
-            println!("  a: {}", proof.compressed_proof.a);
-            println!("  b: {}", proof.compressed_proof.b);
-            println!("  c: {}", proof.compressed_proof.c);
+            println!("  a: {:?}", proof.compressed_proof.a);
+            println!("  b: {:?}", proof.compressed_proof.b);
+            println!("  c: {:?}", proof.compressed_proof.c);
             println!("Roots: {:?}", proof.roots);
             println!("Merkle trees: {:?}", proof.merkle_trees);
             println!("Leaf indices: {:?}", proof.leaf_indices);
