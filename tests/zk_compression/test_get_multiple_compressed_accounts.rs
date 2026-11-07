@@ -19,7 +19,7 @@ async fn test_get_multiple_compressed_accounts_success() {
                         lamports: 1000,
                         leaf_index: 0,
                         owner: "owner1".to_string(),
-                        seq: 1,
+                        seq: Some(1),
                         slot_created: 50,
                         tree: "tree1".to_string(),
                     }),

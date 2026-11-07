@@ -19,7 +19,7 @@ async fn test_get_compressed_token_accounts_by_delegate_success() {
                         lamports: 0,
                         leaf_index: 0,
                         owner: "owner1".to_string(),
-                        seq: 1,
+                        seq: Some(1),
                         slot_created: 50,
                         tree: "tree1".to_string(),
                     },
