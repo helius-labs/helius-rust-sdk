@@ -17,11 +17,11 @@ use rand::Rng;
 use reqwest::StatusCode;
 use serde_json::json;
 use solana_client::{
-    rpc_client::SerializableTransaction,
+    rpc_client::{RpcClient as SolanaRpcClient, SerializableTransaction},
     rpc_config::{RpcSendTransactionConfig, RpcSimulateTransactionConfig},
     rpc_response::{Response, RpcSimulateTransactionResult},
 };
-use solana_commitment_config::CommitmentConfig;
+use solana_commitment_config::{CommitmentConfig, CommitmentLevel};
 use solana_compute_budget_interface::ComputeBudgetInstruction;
 use solana_sdk::signature::keypair_from_seed;
 use solana_sdk::{
@@ -407,6 +407,31 @@ fn resolve_tip_lamports(feed_lamports: Option<u64>, min_lamports: u64, max_tip_l
     feed_lamports.unwrap_or(min_lamports).clamp(min_lamports, ceiling)
 }
 
+/// Simulation config for a draft whose blockhash came from `client.get_latest_blockhash()`
+///
+/// The blockhash is fetched at the client's commitment, so the simulation must run there too.
+/// Left unset, the commitment defaults to `finalized`, and the rooted bank does not know a newer
+/// `confirmed` or `processed` blockhash yet: the simulation then fails with `BlockhashNotFound`.
+fn simulation_config(client: &SolanaRpcClient, sig_verify: bool) -> RpcSimulateTransactionConfig {
+    RpcSimulateTransactionConfig {
+        sig_verify,
+        commitment: Some(client.commitment()),
+        ..Default::default()
+    }
+}
+
+/// The preflight commitment for a send whose config leaves it unset
+///
+/// The smart-transaction builders fetch their blockhash at `confirmed`. Left unset, the
+/// preflight commitment defaults to `finalized`, whose bank does not know that blockhash until
+/// the root catches up, so every send would fail preflight with "Blockhash not found" until then.
+fn with_default_preflight_commitment(config: RpcSendTransactionConfig) -> RpcSendTransactionConfig {
+    RpcSendTransactionConfig {
+        preflight_commitment: config.preflight_commitment.or(Some(CommitmentLevel::Confirmed)),
+        ..config
+    }
+}
+
 fn is_retryable_confirmation_error(err: &HeliusError) -> bool {
     matches!(err, HeliusError::Timeout { .. })
 }
@@ -748,12 +773,11 @@ impl Helius {
         };
 
         // Simulate the transaction
-        let config: RpcSimulateTransactionConfig = RpcSimulateTransactionConfig {
-            sig_verify: signers.is_some(),
-            ..Default::default()
-        };
+        let sig_verify: bool = signers.is_some();
         let result: Response<RpcSimulateTransactionResult> = self
-            .run_blocking_rpc(move |client| client.simulate_transaction_with_config(&transaction, config))
+            .run_blocking_rpc(move |client| {
+                client.simulate_transaction_with_config(&transaction, simulation_config(client, sig_verify))
+            })
             .await??;
 
         // A failed simulation still returns `units_consumed: Some(0)`; surface the error instead of
@@ -1074,7 +1098,9 @@ impl Helius {
     /// * `transaction` - The transaction to be sent, which implements `SerializableTransaction`.
     ///   Each send attempt runs on tokio's blocking pool and so needs an owned copy; the bound is
     ///   satisfied by `Transaction` and `VersionedTransaction`
-    /// * `send_transaction_config` - Configuration options for sending the transaction
+    /// * `send_transaction_config` - Configuration options for sending the transaction. An unset
+    ///   `preflight_commitment` defaults to `confirmed`, the commitment the smart-transaction
+    ///   builders fetch their blockhash at
     /// * `last_valid_block_height` - The last block height at which the transaction is valid
     /// * `timeout` - Optional duration for polling transaction confirmation, defaults to 60 seconds
     ///
@@ -1090,6 +1116,9 @@ impl Helius {
     where
         T: SerializableTransaction + Clone + Send + 'static,
     {
+        let send_transaction_config: RpcSendTransactionConfig =
+            with_default_preflight_commitment(send_transaction_config);
+
         // Retry logic with a timeout
         let timeout: Duration = timeout.unwrap_or(Duration::from_secs(60));
         let start_time: Instant = Instant::now();
@@ -1252,13 +1281,11 @@ impl Helius {
             }
         };
 
-        let config: RpcSimulateTransactionConfig = RpcSimulateTransactionConfig {
-            sig_verify: keypairs.is_some(),
-            ..Default::default()
-        };
-
+        let sig_verify: bool = keypairs.is_some();
         let result: Response<RpcSimulateTransactionResult> = self
-            .run_blocking_rpc(move |client| client.simulate_transaction_with_config(&transaction, config))
+            .run_blocking_rpc(move |client| {
+                client.simulate_transaction_with_config(&transaction, simulation_config(client, sig_verify))
+            })
             .await??;
 
         Ok(result.value.units_consumed)
