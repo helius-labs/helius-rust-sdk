@@ -1,3 +1,4 @@
+use crate::config::validate_path_id;
 use crate::error::Result;
 use crate::types::{CreateWebhookRequest, EditWebhookRequest, ToggleWebhookRequest, Webhook};
 use crate::Helius;
@@ -31,11 +32,12 @@ impl Helius {
     /// # Returns
     /// A `Result` wrapping the updated `Webhook`, or a `HeliusError` if the edit request fails
     pub async fn edit_webhook(&self, request: EditWebhookRequest) -> Result<Webhook> {
+        let webhook_id = validate_path_id(&request.webhook_id, "webhook_id")?;
         let api_key = self.config.require_api_key("webhook operations")?;
         let url: String = format!(
             "{}v0/webhooks/{}?api-key={}",
             self.config.endpoints.api,
-            request.webhook_id,
+            webhook_id,
             api_key.as_str()
         );
         let parsed_url: Url = Url::parse(&url)?;
@@ -111,6 +113,7 @@ impl Helius {
     /// # Returns
     /// A `Result` wrapping the `Webhook` queried, if it exists
     pub async fn get_webhook_by_id(&self, webhook_id: &str) -> Result<Webhook> {
+        let webhook_id = validate_path_id(webhook_id, "webhook_id")?;
         let api_key = self.config.require_api_key("webhook operations")?;
         let url: String = format!(
             "{}v0/webhooks/{}?api-key={}",
@@ -149,11 +152,12 @@ impl Helius {
     /// # Returns
     /// A `Result` wrapping the updated `Webhook`, or a `HeliusError` if the request fails
     pub async fn toggle_webhook(&self, request: ToggleWebhookRequest) -> Result<Webhook> {
+        let webhook_id = validate_path_id(&request.webhook_id, "webhook_id")?;
         let api_key = self.config.require_api_key("webhook operations")?;
         let url: String = format!(
             "{}v0/webhooks/{}?api-key={}",
             self.config.endpoints.api,
-            request.webhook_id,
+            webhook_id,
             api_key.as_str()
         );
         let parsed_url: Url = Url::parse(&url)?;
@@ -172,6 +176,7 @@ impl Helius {
     /// # Returns
     /// A unit since there isn't any response
     pub async fn delete_webhook(&self, webhook_id: &str) -> Result<()> {
+        let webhook_id = validate_path_id(webhook_id, "webhook_id")?;
         let api_key = self.config.require_api_key("webhook operations")?;
         let url: String = format!(
             "{}v0/webhooks/{}?api-key={}",

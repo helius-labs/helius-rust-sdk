@@ -233,3 +233,93 @@ async fn test_get_assets_by_owner_failure() {
     let response: Result<AssetList> = helius.rpc().get_assets_by_owner(request).await;
     assert!(response.is_err(), "Expected an error due to server failure");
 }
+
+/// Every `interface` value the DAS docs list. One asset with a value the enum can't decode fails
+/// the whole page, and the same spelling goes out on a `searchAssets` `interface` filter.
+#[tokio::test]
+async fn test_get_assets_by_owner_decodes_every_documented_interface() {
+    let interfaces = [
+        "V1_NFT",
+        "V1_PRINT",
+        "LEGACY_NFT",
+        "V2_NFT",
+        "FungibleAsset",
+        "FungibleToken",
+        "Custom",
+        "Identity",
+        "Executable",
+        "ProgrammableNFT",
+        "MplCoreAsset",
+        "MplBubblegumV2",
+        "MplCoreCollection",
+        "MplCoreGroup",
+    ];
+    let items: Vec<Value> = interfaces
+        .iter()
+        .map(|interface| {
+            serde_json::json!({
+                "interface": interface,
+                "id": "F9Lw3ki3hJ7PF9HQXsBzoY8GyE6sPoEZZdXJBsTTD2rk",
+                "ownership": {
+                    "frozen": false,
+                    "delegated": false,
+                    "delegate": null,
+                    "ownership_model": "single",
+                    "owner": "GNPwr9fk9RJbfy9nSKbNiz5NPfc69KVwnizverx6fNze"
+                },
+                "mutable": true,
+                "burnt": false
+            })
+        })
+        .collect();
+    let body = serde_json::json!({
+        "jsonrpc": "2.0",
+        "id": "1",
+        "result": { "total": items.len(), "limit": 1000, "page": 1, "items": items }
+    });
+
+    let mut server: Server = Server::new_with_opts_async(mockito::ServerOpts::default()).await;
+    let url: String = server.url();
+    server
+        .mock("POST", "/?api-key=fake_api_key")
+        .with_status(200)
+        .with_header("content-type", "application/json")
+        .with_body(body.to_string())
+        .create();
+
+    let config: Arc<Config> = Arc::new(Config {
+        api_key: Some(ApiKey::new("fake_api_key").unwrap()),
+        cluster: Cluster::Devnet,
+        endpoints: HeliusEndpoints {
+            api: url.to_string(),
+            rpc: url.to_string(),
+        },
+        custom_url: None,
+    });
+    let client: Client = Client::new();
+    let rpc_client: Arc<RpcClient> = Arc::new(RpcClient::new(Arc::new(client.clone()), Arc::clone(&config)).unwrap());
+    let helius: Helius = Helius {
+        config,
+        client,
+        rpc_client,
+        async_rpc_client: None,
+        ws_client: None,
+    };
+
+    let assets: AssetList = helius
+        .rpc()
+        .get_assets_by_owner(GetAssetsByOwner {
+            owner_address: "GNPwr9fk9RJbfy9nSKbNiz5NPfc69KVwnizverx6fNze".to_string(),
+            page: 1,
+            ..Default::default()
+        })
+        .await
+        .expect("every documented interface should decode");
+
+    let round_trip: Vec<Value> = assets
+        .items
+        .iter()
+        .map(|asset| serde_json::to_value(&asset.interface).unwrap())
+        .collect();
+    assert_eq!(round_trip, interfaces);
+}
