@@ -10,9 +10,11 @@ use solana_sdk::{
 use solana_system_interface::instruction as system_instruction;
 use std::sync::Arc;
 
+use solana_commitment_config::CommitmentConfig;
+
 use super::helpers::{
     mock_latest_blockhash, mock_priority_fee_estimate, mock_simulate_transaction, mock_simulate_transaction_failed,
-    setup_mock,
+    setup_mock, setup_mock_with_commitment,
 };
 
 #[tokio::test(flavor = "multi_thread")]
@@ -468,4 +470,100 @@ async fn test_data_size_limit_is_rejected_without_v1() {
             "expected a version-mismatch error, got {err}"
         ),
     }
+}
+
+/// Mocks `simulateTransaction` the way a node answers it at each commitment for a draft built on
+/// a `confirmed` blockhash: the confirmed bank knows the blockhash and runs the draft, while the
+/// rooted (`finalized`) bank does not know it yet and rejects it with `BlockhashNotFound`.
+fn mock_simulation_by_commitment(server: &mut mockito::Server) -> (mockito::Mock, mockito::Mock) {
+    let simulate_at = |commitment: &str| {
+        mockito::Matcher::AllOf(vec![
+            mockito::Matcher::Regex("simulateTransaction".to_string()),
+            mockito::Matcher::Regex(format!(r#""commitment":"{commitment}""#)),
+        ])
+    };
+
+    let confirmed = server
+        .mock("POST", mockito::Matcher::Any)
+        .match_body(simulate_at("confirmed"))
+        .with_status(200)
+        .with_header("Content-Type", "application/json")
+        .with_body(
+            r#"{"jsonrpc":"2.0","result":{"context":{"slot":1},"value":{"err":null,"logs":[],"accounts":null,"unitsConsumed":50000,"returnData":null}},"id":1}"#,
+        )
+        .expect_at_least(1)
+        .create();
+    let finalized = server
+        .mock("POST", mockito::Matcher::Any)
+        .match_body(simulate_at("finalized"))
+        .with_status(200)
+        .with_header("Content-Type", "application/json")
+        .with_body(
+            r#"{"jsonrpc":"2.0","result":{"context":{"slot":1},"value":{"err":"BlockhashNotFound","logs":[],"accounts":null,"unitsConsumed":0,"returnData":null}},"id":1}"#,
+        )
+        .expect(0)
+        .create();
+
+    (confirmed, finalized)
+}
+
+/// The draft's blockhash is fetched at the client's commitment, so it must be simulated there too.
+/// At the RPC default (`finalized`) a confirmed-commitment client, such as `Helius::new_async`
+/// builds, has every draft rejected with `BlockhashNotFound`, failing every smart transaction.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_create_smart_transaction_simulates_at_the_client_commitment() {
+    let (mut server, helius) = setup_mock_with_commitment(Some(CommitmentConfig::confirmed())).await;
+
+    mock_latest_blockhash(&mut server);
+    mock_priority_fee_estimate(&mut server);
+    let (confirmed, finalized) = mock_simulation_by_commitment(&mut server);
+
+    let payer = Keypair::new();
+    let payer_signer: Arc<dyn Signer> = Arc::new(payer.insecure_clone());
+    let config = CreateSmartTransactionConfig {
+        instructions: vec![system_instruction::transfer(
+            &payer.pubkey(),
+            &Pubkey::new_unique(),
+            1000,
+        )],
+        signers: vec![payer_signer],
+        ..Default::default()
+    };
+
+    let result = helius.create_smart_transaction(&config).await;
+    assert!(result.is_ok(), "create_smart_transaction failed: {:?}", result.err());
+
+    confirmed.assert();
+    finalized.assert();
+}
+
+/// The seed-based path reports `units_consumed` as is, so a rejected simulation there does not
+/// fail: it yields 0 units and the transaction is built with the 1,000 CU floor instead of the
+/// real estimate.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_thread_safe_compute_units_are_simulated_at_the_client_commitment() {
+    let (mut server, helius) = setup_mock_with_commitment(Some(CommitmentConfig::confirmed())).await;
+
+    mock_latest_blockhash(&mut server);
+    let (confirmed, finalized) = mock_simulation_by_commitment(&mut server);
+
+    let payer = Keypair::new();
+    let units = helius
+        .get_compute_units_thread_safe(
+            vec![system_instruction::transfer(
+                &payer.pubkey(),
+                &Pubkey::new_unique(),
+                1000,
+            )],
+            payer.pubkey(),
+            vec![],
+            Some(&[&payer]),
+            TransactionVersion::Auto,
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(units, Some(50_000), "the estimate should come from the confirmed bank");
+    confirmed.assert();
+    finalized.assert();
 }
