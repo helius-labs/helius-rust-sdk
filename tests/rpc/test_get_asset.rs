@@ -248,3 +248,65 @@ async fn test_get_asset_failure() {
     let response: Result<Option<Asset>> = helius.rpc().get_asset(request).await;
     assert!(response.is_err(), "Expected an error but got success");
 }
+
+/// The DAS API sends `supply` in snake_case, like the rest of the asset (`getAsset` docs example).
+#[tokio::test]
+async fn test_get_asset_decodes_supply() {
+    let body = serde_json::json!({
+        "jsonrpc": "2.0",
+        "id": "1",
+        "result": {
+            "interface": "ProgrammableNFT",
+            "id": "F9Lw3ki3hJ7PF9HQXsBzoY8GyE6sPoEZZdXJBsTTD2rk",
+            "ownership": {
+                "frozen": true,
+                "delegated": false,
+                "delegate": null,
+                "ownership_model": "single",
+                "owner": "4zdNGgAtFsW1cQgHqkiWyRsxaAgxrSRRynnuunxzjxue"
+            },
+            "supply": { "print_max_supply": 69, "print_current_supply": 61, "edition_nonce": 254 },
+            "mutable": true,
+            "burnt": false
+        }
+    });
+
+    let mut server: Server = Server::new_with_opts_async(mockito::ServerOpts::default()).await;
+    let url: String = server.url();
+    server
+        .mock("POST", "/?api-key=fake_api_key")
+        .with_status(200)
+        .with_header("content-type", "application/json")
+        .with_body(body.to_string())
+        .create();
+
+    let config: Arc<Config> = Arc::new(Config {
+        api_key: Some(ApiKey::new("fake_api_key").unwrap()),
+        cluster: Cluster::Devnet,
+        endpoints: HeliusEndpoints {
+            api: url.to_string(),
+            rpc: url.to_string(),
+        },
+        custom_url: None,
+    });
+    let client: Client = Client::new();
+    let rpc_client: Arc<RpcClient> = Arc::new(RpcClient::new(Arc::new(client.clone()), Arc::clone(&config)).unwrap());
+    let helius: Helius = Helius {
+        config,
+        client,
+        rpc_client,
+        async_rpc_client: None,
+        ws_client: None,
+    };
+
+    let request: GetAsset = GetAsset {
+        id: "F9Lw3ki3hJ7PF9HQXsBzoY8GyE6sPoEZZdXJBsTTD2rk".to_string(),
+        display_options: None,
+    };
+    let asset: Asset = helius.rpc().get_asset(request).await.unwrap().unwrap();
+
+    let supply = asset.supply.expect("the response has a supply");
+    assert_eq!(supply.print_max_supply, Some(69));
+    assert_eq!(supply.print_current_supply, Some(61));
+    assert_eq!(supply.edition_nonce, Some(254));
+}
