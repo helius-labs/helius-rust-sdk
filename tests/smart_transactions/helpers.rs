@@ -7,10 +7,17 @@ use helius::types::*;
 
 use mockito::Server;
 use reqwest::Client;
+use solana_commitment_config::CommitmentConfig;
 
 /// Creates a mockito server and a Helius client wired to it.
 /// Both the Helius HTTP handler and the Solana RPC client point at the mockito server.
 pub async fn setup_mock() -> (Server, Helius) {
+    setup_mock_with_commitment(None).await
+}
+
+/// Like [`setup_mock`], with the Solana RPC client at the given commitment (`None` keeps the
+/// client default, `finalized`), as `HeliusBuilder::with_commitment` and `Helius::new_async` build it.
+pub async fn setup_mock_with_commitment(commitment: Option<CommitmentConfig>) -> (Server, Helius) {
     let server = Server::new_with_opts_async(mockito::ServerOpts::default()).await;
     let url = server.url();
 
@@ -25,7 +32,12 @@ pub async fn setup_mock() -> (Server, Helius) {
     });
 
     let client = Client::new();
-    let rpc_client = Arc::new(RpcClient::new(Arc::new(client.clone()), Arc::clone(&config)).unwrap());
+    let rpc_client = Arc::new(match commitment {
+        Some(commitment) => {
+            RpcClient::new_with_commitment(Arc::new(client.clone()), Arc::clone(&config), commitment).unwrap()
+        }
+        None => RpcClient::new(Arc::new(client.clone()), Arc::clone(&config)).unwrap(),
+    });
     let helius = Helius {
         config,
         client,
