@@ -60,7 +60,11 @@ pub struct CompressedAccount {
     /// The Solana program that owns this compressed account.
     pub owner: String,
     /// Sequence number for tracking updates to this compressed account.
-    pub seq: u64,
+    ///
+    /// `None` for accounts in a V2 (batched) state tree: the indexer returns `"seq": null`
+    /// for them.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub seq: Option<u64>,
     /// Solana slot when this compressed account was first created.
     pub slot_created: u64,
     /// Address of the Merkle tree where this compressed account is stored.
@@ -1006,15 +1010,16 @@ pub struct GetValidityProofRequest {
 /// The three components of a zero-knowledge compressed proof.
 ///
 /// These are the cryptographic proof elements (`a`, `b`, `c`) that together form
-/// a validity proof for compressed account state on Solana.
+/// a validity proof for compressed account state on Solana. The indexer returns each one
+/// as a JSON array of bytes (a compressed Groth16 point: 32, 64 and 32 bytes).
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Default)]
 pub struct CompressedProof {
     /// First component of the zero-knowledge validity proof.
-    pub a: String,
+    pub a: Vec<u8>,
     /// Second component of the zero-knowledge validity proof.
-    pub b: String,
+    pub b: Vec<u8>,
     /// Third component of the zero-knowledge validity proof.
-    pub c: String,
+    pub c: Vec<u8>,
 }
 
 /// A zero-knowledge validity proof with full Merkle tree context.

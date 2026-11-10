@@ -19,7 +19,7 @@ async fn test_get_transaction_with_compression_info_success() {
                         lamports: 0,
                         leaf_index: 0,
                         owner: "owner1".to_string(),
-                        seq: 1,
+                        seq: Some(1),
                         slot_created: 50,
                         tree: "tree1".to_string(),
                     },
