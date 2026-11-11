@@ -137,3 +137,33 @@ async fn test_poll_confirmation_surfaces_transaction_error() {
         "expected the on-chain error to be surfaced, got {result:?}"
     );
 }
+
+/// The poll used to check its deadline before reading, so after its last sleep it timed out on
+/// the strength of a read taken before that sleep. With a 300ms budget it reads at 0ms, sleeps
+/// 300ms, and must read once more before giving up: here that read finds the transaction confirmed.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_poll_confirmation_reads_again_before_timing_out() {
+    let (mut server, helius) = setup_mock().await;
+
+    let calls = std::sync::atomic::AtomicUsize::new(0);
+    server
+        .mock("POST", Matcher::Any)
+        .match_body(Matcher::Regex("getSignatureStatuses".to_string()))
+        .with_status(200)
+        .with_header("Content-Type", "application/json")
+        .with_body_from_request(move |_| {
+            let body = if calls.fetch_add(1, std::sync::atomic::Ordering::SeqCst) == 0 {
+                r#"{"jsonrpc":"2.0","result":{"context":{"slot":1},"value":[null]},"id":1}"#
+            } else {
+                r#"{"jsonrpc":"2.0","result":{"context":{"slot":1},"value":[{"slot":1,"confirmations":null,"err":null,"status":{"Ok":null},"confirmationStatus":"confirmed"}]},"id":1}"#
+            };
+            body.as_bytes().to_vec()
+        })
+        .create();
+
+    let result = helius
+        .poll_transaction_confirmation_with_timeout(Signature::default(), Duration::from_millis(300))
+        .await;
+
+    assert_eq!(result.ok(), Some(Signature::default()));
+}
