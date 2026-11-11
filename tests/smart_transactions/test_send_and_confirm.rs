@@ -274,3 +274,94 @@ async fn test_explicit_preflight_commitment_is_kept() {
     confirmed.assert();
     finalized.assert();
 }
+
+/// Mocks `getSignatureStatuses` to report an on-chain failure.
+fn mock_failed_status(server: &mut Server) {
+    server
+        .mock("POST", Matcher::Any)
+        .match_body(Matcher::Regex("getSignatureStatuses".to_string()))
+        .with_status(200)
+        .with_header("Content-Type", "application/json")
+        .with_body(
+            r#"{"jsonrpc":"2.0","result":{"context":{"slot":1},"value":[{"slot":1,"confirmations":null,"err":{"InstructionError":[0,{"Custom":6001}]},"status":{"Err":{"InstructionError":[0,{"Custom":6001}]}},"confirmationStatus":"confirmed"}]},"id":1}"#,
+        )
+        .create();
+}
+
+/// The loop gives up on expiry using a status read from before the height read. A transaction
+/// that landed at or below the last valid height while the tip moved past it is only visible to a
+/// fresh read, and reporting it as expired invites a rebuild that executes it twice.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_expired_blockhash_returns_a_landed_transaction() {
+    let (mut server, helius) = setup_mock().await;
+    let tx = dummy_transaction();
+
+    mock_block_height(&mut server, 200);
+    mock_confirmed_status(&mut server);
+
+    let result = helius
+        .send_and_confirm_transaction(
+            &tx,
+            RpcSendTransactionConfig::default(),
+            100,
+            Some(Duration::from_secs(1)),
+        )
+        .await;
+
+    assert_eq!(result.ok(), Some(tx.signatures[0]));
+}
+
+/// A fresh read that finds the transaction failed on-chain reports that failure, not the expiry.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_expired_blockhash_reports_an_on_chain_failure() {
+    let (mut server, helius) = setup_mock().await;
+    let tx = dummy_transaction();
+
+    mock_block_height(&mut server, 200);
+    mock_failed_status(&mut server);
+
+    let result = helius
+        .send_and_confirm_transaction(
+            &tx,
+            RpcSendTransactionConfig::default(),
+            100,
+            Some(Duration::from_secs(1)),
+        )
+        .await;
+
+    assert!(
+        matches!(result, Err(HeliusError::TransactionError(_))),
+        "got {result:?}"
+    );
+}
+
+/// Once a transaction lands, resending it fails preflight as already processed. The loop retries
+/// that until the deadline and then reported the send error, although the transaction succeeded.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_already_processed_resends_return_the_landed_transaction() {
+    let (mut server, helius) = setup_mock().await;
+    let tx = dummy_transaction();
+
+    mock_block_height(&mut server, 50);
+    server
+        .mock("POST", Matcher::Any)
+        .match_body(Matcher::Regex("sendTransaction".to_string()))
+        .with_status(200)
+        .with_header("Content-Type", "application/json")
+        .with_body(
+            r#"{"jsonrpc":"2.0","error":{"code":-32002,"message":"Transaction simulation failed: This transaction has already been processed","data":{"err":"AlreadyProcessed","logs":[],"accounts":null,"unitsConsumed":0,"returnData":null}},"id":1}"#,
+        )
+        .create();
+    mock_confirmed_status(&mut server);
+
+    let result = helius
+        .send_and_confirm_transaction(
+            &tx,
+            RpcSendTransactionConfig::default(),
+            100,
+            Some(Duration::from_secs(1)),
+        )
+        .await;
+
+    assert_eq!(result.ok(), Some(tx.signatures[0]));
+}
