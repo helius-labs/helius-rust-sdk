@@ -68,9 +68,6 @@ jobs:
         rustup toolchain install stable --profile minimal --component clippy --component rustfmt
         rustup default stable
 
-    - name: Install Protobuf Compiler
-      run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
-
     - name: Clean up disk space before build
       run: |
         sudo apt-get clean
