@@ -6,6 +6,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+### Changed
+- **Breaking:** `get_batch_wallet_identity` returns `Vec<BatchIdentityResult>` so unresolved domains no longer fail the whole batch. Resolved entries preserve `inputDomain`.
+
 ## [3.1.0] - 2026-10-28
 
 ### Added

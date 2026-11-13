@@ -1,7 +1,7 @@
 use crate::error::Result;
 use crate::types::{
-    BalanceAtQuery, BalanceAtResponse, BalancesResponse, BatchIdentityRequest, FundingSource, HistoryResponse,
-    Identity, TransfersResponse,
+    BalanceAtQuery, BalanceAtResponse, BalancesResponse, BatchIdentityRequest, BatchIdentityResult, FundingSource,
+    HistoryResponse, Identity, TransfersResponse,
 };
 use crate::Helius;
 
@@ -76,7 +76,7 @@ impl Helius {
     /// * `addresses` - A slice of Solana wallet addresses (1-100 addresses)
     ///
     /// # Returns
-    /// A `Result` wrapping a vector of `Identity` objects for addresses with known identity information
+    /// A `Result` wrapping a vector of resolved identities or unresolved domain entries
     ///
     /// # Errors
     /// Returns a `HeliusError` if:
@@ -99,11 +99,14 @@ impl Helius {
     ///     ];
     ///     let identities = helius.get_batch_wallet_identity(&addresses).await.unwrap();
     ///     for identity in identities {
-    ///         println!("Wallet: {} - {}", identity.address, identity.name);
+    ///         match identity {
+    ///             helius::types::BatchIdentityResult::Resolved(entry) => println!("{}", entry.identity.name),
+    ///             helius::types::BatchIdentityResult::Unresolved(entry) => println!("Unresolved: {}", entry.input_domain),
+    ///         }
     ///     }
     /// }
     /// ```
-    pub async fn get_batch_wallet_identity(&self, addresses: &[String]) -> Result<Vec<Identity>> {
+    pub async fn get_batch_wallet_identity(&self, addresses: &[String]) -> Result<Vec<BatchIdentityResult>> {
         let api_key = self.config.require_api_key("batch wallet identity")?;
         let base_url = self.get_wallet_api_base_url();
         let url: String = format!("{}v1/wallet/batch-identity?api-key={}", base_url, api_key.as_str());

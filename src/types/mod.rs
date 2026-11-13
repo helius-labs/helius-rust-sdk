@@ -21,8 +21,9 @@ pub use self::zk_compression_types::*;
 pub use self::inner::{
     AdminBillingCycle, AdminSubscriptionDetails, AdminUsageBreakdown, BalanceAtAsOf, BalanceAtQuery,
     BalanceAtRequested, BalanceAtResponse, BalanceChange, BalancesPagination, BalancesResponse, BatchIdentityRequest,
-    FundingSource, HistoryResponse, HistoryTransaction, Identity, Nft, Pagination, ProjectUsage, TokenAccountsOption,
-    TokenBalance, Transfer, TransferDirection, TransfersResponse,
+    BatchIdentityResult, FundingSource, HistoryResponse, HistoryTransaction, Identity, Nft, Pagination, ProjectUsage,
+    ResolvedBatchIdentity, TokenAccountsOption, TokenBalance, Transfer, TransferDirection, TransfersResponse,
+    UnresolvedIdentity,
 };
 
 use crate::error::{HeliusError, Result};

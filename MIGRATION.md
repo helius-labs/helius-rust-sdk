@@ -9,6 +9,14 @@ update your code. The most recent upgrade is listed first.
 
 ---
 
+## Unreleased: batch wallet identity
+
+`get_batch_wallet_identity` now returns `Vec<BatchIdentityResult>`.
+Match `BatchIdentityResult::Resolved(entry)` to read `entry.identity.name` or
+`entry.identity.address`, and `BatchIdentityResult::Unresolved(entry)` to handle
+`entry.input_domain`. Resolved entries also expose optional `input_domain`.
+`Identity` and `get_wallet_identity` are unchanged.
+
 ## 2.x → 3.0
 
 3.0 is a correctness and resilience release. Only two changes can fail to compile, and both are

@@ -3118,6 +3118,35 @@ pub struct Identity {
     pub tags: Vec<String>,
 }
 
+/// A resolved batch entry, optionally correlated with its input domain.
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct ResolvedBatchIdentity {
+    #[serde(flatten)]
+    pub identity: Identity,
+    #[serde(rename = "inputDomain", default, skip_serializing_if = "Option::is_none")]
+    pub input_domain: Option<String>,
+}
+
+/// A domain that could not be resolved by the batch endpoint.
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct UnresolvedIdentity {
+    /// The API returns null for unresolved domains.
+    pub address: Option<String>,
+    #[serde(rename = "type")]
+    pub entity_type: String,
+    #[serde(rename = "inputDomain")]
+    pub input_domain: String,
+    pub unresolved: bool,
+}
+
+/// One batch result, in request order.
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(untagged)]
+pub enum BatchIdentityResult {
+    Resolved(ResolvedBatchIdentity),
+    Unresolved(UnresolvedIdentity),
+}
+
 /// Request body for batch identity lookup
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct BatchIdentityRequest {
