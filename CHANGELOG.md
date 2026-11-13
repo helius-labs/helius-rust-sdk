@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+## [4.0.0] - 2026-11-13
+
+A major version because two fixes change public types (#245, #249). Most code upgrades without changes; see [Migrating from 3.x](#migrating-from-3x).
+
+### Migrating from 3.x
+- `CompressedProof::a`, `b`, and `c` are now `Vec<u8>` instead of `String`, matching the byte arrays `getValidityProof` returns. The old types failed to decode every real response, so only code that builds these structs or formats the fields needs a change (for example, `{}` to `{:?}`).
+- `CompressedAccount::seq` is now `Option<u64>`. It's `None` for accounts in V2 (batched) state trees.
+- `Interface` has two new variants, `MplCoreGroup` and `MplBubblegumV2`. Add arms for them, or a wildcard arm, to any exhaustive `match`.
+
 ### Added
 - **Historical account state (beta).** Wrappers for the Helius-only [`getHistoricalAccountInfo`](https://www.helius.dev/docs/api-reference/rpc/http/gethistoricalaccountinfo) and [`getHistoricalTokenAccountsByOwner`](https://www.helius.dev/docs/api-reference/rpc/http/gethistoricaltokenaccountsbyowner) RPC methods. They read accounts as they were at a past slot, or immediately after a specific transaction within a slot. Mainnet only; Business plans and above; 0 credits per call.
   - `RpcClient::get_historical_account_info(address, query, config)` returns a `GetHistoricalAccountInfoResponse` whose `value` is the `HistoricalAccount`, or `None` if the account didn't exist at that position.
@@ -18,6 +27,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ### Changed
 - `get_all_program_accounts`, `get_all_token_accounts_by_owner`, and `get_all_historical_token_accounts_by_owner` share one pagination loop. Behavior is unchanged, except that `get_all_program_accounts` now logs per-page progress at `debug` instead of `info`.
+
+### Fixed
+- **A transaction that confirms late is no longer reported as expired.** `send_and_confirm_transaction` (and so `send_smart_transaction`) and the Sender confirmation path (`send_smart_transaction_with_sender`, `send_and_confirm_via_sender`) now read the signature status once more before returning a blockhash-expiry or timeout error. Before, a transaction that confirmed between the last poll and the expiry check was reported as failed, and a caller that rebuilt and resent it executed it twice. (#251)
+- **Smart transactions on a `confirmed` client no longer fail with `BlockhashNotFound`.** `get_compute_units` simulated at `finalized` with a blockhash fetched at the client's commitment, so `create_smart_transaction` and `send_smart_transaction` failed on clients built with `Helius::new_async` or `with_commitment(confirmed)`. Simulation now uses the client's commitment, and `send_and_confirm_transaction` defaults an unset `preflight_commitment` to `confirmed`, matching the blockhash the smart transaction builders fetch. (#247)
+- **ZK compression responses decode.** `getValidityProof` returns proof components as byte arrays, which the `String` fields never decoded. Accounts in V2 state trees come back with `"seq": null`, which failed the whole response of `getCompressedAccount`, `getMultipleCompressedAccounts`, the `...ByOwner` and token account methods, and `getTransactionWithCompressionInfo`. Breaking; see [Migrating from 3.x](#migrating-from-3x). (#249)
+- **DAS pages with legacy NFTs, Core groups, or Bubblegum V2 assets decode.** `Interface::LegacyNFT` now matches the API's `"LEGACY_NFT"` instead of `"Legacy_NFT"`, and the new `MplCoreGroup` and `MplBubblegumV2` variants cover the other two interfaces. Before, one such asset failed the whole response. Breaking; see [Migrating from 3.x](#migrating-from-3x). (#245)
+- DAS `Supply` fields (`print_max_supply`, `print_current_supply`, `edition_nonce`, `edition_number`) read the snake_case keys the API returns. They were always `None` before. (#246)
+- `get_withdrawable_amount` returns the full balance (minus rent, if requested) for a stake account that's initialized but never delegated, instead of an error, as the TS SDK does. (#248)
+- Admin and webhook methods that take a `project_id` or `webhook_id` reject an empty ID, or one with characters other than ASCII letters, digits, `-`, and `_`, with `HeliusError::InvalidInput`. Before, the ID went into the URL path as-is, so a value containing `../` or `?` could change which endpoint was called. (#242)
 
 ## [3.1.0] - 2026-10-28
 
@@ -375,7 +393,8 @@ Dependency-only release. There are no source changes; 3.0.1 exists so that a fre
 - Integration test suite using `mockito`
 - GitHub Actions CI workflow
 
-[Unreleased]: https://github.com/helius-labs/helius-rust-sdk/compare/v3.1.0...HEAD
+[Unreleased]: https://github.com/helius-labs/helius-rust-sdk/compare/v4.0.0...HEAD
+[4.0.0]: https://github.com/helius-labs/helius-rust-sdk/compare/v3.1.0...v4.0.0
 [3.1.0]: https://github.com/helius-labs/helius-rust-sdk/compare/v3.0.1...v3.1.0
 [3.0.1]: https://github.com/helius-labs/helius-rust-sdk/compare/v3.0.0...v3.0.1
 [3.0.0]: https://github.com/helius-labs/helius-rust-sdk/compare/v2.0.0...v3.0.0
