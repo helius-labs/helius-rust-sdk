@@ -17,6 +17,7 @@
 /// See [`HeliusError`](crate::error::HeliusError) for the full list of error variants.
 use std::collections::HashMap;
 use std::fmt::Debug;
+use std::future::Future;
 use std::sync::Arc;
 
 use crate::config::Config;
@@ -25,13 +26,17 @@ use crate::request_handler::RequestHandler;
 use crate::types::inner::{RpcError, RpcRequest};
 use crate::types::{
     Asset, AssetList, AssetProof, EditionsList, GetAsset, GetAssetBatch, GetAssetProof, GetAssetProofBatch,
-    GetAssetSignatures, GetAssetsByAuthority, GetAssetsByCreator, GetAssetsByGroup, GetAssetsByOwner, GetNftEditions,
-    GetPriorityFeeEstimateRequest, GetPriorityFeeEstimateResponse, GetProgramAccountsV2Config,
-    GetProgramAccountsV2Request, GetProgramAccountsV2Response, GetTokenAccounts, GetTokenAccountsByOwnerV2Config,
-    GetTokenAccountsByOwnerV2Request, GetTokenAccountsByOwnerV2Response, GetTransactionsForAddressOptions,
-    GetTransactionsForAddressRequest, GetTransactionsForAddressResponse, GetTransfersByAddressConfig,
-    GetTransfersByAddressRequest, GetTransfersByAddressResponse, GpaAccount, SearchAssets, TokenAccountRecord,
-    TokenAccountsList, TokenAccountsOwnerFilter, TransactionSignatureList,
+    GetAssetSignatures, GetAssetsByAuthority, GetAssetsByCreator, GetAssetsByGroup, GetAssetsByOwner,
+    GetHistoricalAccountInfoConfig, GetHistoricalAccountInfoRequest, GetHistoricalAccountInfoResponse,
+    GetHistoricalTokenAccountsByOwnerConfig, GetHistoricalTokenAccountsByOwnerRequest,
+    GetHistoricalTokenAccountsByOwnerResponse, GetNftEditions, GetPriorityFeeEstimateRequest,
+    GetPriorityFeeEstimateResponse, GetProgramAccountsV2Config, GetProgramAccountsV2Request,
+    GetProgramAccountsV2Response, GetTokenAccounts, GetTokenAccountsByOwnerV2Config, GetTokenAccountsByOwnerV2Request,
+    GetTokenAccountsByOwnerV2Response, GetTransactionsForAddressOptions, GetTransactionsForAddressRequest,
+    GetTransactionsForAddressResponse, GetTransfersByAddressConfig, GetTransfersByAddressRequest,
+    GetTransfersByAddressResponse, GpaAccount, HistoricalAccountQuery, HistoricalAccountRequest,
+    HistoricalKeyedAccount, SearchAssets, TokenAccountRecord, TokenAccountsList, TokenAccountsOwnerFilter,
+    TransactionSignatureList,
 };
 
 use bytes::Bytes;
@@ -508,52 +513,23 @@ impl RpcClient {
         program_id: String,
         mut config: GetProgramAccountsV2Config,
     ) -> Result<Vec<GpaAccount>> {
-        // Ignore the user-provided pagination_key since we auto-paginate
-        config.pagination_key = None;
-
-        // Default to 10k
         if config.limit.is_none() {
             config.limit = Some(10000);
         }
-
-        // Client-side page cap: caller override, else the default backstop.
         let max_pages: usize = config.max_pages.unwrap_or(DEFAULT_MAX_AUTO_PAGINATION_PAGES);
 
-        let mut all_accounts: Vec<GpaAccount> = Vec::new();
-        let mut pages: usize = 0;
-        loop {
-            let response: GetProgramAccountsV2Response =
-                self.get_program_accounts_v2(program_id.clone(), config.clone()).await?;
-            all_accounts.extend(response.accounts);
-            pages += 1;
-
-            log::info!("Fetched {} accounts so far", all_accounts.len());
-
-            match response.pagination_key {
-                // Stop if the server stops advancing the cursor (returns the same key) or if we
-                // hit the page cap, so a misbehaving server can't paginate forever.
-                Some(key) if config.pagination_key.as_ref() == Some(&key) => {
-                    log::warn!(
-                        "get_all_program_accounts stopping: server returned a non-advancing pagination cursor after {} pages ({} accounts)",
-                        pages,
-                        all_accounts.len()
-                    );
-                    break;
-                }
-                Some(_) if pages >= max_pages => {
-                    log::warn!(
-                        "get_all_program_accounts hit the {}-page cap ({} accounts); results may be truncated. Raise `max_pages` on the config to fetch more.",
-                        max_pages,
-                        all_accounts.len()
-                    );
-                    break;
-                }
-                Some(key) => config.pagination_key = Some(key),
-                None => break,
+        collect_pages("get_all_program_accounts", max_pages, |cursor| {
+            let program_id: String = program_id.clone();
+            let config = GetProgramAccountsV2Config {
+                pagination_key: cursor,
+                ..config.clone()
+            };
+            async move {
+                let response: GetProgramAccountsV2Response = self.get_program_accounts_v2(program_id, config).await?;
+                Ok((response.accounts, response.pagination_key))
             }
-        }
-
-        Ok(all_accounts)
+        })
+        .await
     }
 
     /// Get all token accounts by owner by auto-paginating through results
@@ -572,51 +548,24 @@ impl RpcClient {
         filter: TokenAccountsOwnerFilter,
         mut config: GetTokenAccountsByOwnerV2Config,
     ) -> Result<Vec<TokenAccountRecord>> {
-        // Ignore the user-provided pagination_key since we auto-paginate
-        config.pagination_key = None;
-
-        // Default to 10k
         if config.limit.is_none() {
             config.limit = Some(10000);
         }
-
-        // Client-side page cap: caller override, else the default backstop.
         let max_pages: usize = config.max_pages.unwrap_or(DEFAULT_MAX_AUTO_PAGINATION_PAGES);
 
-        let mut all_accounts: Vec<TokenAccountRecord> = Vec::new();
-        let mut pages: usize = 0;
-        loop {
-            let response: GetTokenAccountsByOwnerV2Response = self
-                .get_token_accounts_by_owner_v2(owner.clone(), filter.clone(), config.clone())
-                .await?;
-            all_accounts.extend(response.value.accounts);
-            pages += 1;
-
-            match response.value.pagination_key {
-                // Stop if the server stops advancing the cursor (returns the same key) or if we
-                // hit the page cap, so a misbehaving server can't paginate forever.
-                Some(key) if config.pagination_key.as_ref() == Some(&key) => {
-                    log::warn!(
-                        "get_all_token_accounts_by_owner stopping: server returned a non-advancing pagination cursor after {} pages ({} accounts)",
-                        pages,
-                        all_accounts.len()
-                    );
-                    break;
-                }
-                Some(_) if pages >= max_pages => {
-                    log::warn!(
-                        "get_all_token_accounts_by_owner hit the {}-page cap ({} accounts); results may be truncated. Raise `max_pages` on the config to fetch more.",
-                        max_pages,
-                        all_accounts.len()
-                    );
-                    break;
-                }
-                Some(key) => config.pagination_key = Some(key),
-                None => break,
+        collect_pages("get_all_token_accounts_by_owner", max_pages, |cursor| {
+            let (owner, filter): (String, TokenAccountsOwnerFilter) = (owner.clone(), filter.clone());
+            let config = GetTokenAccountsByOwnerV2Config {
+                pagination_key: cursor,
+                ..config.clone()
+            };
+            async move {
+                let response: GetTokenAccountsByOwnerV2Response =
+                    self.get_token_accounts_by_owner_v2(owner, filter, config).await?;
+                Ok((response.value.accounts, response.value.pagination_key))
             }
-        }
-
-        Ok(all_accounts)
+        })
+        .await
     }
 
     /// Gets transactions for a specific address with advanced filtering and sorting
@@ -656,4 +605,134 @@ impl RpcClient {
         let params: GetTransfersByAddressRequest = GetTransfersByAddressRequest::new(address, config);
         self.post_rpc_request("getTransfersByAddress", params).await
     }
+
+    /// Gets an account as it was at a past slot, or right after a transaction in that slot (beta).
+    /// Mainnet only.
+    ///
+    /// ```no_run
+    /// # use helius::error::Result;
+    /// # use helius::types::{Cluster, Encoding, GetHistoricalAccountInfoConfig, HistoricalAccountQuery};
+    /// # use helius::Helius;
+    /// # async fn run() -> Result<()> {
+    /// let helius: Helius = Helius::new("your_api_key", Cluster::MainnetBeta)?;
+    /// let config = GetHistoricalAccountInfoConfig {
+    ///     encoding: Some(Encoding::JsonParsed),
+    ///     ..Default::default()
+    /// };
+    ///
+    /// let response = helius
+    ///     .rpc()
+    ///     .get_historical_account_info(
+    ///         "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v".to_string(),
+    ///         HistoricalAccountQuery::after_transaction(445_000_000, 10),
+    ///         Some(config),
+    ///     )
+    ///     .await?;
+    ///
+    /// if let Some(account) = response.value {
+    ///     println!("{} lamports, last written at {:?}", account.lamports, account.last_updated_at);
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
+    ///
+    /// # Errors
+    /// `HeliusError::RpcError` with code `-32018` for a slot before
+    /// [`HISTORICAL_ACCOUNT_COVERAGE_START_SLOT`](crate::types::HISTORICAL_ACCOUNT_COVERAGE_START_SLOT), or `-32004`
+    /// for a slot newer than the requested commitment allows
+    pub async fn get_historical_account_info(
+        &self,
+        address: String,
+        query: HistoricalAccountQuery,
+        config: Option<GetHistoricalAccountInfoConfig>,
+    ) -> Result<GetHistoricalAccountInfoResponse> {
+        let params: GetHistoricalAccountInfoRequest = HistoricalAccountRequest::new(address, query, config);
+        self.post_rpc_request("getHistoricalAccountInfo", params).await
+    }
+
+    /// Gets one page of the SPL Token and Token-2022 accounts a wallet owned at a past slot, or
+    /// right after a transaction in that slot (beta). Mainnet only.
+    ///
+    /// Keep passing `value.pagination_key` back until it's `None`: a short or empty page can still
+    /// have a cursor. Set `query.slot` so every page reads the same point in time.
+    pub async fn get_historical_token_accounts_by_owner(
+        &self,
+        owner: String,
+        query: HistoricalAccountQuery,
+        config: Option<GetHistoricalTokenAccountsByOwnerConfig>,
+    ) -> Result<GetHistoricalTokenAccountsByOwnerResponse> {
+        let params: GetHistoricalTokenAccountsByOwnerRequest = HistoricalAccountRequest::new(owner, query, config);
+        self.post_rpc_request("getHistoricalTokenAccountsByOwner", params).await
+    }
+
+    /// Gets every token account a wallet owned at a past position by following
+    /// `getHistoricalTokenAccountsByOwner` cursors (beta). `config.pagination_key` is ignored and
+    /// `config.max_pages` caps the pages fetched. Set `query.slot` so every page reads the same point
+    /// in time.
+    pub async fn get_all_historical_token_accounts_by_owner(
+        &self,
+        owner: String,
+        query: HistoricalAccountQuery,
+        config: GetHistoricalTokenAccountsByOwnerConfig,
+    ) -> Result<Vec<HistoricalKeyedAccount>> {
+        let max_pages: usize = config.max_pages.unwrap_or(DEFAULT_MAX_AUTO_PAGINATION_PAGES);
+
+        collect_pages("get_all_historical_token_accounts_by_owner", max_pages, |cursor| {
+            let owner: String = owner.clone();
+            let config = GetHistoricalTokenAccountsByOwnerConfig {
+                pagination_key: cursor,
+                ..config.clone()
+            };
+            async move {
+                let response: GetHistoricalTokenAccountsByOwnerResponse = self
+                    .get_historical_token_accounts_by_owner(owner, query, Some(config))
+                    .await?;
+                Ok((response.value.accounts, response.value.pagination_key))
+            }
+        })
+        .await
+    }
+}
+
+/// Follows pagination cursors from the first page until the server returns none. Stops early, with a
+/// warning, on a non-advancing cursor or after `max_pages`, so a misbehaving server can't loop forever.
+async fn collect_pages<T, F, Fut>(method: &str, max_pages: usize, mut fetch_page: F) -> Result<Vec<T>>
+where
+    F: FnMut(Option<String>) -> Fut,
+    Fut: Future<Output = Result<(Vec<T>, Option<String>)>>,
+{
+    let mut items: Vec<T> = Vec::new();
+    let mut cursor: Option<String> = None;
+    let mut pages: usize = 0;
+    loop {
+        let (page, next): (Vec<T>, Option<String>) = fetch_page(cursor.clone()).await?;
+        items.extend(page);
+        pages += 1;
+        log::debug!("{} fetched {} items over {} pages", method, items.len(), pages);
+
+        match next {
+            Some(key) if cursor.as_ref() == Some(&key) => {
+                log::warn!(
+                    "{} stopping: server returned a non-advancing pagination cursor after {} pages ({} items)",
+                    method,
+                    pages,
+                    items.len()
+                );
+                break;
+            }
+            Some(_) if pages >= max_pages => {
+                log::warn!(
+                    "{} hit the {}-page cap ({} items); results may be truncated. Raise `max_pages` on the config to fetch more.",
+                    method,
+                    max_pages,
+                    items.len()
+                );
+                break;
+            }
+            Some(key) => cursor = Some(key),
+            None => break,
+        }
+    }
+
+    Ok(items)
 }

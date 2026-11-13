@@ -6,6 +6,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+### Added
+- **Historical account state (beta).** Wrappers for the Helius-only [`getHistoricalAccountInfo`](https://www.helius.dev/docs/api-reference/rpc/http/gethistoricalaccountinfo) and [`getHistoricalTokenAccountsByOwner`](https://www.helius.dev/docs/api-reference/rpc/http/gethistoricaltokenaccountsbyowner) RPC methods. They read accounts as they were at a past slot, or immediately after a specific transaction within a slot. Mainnet only; Business plans and above; 0 credits per call.
+  - `RpcClient::get_historical_account_info(address, query, config)` returns a `GetHistoricalAccountInfoResponse` whose `value` is the `HistoricalAccount`, or `None` if the account didn't exist at that position.
+  - `RpcClient::get_historical_token_accounts_by_owner(owner, query, config)` returns one page of `HistoricalKeyedAccount`s with a `pagination_key`. `get_all_historical_token_accounts_by_owner` follows the cursor until it's `None`, including through short or empty pages that still carry one, and honors `max_pages` like the other auto-paginating helpers.
+  - `HistoricalAccountQuery` selects the position: `latest()`, `at_slot(s)`, `after_transaction(s, i)`, `before_transaction(s, i)`, and `before(&last_updated_at)`, which steps to the state before a write so you can walk an account's history newest first.
+  - Every `HistoricalAccount` carries `last_updated_at: AccountWritePosition` (`slot`, `transaction_index`), the write that produced the returned state. `HISTORICAL_ACCOUNT_COVERAGE_START_SLOT` (444,959,999) is where history begins; earlier slots return JSON-RPC error `-32018` as `HeliusError::RpcError`.
+  - `GetHistoricalTokenAccountsByOwnerConfig::filter` takes an optional `TokenAccountsOwnerFilter`, flattened into the config object as `mint` or `programId`.
+  - `RpcContext` now derives `Default`.
+  - `examples/helius/get_historical_account_state.rs` reads state before and after a transaction, walks back through an account's history, and lists a wallet's token accounts at a slot.
+
+### Changed
+- `get_all_program_accounts`, `get_all_token_accounts_by_owner`, and `get_all_historical_token_accounts_by_owner` share one pagination loop. Behavior is unchanged, except that `get_all_program_accounts` now logs per-page progress at `debug` instead of `info`.
+
 ## [3.1.0] - 2026-10-28
 
 ### Added
