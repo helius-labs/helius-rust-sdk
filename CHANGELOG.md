@@ -22,6 +22,7 @@ A major version because two fixes change public types (#245, #249). Most code up
   - `HistoricalAccountQuery` selects the position: `latest()`, `at_slot(s)`, `after_transaction(s, i)`, `before_transaction(s, i)`, and `before(&last_updated_at)`, which steps to the state before a write so you can walk an account's history newest first.
   - Every `HistoricalAccount` carries `last_updated_at: AccountWritePosition` (`slot`, `transaction_index`), the write that produced the returned state. `HISTORICAL_ACCOUNT_COVERAGE_START_SLOT` (444,959,999) is where history begins; earlier slots return JSON-RPC error `-32018` as `HeliusError::RpcError`.
   - `GetHistoricalTokenAccountsByOwnerConfig::filter` takes an optional `TokenAccountsOwnerFilter`, flattened into the config object as `mint` or `programId`.
+  - `GetHistoricalTokenAccountsByOwnerConfig::limit` accepts 1 to `HISTORICAL_TOKEN_ACCOUNTS_MAX_LIMIT` (25,000), which is also the server default. Other values return `HeliusError::InvalidInput` without sending a request.
   - `RpcContext` now derives `Default`.
   - `examples/helius/get_historical_account_state.rs` reads state before and after a transaction, walks back through an account's history, and lists a wallet's token accounts at a slot.
 

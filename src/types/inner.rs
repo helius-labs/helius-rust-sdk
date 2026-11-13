@@ -2460,6 +2460,9 @@ pub struct GetTokenAccountsByOwnerV2Value {
 /// 1030. Earlier slots return JSON-RPC error `-32018`.
 pub const HISTORICAL_ACCOUNT_COVERAGE_START_SLOT: u64 = 444_959_999;
 
+/// The largest `limit` `getHistoricalTokenAccountsByOwner` accepts, and its default page size.
+pub const HISTORICAL_TOKEN_ACCOUNTS_MAX_LIMIT: u32 = 25_000;
+
 /// The position in history that the historical account methods read (beta).
 ///
 /// ```
@@ -2581,7 +2584,8 @@ pub struct GetHistoricalTokenAccountsByOwnerConfig {
     pub encoding: Option<Encoding>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub data_slice: Option<DataSlice>,
-    /// 1-100,000; the server defaults to 100,000
+    /// 1 to [`HISTORICAL_TOKEN_ACCOUNTS_MAX_LIMIT`] (25,000), which is also the server default.
+    /// Other values return `HeliusError::InvalidInput` without sending a request
     #[serde(skip_serializing_if = "Option::is_none")]
     pub limit: Option<u32>,
     #[serde(skip_serializing_if = "Option::is_none")]
