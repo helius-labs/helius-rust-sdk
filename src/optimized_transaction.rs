@@ -33,7 +33,7 @@ use solana_sdk::{
     pubkey::Pubkey,
     signature::{Signature, Signer},
     signer::keypair::Keypair,
-    transaction::{Transaction, VersionedTransaction},
+    transaction::{Transaction, TransactionError, VersionedTransaction},
 };
 use solana_system_interface::instruction as system_instruction;
 use solana_transaction_status_client_types::TransactionConfirmationStatus;
@@ -1207,6 +1207,18 @@ impl Helius {
                 // transaction, say) would otherwise be retried until the timeout and reported as a
                 // generic "timed out" with the real reason discarded.
                 Err(err) => {
+                    // Once an earlier attempt has landed, a resend fails preflight with
+                    // `AlreadyProcessed` because the bank's status cache already holds the
+                    // transaction, and every later resend fails the same way. Read its status now
+                    // instead of resending it until the blockhash expires or the deadline passes.
+                    if matches!(err.get_transaction_error(), Some(TransactionError::AlreadyProcessed)) {
+                        match self.confirmed_signature(*transaction.get_signature()).await {
+                            Ok(Some(sig)) => return Ok(sig),
+                            Err(err @ HeliusError::TransactionError(_)) => return Err(err),
+                            // Not confirmed yet, or the read itself failed: retry as before
+                            Ok(None) | Err(_) => {}
+                        }
+                    }
                     last_send_err = Some(HeliusError::from(err));
                     sleep(retry_delay).await;
                     continue;
