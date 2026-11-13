@@ -494,3 +494,75 @@ async fn test_get_historical_token_accounts_by_owner_failure() {
 
     assert!(matches!(response, Err(HeliusError::InternalError { .. })));
 }
+
+#[tokio::test]
+async fn test_historical_token_accounts_rejects_out_of_range_limit_without_a_request() {
+    let mut server = Server::new_with_opts_async(mockito::ServerOpts::default()).await;
+    let mock = mock_rpc(&mut server, token_page(&["Account1"], None), 0).await;
+    let helius = mock_helius(&server.url());
+
+    for limit in [0, HISTORICAL_TOKEN_ACCOUNTS_MAX_LIMIT + 1, 100_000] {
+        let config = GetHistoricalTokenAccountsByOwnerConfig {
+            limit: Some(limit),
+            ..Default::default()
+        };
+        let page = helius
+            .rpc()
+            .get_historical_token_accounts_by_owner(
+                OWNER.to_string(),
+                HistoricalAccountQuery::at_slot(445_000_000),
+                Some(config.clone()),
+            )
+            .await;
+        assert!(
+            matches!(page, Err(HeliusError::InvalidInput(_))),
+            "limit {limit}: {page:?}"
+        );
+
+        let all = helius
+            .rpc()
+            .get_all_historical_token_accounts_by_owner(
+                OWNER.to_string(),
+                HistoricalAccountQuery::at_slot(445_000_000),
+                config,
+            )
+            .await;
+        assert!(
+            matches!(all, Err(HeliusError::InvalidInput(_))),
+            "limit {limit}: {all:?}"
+        );
+    }
+
+    mock.assert_async().await;
+}
+
+#[tokio::test]
+async fn test_historical_token_accounts_accepts_max_limit() {
+    let mut server = Server::new_with_opts_async(mockito::ServerOpts::default()).await;
+    let mock = server
+        .mock("POST", "/?api-key=fake_api_key")
+        .match_body(Matcher::PartialJson(json!({
+            "params": [OWNER, { "slot": 445000000 }, { "limit": 25000 }]
+        })))
+        .with_status(200)
+        .with_body(token_page(&["Account1"], None))
+        .create_async()
+        .await;
+
+    let config = GetHistoricalTokenAccountsByOwnerConfig {
+        limit: Some(HISTORICAL_TOKEN_ACCOUNTS_MAX_LIMIT),
+        ..Default::default()
+    };
+    let response = mock_helius(&server.url())
+        .rpc()
+        .get_historical_token_accounts_by_owner(
+            OWNER.to_string(),
+            HistoricalAccountQuery::at_slot(445_000_000),
+            Some(config),
+        )
+        .await
+        .unwrap();
+
+    mock.assert_async().await;
+    assert_eq!(response.value.accounts.len(), 1);
+}
