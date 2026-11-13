@@ -16,6 +16,7 @@ mod rpc {
     mod test_get_assets_by_creator;
     mod test_get_assets_by_group;
     mod test_get_assets_by_owner;
+    mod test_get_historical_account_state;
     mod test_get_nft_editions;
     mod test_get_priority_fee_estimate;
     mod test_get_program_accounts_v2;

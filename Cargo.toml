@@ -129,6 +129,10 @@ name = "get_program_accounts_v2"
 path = "examples/helius/get_program_accounts_v2.rs"
 
 [[example]]
+name = "get_historical_account_state"
+path = "examples/helius/get_historical_account_state.rs"
+
+[[example]]
 name = "get_priority_fee_estimate"
 path = "examples/helius/get_priority_fee_estimate.rs"
 
