@@ -1378,7 +1378,6 @@ pub struct Uses {
 /// Tracks the print supply for Metaplex master edition NFTs. A master edition
 /// can produce a limited or unlimited number of prints (editions).
 #[derive(Serialize, Deserialize, Debug, Default)]
-#[serde(rename_all = "camelCase")]
 pub struct Supply {
     /// Maximum number of editions that can be printed (`None` or `0` = unlimited)
     pub print_max_supply: Option<u64>,
@@ -2406,7 +2405,7 @@ pub type GetTokenAccountsByOwnerV2Request = (String, TokenAccountsOwnerFilter, G
 ///
 /// Provides information about the slot at which the response was computed and the
 /// API version of the node.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct RpcContext {
     /// The slot at which the response was computed
     pub slot: u64,
@@ -2455,6 +2454,218 @@ pub struct GetTokenAccountsByOwnerV2Value {
     pub pagination_key: Option<String>,
     /// Number of accounts in this page
     pub count: u64,
+}
+
+/// The earliest slot the historical account methods can read: the state at the start of epoch
+/// 1030. Earlier slots return JSON-RPC error `-32018`.
+pub const HISTORICAL_ACCOUNT_COVERAGE_START_SLOT: u64 = 444_959_999;
+
+/// The largest `limit` `getHistoricalTokenAccountsByOwner` accepts, and its default page size.
+pub const HISTORICAL_TOKEN_ACCOUNTS_MAX_LIMIT: u32 = 25_000;
+
+/// The position in history that the historical account methods read (beta).
+///
+/// ```
+/// use helius::types::HistoricalAccountQuery;
+///
+/// assert_eq!(
+///     HistoricalAccountQuery::before_transaction(445_000_000, 10),
+///     HistoricalAccountQuery::after_transaction(445_000_000, 9),
+/// );
+/// assert_eq!(
+///     HistoricalAccountQuery::before_transaction(445_000_000, 0),
+///     HistoricalAccountQuery::at_slot(444_999_999),
+/// );
+/// ```
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, Default, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct HistoricalAccountQuery {
+    /// `None` reads the latest indexed slot, capped at the requested commitment
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub slot: Option<u64>,
+    /// Requires `slot`. Excludes the slot's non-transaction writes, such as epoch rewards
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub transaction_index: Option<u32>,
+}
+
+impl HistoricalAccountQuery {
+    /// The latest indexed slot, capped at the requested commitment
+    pub fn latest() -> Self {
+        Self::default()
+    }
+
+    /// The end of `slot`, including non-transaction writes such as epoch rewards
+    pub fn at_slot(slot: u64) -> Self {
+        Self {
+            slot: Some(slot),
+            transaction_index: None,
+        }
+    }
+
+    /// Right after the transaction at `transaction_index` in `slot` executed
+    pub fn after_transaction(slot: u64, transaction_index: u32) -> Self {
+        Self {
+            slot: Some(slot),
+            transaction_index: Some(transaction_index),
+        }
+    }
+
+    /// Right before the transaction at `transaction_index` in `slot` executed: after the previous
+    /// transaction, or at the end of the previous slot for index 0
+    pub fn before_transaction(slot: u64, transaction_index: u32) -> Self {
+        match transaction_index.checked_sub(1) {
+            Some(previous) => Self::after_transaction(slot, previous),
+            None => Self::at_slot(slot.saturating_sub(1)),
+        }
+    }
+
+    /// Right before the write at `position`, for walking an account's history newest first from
+    /// each [`last_updated_at`](HistoricalAccount::last_updated_at). Stop at a `None` value or at
+    /// [`HISTORICAL_ACCOUNT_COVERAGE_START_SLOT`]. A non-transaction write steps to the end of the
+    /// previous slot, which skips any state written by a transaction earlier in its slot.
+    pub fn before(position: &AccountWritePosition) -> Self {
+        match position.transaction_index {
+            Some(index) => Self::before_transaction(position.slot, index),
+            None => Self::at_slot(position.slot.saturating_sub(1)),
+        }
+    }
+}
+
+/// The write that produced a historical account's state, at or before the queried position.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct AccountWritePosition {
+    /// [`HISTORICAL_ACCOUNT_COVERAGE_START_SLOT`] with no `transaction_index` means the account
+    /// hasn't changed since coverage began
+    pub slot: u64,
+    /// `None` for a write outside a transaction, such as epoch rewards
+    pub transaction_index: Option<u32>,
+}
+
+/// An account as it was at a past position. `data` is `[encoded, encoding]` for the base64
+/// encodings, or a parsed object for `jsonParsed` (falling back to base64 when unparseable).
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct HistoricalAccount {
+    pub lamports: u64,
+    pub owner: String,
+    pub data: Value,
+    pub executable: bool,
+    /// `u64::MAX` for rent-exempt accounts
+    pub rent_epoch: u64,
+    pub space: u64,
+    pub last_updated_at: AccountWritePosition,
+}
+
+/// Configuration for `getHistoricalAccountInfo` (beta). The server rejects `Encoding::Base58`
+/// and `CommitmentLevel::Processed`.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct GetHistoricalAccountInfoConfig {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub encoding: Option<Encoding>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub data_slice: Option<DataSlice>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub commitment: Option<CommitmentLevel>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub min_context_slot: Option<u64>,
+}
+
+/// Configuration for `getHistoricalTokenAccountsByOwner` (beta). The server rejects
+/// `Encoding::Base58` and `CommitmentLevel::Processed`.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct GetHistoricalTokenAccountsByOwnerConfig {
+    /// Sent as `mint` or `programId`. `None` returns every SPL Token and Token-2022 account
+    #[serde(flatten, skip_serializing_if = "Option::is_none")]
+    pub filter: Option<TokenAccountsOwnerFilter>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub encoding: Option<Encoding>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub data_slice: Option<DataSlice>,
+    /// 1 to [`HISTORICAL_TOKEN_ACCOUNTS_MAX_LIMIT`] (25,000), which is also the server default.
+    /// Other values return `HeliusError::InvalidInput` without sending a request
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub limit: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub pagination_key: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub commitment: Option<CommitmentLevel>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub min_context_slot: Option<u64>,
+    /// Client-side only: the page cap for
+    /// [`get_all_historical_token_accounts_by_owner`](crate::rpc_client::RpcClient::get_all_historical_token_accounts_by_owner).
+    /// `None` uses [`DEFAULT_MAX_AUTO_PAGINATION_PAGES`](crate::rpc_client::DEFAULT_MAX_AUTO_PAGINATION_PAGES)
+    #[serde(skip)]
+    pub max_pages: Option<usize>,
+}
+
+/// Params for the historical account methods: `[address, query]`, or `[address, query, config]`.
+#[derive(Debug, Clone, Default)]
+pub struct HistoricalAccountRequest<C> {
+    pub address: String,
+    pub query: HistoricalAccountQuery,
+    pub config: Option<C>,
+}
+
+impl<C> HistoricalAccountRequest<C> {
+    /// Builds the params for an address (or owner wallet), a position, and an optional config
+    pub fn new(address: String, query: HistoricalAccountQuery, config: Option<C>) -> Self {
+        Self { address, query, config }
+    }
+}
+
+impl<C: Serialize> Serialize for HistoricalAccountRequest<C> {
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let len = if self.config.is_some() { 3 } else { 2 };
+        let mut tuple = serializer.serialize_tuple(len)?;
+        tuple.serialize_element(&self.address)?;
+        tuple.serialize_element(&self.query)?;
+        if let Some(config) = &self.config {
+            tuple.serialize_element(config)?;
+        }
+        tuple.end()
+    }
+}
+
+pub type GetHistoricalAccountInfoRequest = HistoricalAccountRequest<GetHistoricalAccountInfoConfig>;
+pub type GetHistoricalTokenAccountsByOwnerRequest = HistoricalAccountRequest<GetHistoricalTokenAccountsByOwnerConfig>;
+
+/// Response from `getHistoricalAccountInfo`. `context.slot` is the latest indexed slot, not the
+/// queried one.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct GetHistoricalAccountInfoResponse {
+    pub context: RpcContext,
+    /// `None` if the account didn't exist at that position
+    pub value: Option<HistoricalAccount>,
+}
+
+/// A token account returned by `getHistoricalTokenAccountsByOwner`.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct HistoricalKeyedAccount {
+    pub pubkey: String,
+    pub account: HistoricalAccount,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct GetHistoricalTokenAccountsByOwnerValue {
+    /// Ordered by mint, then by token account address
+    pub accounts: Vec<HistoricalKeyedAccount>,
+    /// `<mint>:<tokenAccount>`. Only `None` means the end; short or empty pages can have one
+    pub pagination_key: Option<String>,
+}
+
+/// Response from `getHistoricalTokenAccountsByOwner`. `context.slot` is the latest indexed slot,
+/// not the queried one.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct GetHistoricalTokenAccountsByOwnerResponse {
+    pub context: RpcContext,
+    pub value: GetHistoricalTokenAccountsByOwnerValue,
 }
 
 /// Level of detail to include for each transaction in `getTransactionsForAddress` responses.

@@ -1,6 +1,6 @@
 ---
 url: https://github.com/helius-labs/helius-rust-sdk
-last_updated: 2026-10-28
+last_updated: 2026-11-13
 ---
 
 # Helius Rust SDK
@@ -12,7 +12,7 @@ last_updated: 2026-10-28
 The Helius Rust SDK provides asynchronous access to Helius APIs and enhanced Solana RPC functionality. It simplifies Solana development with high-level abstractions for assets, transactions, webhooks, staking, and ultra-low latency transaction submission via Helius Sender.
 
 - Crate: `helius` (crates.io)
-- Version: 3.1.x
+- Version: 4.0.x
 - Changelog: https://github.com/helius-labs/helius-rust-sdk/blob/dev/CHANGELOG.md
 - Rust: 1.97.1+ (edition 2021)
 - Async Runtime: tokio
@@ -43,7 +43,7 @@ Use the Helius Rust SDK when you need to:
 Add to your `Cargo.toml`:
 ```toml
 [dependencies]
-helius = "3.1"
+helius = "4.0"
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 ```
 
@@ -94,6 +94,7 @@ examples/
 │   └── get_transactions_for_address_with_filters.rs  # Filtered tx history
 ├── helius/                                   # Helius-specific RPC methods
 │   ├── async_config_based_creation.rs        #   HeliusBuilder usage
+│   ├── get_historical_account_state.rs       #   Accounts at a past slot/transaction (beta)
 │   ├── get_priority_fee_estimate.rs          #   Priority fee estimation
 │   ├── get_program_accounts_v2.rs            #   RPC V2: paginated program accounts
 │   ├── get_token_accounts_by_owner_v2.rs     #   RPC V2: paginated token accounts
@@ -442,6 +443,56 @@ if let Some(token) = transfers.pagination_token {
     ).await?;
 }
 ```
+
+#### getHistoricalAccountInfo / getHistoricalTokenAccountsByOwner (Beta)
+
+Read accounts as they were at a past slot, or immediately after a specific transaction within a slot. Helius-exclusive; mainnet only (devnet returns `-32601`); Business plans and above. History starts at `HISTORICAL_ACCOUNT_COVERAGE_START_SLOT` (444,959,999); earlier slots return `-32018`.
+
+```rust
+use helius::types::{
+    Encoding, GetHistoricalAccountInfoConfig, GetHistoricalTokenAccountsByOwnerConfig,
+    HistoricalAccountQuery, TokenAccountsOwnerFilter,
+};
+
+// HistoricalAccountQuery::latest()                 -> {} (latest indexed slot)
+// HistoricalAccountQuery::at_slot(s)               -> end of slot s
+// HistoricalAccountQuery::after_transaction(s, i)  -> right after tx i in slot s
+// HistoricalAccountQuery::before_transaction(s, i) -> right before tx i in slot s
+let response = helius.rpc().get_historical_account_info(
+    "account_address".to_string(),
+    HistoricalAccountQuery::after_transaction(445_000_000, 10),
+    Some(GetHistoricalAccountInfoConfig {
+        encoding: Some(Encoding::JsonParsed),
+        ..Default::default()
+    }),
+).await?;
+
+// `value` is None if the account didn't exist at that position
+if let Some(account) = response.value {
+    // The write that produced this state; walk back with HistoricalAccountQuery::before(&position)
+    let position = account.last_updated_at;
+}
+
+// One page; keep paging until `value.pagination_key` is None (short/empty pages can have a key)
+let page = helius.rpc().get_historical_token_accounts_by_owner(
+    "owner_wallet".to_string(),
+    HistoricalAccountQuery::at_slot(445_000_000), // pin the slot across pages
+    Some(GetHistoricalTokenAccountsByOwnerConfig {
+        filter: Some(TokenAccountsOwnerFilter::Mint { mint: "mint_address".to_string() }),
+        limit: Some(1000),
+        ..Default::default()
+    }),
+).await?;
+
+// Or auto-paginate
+let all = helius.rpc().get_all_historical_token_accounts_by_owner(
+    "owner_wallet".to_string(),
+    HistoricalAccountQuery::at_slot(445_000_000),
+    GetHistoricalTokenAccountsByOwnerConfig::default(),
+).await?;
+```
+
+`response.context.slot` is the latest indexed slot, not the slot you queried. Encodings: `Base64` (default), `Base64Zstd`, `JsonParsed` (no `Base58`). Commitment: `Finalized` (default) or `Confirmed` (no `Processed`).
 
 ### Parsed Events
 
@@ -844,11 +895,11 @@ tokio::spawn(async move {
 ```toml
 # Default: native TLS (OpenSSL)
 [dependencies]
-helius = "3.1"
+helius = "4.0"
 
 # Alternative: rustls (pure Rust, no OpenSSL dependency)
 [dependencies]
-helius = { version = "3.1", default-features = false, features = ["rustls"] }
+helius = { version = "4.0", default-features = false, features = ["rustls"] }
 ```
 
 ## Plans and Rate Limits

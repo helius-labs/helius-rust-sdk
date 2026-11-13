@@ -17,7 +17,7 @@ async fn test_get_compressed_account_success() {
                 lamports: 1000,
                 leaf_index: 0,
                 owner: "11111114d3RrygbPdAtMuFnDmzsN8T5fYKVQ7FVr7".to_string(),
-                seq: 1,
+                seq: Some(1),
                 slot_created: 50,
                 tree: "11111117qkFjr4u54stuNNUR8fRF8dNhaP35yvANs".to_string(),
             }),

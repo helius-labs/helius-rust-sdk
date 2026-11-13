@@ -3,7 +3,7 @@ use solana_sdk::pubkey::Pubkey;
 use solana_stake_interface::stake_flags::StakeFlags;
 use solana_stake_interface::state::{Meta, Stake, StakeStateV2};
 
-use super::helpers::setup_mock;
+use super::helpers::{mock_rent_exempt, setup_mock};
 
 use mockito::{Matcher, Server};
 
@@ -90,4 +90,40 @@ async fn test_withdrawable_zero_for_active_stake() {
     let result = helius.get_withdrawable_amount(stake_account, true).await;
 
     assert!(matches!(result, Ok(0)), "Active stake must report 0, got {result:?}");
+}
+
+/// A stake account that was created but never delegated holds no stake, so its whole balance is
+/// withdrawable right away, and there is no epoch to compare against.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_withdrawable_full_balance_for_initialized_account() {
+    let (mut server, helius) = setup_mock().await;
+
+    let state = StakeStateV2::Initialized(Meta::default());
+    let data = base64::engine::general_purpose::STANDARD.encode(bincode::serialize(&state).unwrap());
+    server
+        .mock("POST", Matcher::Any)
+        .match_body(Matcher::Regex("getAccountInfo".to_string()))
+        .with_status(200)
+        .with_header("Content-Type", "application/json")
+        .with_body(format!(
+            r#"{{"jsonrpc":"2.0","result":{{"context":{{"slot":1}},"value":{{"data":["{data}","base64"],"executable":false,"lamports":5000000000,"owner":"Stake11111111111111111111111111111111111111","rentEpoch":18446744073709551615,"space":200}}}},"id":1}}"#
+        ))
+        .create();
+    let epoch = server
+        .mock("POST", Matcher::Any)
+        .match_body(Matcher::Regex("getEpochInfo".to_string()))
+        .expect(0)
+        .create();
+    mock_rent_exempt(&mut server);
+
+    let stake_account = Pubkey::new_unique();
+    let with_rent = helius.get_withdrawable_amount(stake_account, true).await;
+    let without_rent = helius.get_withdrawable_amount(stake_account, false).await;
+
+    assert!(matches!(with_rent, Ok(5_000_000_000)), "got {with_rent:?}");
+    assert!(
+        matches!(without_rent, Ok(amount) if amount == 5_000_000_000 - 2_282_880),
+        "got {without_rent:?}"
+    );
+    epoch.assert();
 }

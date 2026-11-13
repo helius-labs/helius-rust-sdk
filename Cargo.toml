@@ -1,6 +1,6 @@
 [package]
 name = "helius"
-version = "3.1.0"
+version = "4.0.0"
 rust-version = "1.97.1"
 edition = "2021"
 description = "An asynchronous Helius Rust SDK for building the future of Solana"
@@ -127,6 +127,10 @@ path = "examples/helius/async_config_based_creation.rs"
 [[example]]
 name = "get_program_accounts_v2"
 path = "examples/helius/get_program_accounts_v2.rs"
+
+[[example]]
+name = "get_historical_account_state"
+path = "examples/helius/get_historical_account_state.rs"
 
 [[example]]
 name = "get_priority_fee_estimate"

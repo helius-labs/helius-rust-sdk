@@ -3,6 +3,7 @@ use std::time::Duration;
 use helius::error::HeliusError;
 
 use solana_client::rpc_config::RpcSendTransactionConfig;
+use solana_commitment_config::CommitmentLevel;
 use solana_sdk::{
     hash::Hash,
     pubkey::Pubkey,
@@ -172,4 +173,195 @@ async fn test_stale_send_error_does_not_mask_timeout() {
         matches!(err, HeliusError::Timeout { .. }),
         "the run ended in a confirmation timeout, not the earlier send failure, got {err:?}"
     );
+}
+
+/// Mocks `sendTransaction` the way a node answers a transaction built on a `confirmed` blockhash
+/// (as every smart transaction is): preflight at `confirmed` accepts it, while preflight at
+/// `finalized` runs on the rooted bank, which does not know the blockhash yet. Returned uncreated so
+/// each test can set its expectations.
+fn mock_send_by_preflight_commitment(server: &mut Server, tx: &Transaction) -> (mockito::Mock, mockito::Mock) {
+    let send_with = |commitment: &str| {
+        Matcher::AllOf(vec![
+            Matcher::Regex("sendTransaction".to_string()),
+            Matcher::Regex(format!(r#""preflightCommitment":"{commitment}""#)),
+        ])
+    };
+
+    let confirmed = server
+        .mock("POST", Matcher::Any)
+        .match_body(send_with("confirmed"))
+        .with_status(200)
+        .with_header("Content-Type", "application/json")
+        .with_body(format!(r#"{{"jsonrpc":"2.0","result":"{}","id":1}}"#, tx.signatures[0]));
+    let finalized = server
+        .mock("POST", Matcher::Any)
+        .match_body(send_with("finalized"))
+        .with_status(200)
+        .with_header("Content-Type", "application/json")
+        .with_body(
+            r#"{"jsonrpc":"2.0","error":{"code":-32002,"message":"Transaction simulation failed: Blockhash not found","data":{"err":"BlockhashNotFound","logs":[],"accounts":null,"unitsConsumed":0,"returnData":null}},"id":1}"#,
+        );
+
+    (confirmed, finalized)
+}
+
+fn mock_confirmed_status(server: &mut Server) {
+    server
+        .mock("POST", Matcher::Any)
+        .match_body(Matcher::Regex("getSignatureStatuses".to_string()))
+        .with_status(200)
+        .with_header("Content-Type", "application/json")
+        .with_body(
+            r#"{"jsonrpc":"2.0","result":{"context":{"slot":1},"value":[{"slot":1,"confirmations":null,"err":null,"status":{"Ok":null},"confirmationStatus":"confirmed"}]},"id":1}"#,
+        )
+        .create();
+}
+
+/// The smart-transaction builders fetch their blockhash at `confirmed`, and `SmartTransactionConfig::new`
+/// sends with `RpcSendTransactionConfig::default()`, which leaves the preflight commitment unset.
+/// Unset, the RPC client fills in `finalized`, so every send failed preflight with "Blockhash not
+/// found" until the root caught up with the blockhash, or until the timeout ran out first.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_unset_preflight_commitment_defaults_to_confirmed() {
+    let (mut server, helius) = setup_mock().await;
+    let tx = dummy_transaction();
+
+    mock_block_height(&mut server, 50);
+    let (confirmed, finalized) = mock_send_by_preflight_commitment(&mut server, &tx);
+    let confirmed = confirmed.expect(1).create();
+    let finalized = finalized.expect(0).create();
+    mock_confirmed_status(&mut server);
+
+    let result = helius
+        .send_and_confirm_transaction(
+            &tx,
+            RpcSendTransactionConfig::default(),
+            100,
+            Some(Duration::from_secs(2)),
+        )
+        .await;
+
+    assert_eq!(result.ok(), Some(tx.signatures[0]), "the first send should go through");
+    confirmed.assert();
+    finalized.assert();
+}
+
+/// A preflight commitment the caller sets is sent as is.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_explicit_preflight_commitment_is_kept() {
+    let (mut server, helius) = setup_mock().await;
+    let tx = dummy_transaction();
+
+    mock_block_height(&mut server, 50);
+    let (confirmed, finalized) = mock_send_by_preflight_commitment(&mut server, &tx);
+    let confirmed = confirmed.expect(0).create();
+    let finalized = finalized.expect_at_least(1).create();
+
+    let result = helius
+        .send_and_confirm_transaction(
+            &tx,
+            RpcSendTransactionConfig {
+                preflight_commitment: Some(CommitmentLevel::Finalized),
+                ..RpcSendTransactionConfig::default()
+            },
+            100,
+            Some(Duration::from_secs(1)),
+        )
+        .await;
+
+    let err = result.expect_err("the finalized preflight rejects the confirmed blockhash");
+    assert!(err.to_string().contains("Blockhash not found"), "got {err:?}");
+    confirmed.assert();
+    finalized.assert();
+}
+
+/// Mocks `getSignatureStatuses` to report an on-chain failure.
+fn mock_failed_status(server: &mut Server) {
+    server
+        .mock("POST", Matcher::Any)
+        .match_body(Matcher::Regex("getSignatureStatuses".to_string()))
+        .with_status(200)
+        .with_header("Content-Type", "application/json")
+        .with_body(
+            r#"{"jsonrpc":"2.0","result":{"context":{"slot":1},"value":[{"slot":1,"confirmations":null,"err":{"InstructionError":[0,{"Custom":6001}]},"status":{"Err":{"InstructionError":[0,{"Custom":6001}]}},"confirmationStatus":"confirmed"}]},"id":1}"#,
+        )
+        .create();
+}
+
+/// The loop gives up on expiry using a status read from before the height read. A transaction
+/// that landed at or below the last valid height while the tip moved past it is only visible to a
+/// fresh read, and reporting it as expired invites a rebuild that executes it twice.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_expired_blockhash_returns_a_landed_transaction() {
+    let (mut server, helius) = setup_mock().await;
+    let tx = dummy_transaction();
+
+    mock_block_height(&mut server, 200);
+    mock_confirmed_status(&mut server);
+
+    let result = helius
+        .send_and_confirm_transaction(
+            &tx,
+            RpcSendTransactionConfig::default(),
+            100,
+            Some(Duration::from_secs(1)),
+        )
+        .await;
+
+    assert_eq!(result.ok(), Some(tx.signatures[0]));
+}
+
+/// A fresh read that finds the transaction failed on-chain reports that failure, not the expiry.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_expired_blockhash_reports_an_on_chain_failure() {
+    let (mut server, helius) = setup_mock().await;
+    let tx = dummy_transaction();
+
+    mock_block_height(&mut server, 200);
+    mock_failed_status(&mut server);
+
+    let result = helius
+        .send_and_confirm_transaction(
+            &tx,
+            RpcSendTransactionConfig::default(),
+            100,
+            Some(Duration::from_secs(1)),
+        )
+        .await;
+
+    assert!(
+        matches!(result, Err(HeliusError::TransactionError(_))),
+        "got {result:?}"
+    );
+}
+
+/// Once a transaction lands, resending it fails preflight as already processed. The loop retries
+/// that until the deadline and then reported the send error, although the transaction succeeded.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_already_processed_resends_return_the_landed_transaction() {
+    let (mut server, helius) = setup_mock().await;
+    let tx = dummy_transaction();
+
+    mock_block_height(&mut server, 50);
+    server
+        .mock("POST", Matcher::Any)
+        .match_body(Matcher::Regex("sendTransaction".to_string()))
+        .with_status(200)
+        .with_header("Content-Type", "application/json")
+        .with_body(
+            r#"{"jsonrpc":"2.0","error":{"code":-32002,"message":"Transaction simulation failed: This transaction has already been processed","data":{"err":"AlreadyProcessed","logs":[],"accounts":null,"unitsConsumed":0,"returnData":null}},"id":1}"#,
+        )
+        .create();
+    mock_confirmed_status(&mut server);
+
+    let result = helius
+        .send_and_confirm_transaction(
+            &tx,
+            RpcSendTransactionConfig::default(),
+            100,
+            Some(Duration::from_secs(1)),
+        )
+        .await;
+
+    assert_eq!(result.ok(), Some(tx.signatures[0]));
 }

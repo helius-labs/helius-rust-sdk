@@ -1314,7 +1314,7 @@ impl Helius {
     ///     };
     ///     let response = helius.get_validity_proof(request).await.unwrap();
     ///     let proof = &response.value;
-    ///     println!("Proof a: {}", proof.compressed_proof.a);
+    ///     println!("Proof a: {:?}", proof.compressed_proof.a);
     ///     println!("Roots: {:?}", proof.roots);
     ///     println!("Merkle trees: {:?}", proof.merkle_trees);
     /// }

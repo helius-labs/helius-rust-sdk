@@ -47,6 +47,19 @@ pub(crate) fn validate_rebate_address(address: &str) -> Result<&str> {
     }
 }
 
+/// Checks that a URL path segment identifier (`project_id`, `webhook_id`) is non-empty and
+/// contains only ASCII alphanumerics, `-`, or `_` (rejecting whitespace padding, dot segments,
+/// and raw or percent-encoded path/query separators).
+pub(crate) fn validate_path_id<'a>(id: &'a str, field: &str) -> Result<&'a str> {
+    if !id.is_empty() && id.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'_') {
+        Ok(id)
+    } else {
+        Err(HeliusError::InvalidInput(format!(
+            "Invalid {field} {id:?}: expected a non-empty ASCII alphanumeric, '-', or '_' identifier"
+        )))
+    }
+}
+
 /// Whether a raw `key=value` query segment names `key`, comparing the decoded key
 fn query_segment_has_key(segment: &str, key: &str) -> bool {
     url::form_urlencoded::parse(segment.as_bytes())

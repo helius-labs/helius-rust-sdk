@@ -17,11 +17,11 @@ use rand::Rng;
 use reqwest::StatusCode;
 use serde_json::json;
 use solana_client::{
-    rpc_client::SerializableTransaction,
+    rpc_client::{RpcClient as SolanaRpcClient, SerializableTransaction},
     rpc_config::{RpcSendTransactionConfig, RpcSimulateTransactionConfig},
     rpc_response::{Response, RpcSimulateTransactionResult},
 };
-use solana_commitment_config::CommitmentConfig;
+use solana_commitment_config::{CommitmentConfig, CommitmentLevel};
 use solana_compute_budget_interface::ComputeBudgetInstruction;
 use solana_sdk::signature::keypair_from_seed;
 use solana_sdk::{
@@ -407,6 +407,31 @@ fn resolve_tip_lamports(feed_lamports: Option<u64>, min_lamports: u64, max_tip_l
     feed_lamports.unwrap_or(min_lamports).clamp(min_lamports, ceiling)
 }
 
+/// Simulation config for a draft whose blockhash came from `client.get_latest_blockhash()`
+///
+/// The blockhash is fetched at the client's commitment, so the simulation must run there too.
+/// Left unset, the commitment defaults to `finalized`, and the rooted bank does not know a newer
+/// `confirmed` or `processed` blockhash yet: the simulation then fails with `BlockhashNotFound`.
+fn simulation_config(client: &SolanaRpcClient, sig_verify: bool) -> RpcSimulateTransactionConfig {
+    RpcSimulateTransactionConfig {
+        sig_verify,
+        commitment: Some(client.commitment()),
+        ..Default::default()
+    }
+}
+
+/// The preflight commitment for a send whose config leaves it unset
+///
+/// The smart-transaction builders fetch their blockhash at `confirmed`. Left unset, the
+/// preflight commitment defaults to `finalized`, whose bank does not know that blockhash until
+/// the root catches up, so every send would fail preflight with "Blockhash not found" until then.
+fn with_default_preflight_commitment(config: RpcSendTransactionConfig) -> RpcSendTransactionConfig {
+    RpcSendTransactionConfig {
+        preflight_commitment: config.preflight_commitment.or(Some(CommitmentLevel::Confirmed)),
+        ..config
+    }
+}
+
 fn is_retryable_confirmation_error(err: &HeliusError) -> bool {
     matches!(err, HeliusError::Timeout { .. })
 }
@@ -748,12 +773,11 @@ impl Helius {
         };
 
         // Simulate the transaction
-        let config: RpcSimulateTransactionConfig = RpcSimulateTransactionConfig {
-            sig_verify: signers.is_some(),
-            ..Default::default()
-        };
+        let sig_verify: bool = signers.is_some();
         let result: Response<RpcSimulateTransactionResult> = self
-            .run_blocking_rpc(move |client| client.simulate_transaction_with_config(&transaction, config))
+            .run_blocking_rpc(move |client| {
+                client.simulate_transaction_with_config(&transaction, simulation_config(client, sig_verify))
+            })
             .await??;
 
         // A failed simulation still returns `units_consumed: Some(0)`; surface the error instead of
@@ -806,29 +830,19 @@ impl Helius {
         let start: Instant = Instant::now();
 
         loop {
-            if start.elapsed() >= timeout {
+            if let Some(sig) = self.confirmed_signature(txt_sig).await? {
+                return Ok(sig);
+            }
+
+            // Check the deadline after the read, not before it: checking first would give up on
+            // the strength of a read taken before the last sleep, missing a transaction that
+            // confirmed during it.
+            let remaining: Duration = timeout.saturating_sub(start.elapsed());
+            if remaining.is_zero() {
                 return Err(HeliusError::Timeout {
                     code: StatusCode::REQUEST_TIMEOUT,
                     text: format!("Transaction {}'s confirmation timed out", txt_sig),
                 });
-            }
-
-            let status = self
-                .run_blocking_rpc(move |client| client.get_signature_statuses(&[txt_sig]))
-                .await??;
-
-            // `value` should hold exactly one entry for the single signature queried, but guard
-            // against an empty/short response by treating a missing entry as "not yet available"
-            // (retry) rather than indexing and panicking.
-            if let Some(status) = status.value.first().cloned().flatten() {
-                if let Some(err) = status.err {
-                    return Err(HeliusError::TransactionError(err));
-                }
-                if status.confirmation_status == Some(TransactionConfirmationStatus::Confirmed)
-                    || status.confirmation_status == Some(TransactionConfirmationStatus::Finalized)
-                {
-                    return Ok(txt_sig);
-                }
             }
 
             // Either the status is not available yet, or the transaction is still `Processed`.
@@ -837,8 +851,53 @@ impl Helius {
             // blocking RPC calls for the full timeout.
             // Clamp the wait to the time actually left so the poll honours its timeout rather
             // than overshooting it by up to one full interval.
-            sleep(interval.min(timeout.saturating_sub(start.elapsed()))).await;
+            sleep(interval.min(remaining)).await;
             interval = (interval * 2).min(MAX_POLL_INTERVAL);
+        }
+    }
+
+    /// Reads `sig`'s status once: `Some(sig)` if it is confirmed or finalized, `None` if it is
+    /// not yet available or only `Processed`, and [`HeliusError::TransactionError`] if it landed
+    /// but failed on-chain
+    async fn confirmed_signature(&self, sig: Signature) -> Result<Option<Signature>> {
+        let status = self
+            .run_blocking_rpc(move |client| client.get_signature_statuses(&[sig]))
+            .await??;
+
+        // `value` should hold exactly one entry for the single signature queried, but guard
+        // against an empty/short response by treating a missing entry as "not yet available"
+        // (retry) rather than indexing and panicking.
+        if let Some(status) = status.value.first().cloned().flatten() {
+            if let Some(err) = status.err {
+                return Err(HeliusError::TransactionError(err));
+            }
+            if status.confirmation_status == Some(TransactionConfirmationStatus::Confirmed)
+                || status.confirmation_status == Some(TransactionConfirmationStatus::Finalized)
+            {
+                return Ok(Some(sig));
+            }
+        }
+
+        Ok(None)
+    }
+
+    /// Reads `sig`'s status once more before giving up on it with `give_up`
+    ///
+    /// A send loop decides the blockhash expired, or its deadline passed, on a status read taken
+    /// before that check and before the sleep that preceded it. A transaction that landed in
+    /// between would be reported as expired or failed, and a caller that rebuilds and resends it
+    /// would execute it twice. A fresh read settles it: confirmed is a success, failed on-chain
+    /// is that error, and anything else is `give_up`.
+    async fn recheck_before_giving_up(&self, sig: Signature, give_up: HeliusError) -> Result<Signature> {
+        match self.confirmed_signature(sig).await {
+            Ok(Some(sig)) => Ok(sig),
+            Err(err @ HeliusError::TransactionError(_)) => Err(err),
+            // Still unconfirmed, or the read itself failed: the reason for giving up stands
+            Ok(None) => Err(give_up),
+            Err(err) => {
+                log::debug!("Status re-check for {sig} failed, keeping the original error: {err}");
+                Err(give_up)
+            }
         }
     }
 
@@ -1074,7 +1133,9 @@ impl Helius {
     /// * `transaction` - The transaction to be sent, which implements `SerializableTransaction`.
     ///   Each send attempt runs on tokio's blocking pool and so needs an owned copy; the bound is
     ///   satisfied by `Transaction` and `VersionedTransaction`
-    /// * `send_transaction_config` - Configuration options for sending the transaction
+    /// * `send_transaction_config` - Configuration options for sending the transaction. An unset
+    ///   `preflight_commitment` defaults to `confirmed`, the commitment the smart-transaction
+    ///   builders fetch their blockhash at
     /// * `last_valid_block_height` - The last block height at which the transaction is valid
     /// * `timeout` - Optional duration for polling transaction confirmation, defaults to 60 seconds
     ///
@@ -1090,6 +1151,9 @@ impl Helius {
     where
         T: SerializableTransaction + Clone + Send + 'static,
     {
+        let send_transaction_config: RpcSendTransactionConfig =
+            with_default_preflight_commitment(send_transaction_config);
+
         // Retry logic with a timeout
         let timeout: Duration = timeout.unwrap_or(Duration::from_secs(60));
         let start_time: Instant = Instant::now();
@@ -1152,17 +1216,19 @@ impl Helius {
 
         // Surface the last send failure if there was one; the timeout is only the real story when
         // every send succeeded and confirmation never landed.
-        if let Some(err) = last_send_err {
-            return Err(err);
-        }
-
-        Err(HeliusError::Timeout {
+        let give_up: HeliusError = last_send_err.unwrap_or_else(|| HeliusError::Timeout {
             code: StatusCode::REQUEST_TIMEOUT,
             text: format!(
                 "Transaction failed to confirm within {}s or the blockhash expired",
                 timeout.as_secs()
             ),
-        })
+        });
+
+        // The transaction may have landed after the last status read: a resend of a landed
+        // transaction fails preflight as already processed, and the loop above then ends on that
+        // send error or on the expiry without polling again.
+        self.recheck_before_giving_up(*transaction.get_signature(), give_up)
+            .await
     }
 
     /// Thread safe version of get_compute_units to simulate a transaction to get the total compute units consumed
@@ -1252,13 +1318,11 @@ impl Helius {
             }
         };
 
-        let config: RpcSimulateTransactionConfig = RpcSimulateTransactionConfig {
-            sig_verify: keypairs.is_some(),
-            ..Default::default()
-        };
-
+        let sig_verify: bool = keypairs.is_some();
         let result: Response<RpcSimulateTransactionResult> = self
-            .run_blocking_rpc(move |client| client.simulate_transaction_with_config(&transaction, config))
+            .run_blocking_rpc(move |client| {
+                client.simulate_transaction_with_config(&transaction, simulation_config(client, sig_verify))
+            })
             .await??;
 
         Ok(result.value.units_consumed)
@@ -1820,26 +1884,42 @@ impl Helius {
         let sig: Signature = post_to_sender(&tx64, &opts, mev_protect).await?;
 
         // Poll until confirmed (or timeout/last valid blockhash expiry)
-        let start: Instant = Instant::now();
+        self.confirm_sender_transaction(sig, last_valid_block_height, Instant::now(), &opts, "Transaction")
+            .await
+    }
+
+    /// Polls a transaction sent through Sender until it confirms, its blockhash expires, or the
+    /// Sender poll budget (`opts.poll_timeout_ms` from `start`) runs out. `label` names the
+    /// transaction in the errors.
+    ///
+    /// Before reporting expiry or a timeout, the status is read once more: the last read came
+    /// from a poll that ended before the expiry check and the `poll_interval_ms` sleep after it.
+    async fn confirm_sender_transaction(
+        &self,
+        sig: Signature,
+        last_valid_block_height: u64,
+        start: Instant,
+        opts: &SenderSendOptions,
+        label: &str,
+    ) -> Result<Signature> {
         let timeout: Duration = Duration::from_millis(opts.poll_timeout_ms);
         let interval: Duration = Duration::from_millis(opts.poll_interval_ms);
 
         loop {
             if start.elapsed() >= timeout {
-                return Err(HeliusError::Timeout {
+                let give_up: HeliusError = HeliusError::Timeout {
                     code: StatusCode::REQUEST_TIMEOUT,
-                    text: format!("Transaction {}'s confirmation timed out", sig),
-                });
+                    text: format!("{label} {sig}'s confirmation timed out"),
+                };
+                return self.recheck_before_giving_up(sig, give_up).await;
             }
 
             if self.run_blocking_rpc(|client| client.get_block_height()).await?? > last_valid_block_height {
-                return Err(HeliusError::Timeout {
+                let give_up: HeliusError = HeliusError::Timeout {
                     code: StatusCode::REQUEST_TIMEOUT,
-                    text: format!(
-                        "Transaction {} expired (last_valid_block_height={})",
-                        sig, last_valid_block_height
-                    ),
-                });
+                    text: format!("{label} {sig} expired (last_valid_block_height={last_valid_block_height})"),
+                };
+                return self.recheck_before_giving_up(sig, give_up).await;
             }
 
             // Bounded by the remaining Sender poll budget so `poll_timeout_ms` is binding.
@@ -1988,40 +2068,11 @@ impl Helius {
             return Err(HeliusError::InvalidInput(format!("Sender bundle error: {err}")));
         }
 
-        // Track landing via each transaction's signature.
+        // Track landing via each transaction's signature, all within one Sender poll budget.
         let start: Instant = Instant::now();
-        let timeout: Duration = Duration::from_millis(opts.poll_timeout_ms);
-        let interval: Duration = Duration::from_millis(opts.poll_interval_ms);
-
         for sig in &signatures {
-            loop {
-                if start.elapsed() >= timeout {
-                    return Err(HeliusError::Timeout {
-                        code: StatusCode::REQUEST_TIMEOUT,
-                        text: format!("Bundle transaction {sig}'s confirmation timed out"),
-                    });
-                }
-
-                if self.run_blocking_rpc(|client| client.get_block_height()).await?? > last_valid_block_height {
-                    return Err(HeliusError::Timeout {
-                        code: StatusCode::REQUEST_TIMEOUT,
-                        text: format!(
-                            "Bundle transaction {sig} expired (last_valid_block_height={last_valid_block_height})"
-                        ),
-                    });
-                }
-
-                // Bounded by the remaining Sender poll budget so `poll_timeout_ms` is binding.
-                let remaining: Duration = timeout.saturating_sub(start.elapsed());
-                match self
-                    .poll_transaction_confirmation_with_timeout(*sig, remaining.min(DEFAULT_CONFIRMATION_POLL_TIMEOUT))
-                    .await
-                {
-                    Ok(_) => break,
-                    Err(err) if is_retryable_confirmation_error(&err) => sleep(interval).await,
-                    Err(err) => return Err(err),
-                }
-            }
+            self.confirm_sender_transaction(*sig, last_valid_block_height, start, &opts, "Bundle transaction")
+                .await?;
         }
 
         Ok(signatures)
@@ -2617,5 +2668,153 @@ mod tests {
     fn v1_compute_unit_limit_rejects_an_over_maximum_value() {
         assert!(resolve_compute_unit_limit_for_v1(Some(MAX_COMPUTE_UNIT_LIMIT + 1)).is_err());
         assert!(resolve_compute_unit_limit_for_v1(Some(u32::MAX)).is_err());
+    }
+
+    /// The Sender endpoints are fixed, so the confirmation half of a Sender send is tested here,
+    /// against a mock RPC, rather than through `send_and_confirm_via_sender`.
+    mod sender_confirmation {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        use std::sync::Arc;
+        use std::time::Instant;
+
+        use mockito::{Matcher, Mock, ServerGuard};
+        use reqwest::Client;
+        use solana_sdk::signature::Signature;
+
+        use crate::config::Config;
+        use crate::error::HeliusError;
+        use crate::rpc_client::RpcClient;
+        use crate::types::{ApiKey, Cluster, HeliusEndpoints, SenderSendOptions};
+        use crate::Helius;
+
+        const LAST_VALID_BLOCK_HEIGHT: u64 = 100;
+
+        const STATUS_UNKNOWN: &str = r#"{"jsonrpc":"2.0","result":{"context":{"slot":1},"value":[null]},"id":1}"#;
+        const STATUS_CONFIRMED: &str = r#"{"jsonrpc":"2.0","result":{"context":{"slot":1},"value":[{"slot":1,"confirmations":null,"err":null,"status":{"Ok":null},"confirmationStatus":"confirmed"}]},"id":1}"#;
+        const STATUS_FAILED: &str = r#"{"jsonrpc":"2.0","result":{"context":{"slot":1},"value":[{"slot":1,"confirmations":null,"err":{"InstructionError":[0,{"Custom":6001}]},"status":{"Err":{"InstructionError":[0,{"Custom":6001}]}},"confirmationStatus":"confirmed"}]},"id":1}"#;
+
+        async fn setup() -> (ServerGuard, Helius) {
+            let server = mockito::Server::new_async().await;
+            let url = server.url();
+            let config = Arc::new(Config {
+                api_key: Some(ApiKey::new("fake_api_key").unwrap()),
+                cluster: Cluster::Devnet,
+                endpoints: HeliusEndpoints {
+                    api: url.clone(),
+                    rpc: url,
+                },
+                custom_url: None,
+            });
+            let client = Client::new();
+            let rpc_client = Arc::new(RpcClient::new(Arc::new(client.clone()), Arc::clone(&config)).unwrap());
+            let helius = Helius {
+                config,
+                client,
+                rpc_client,
+                async_rpc_client: None,
+                ws_client: None,
+            };
+            (server, helius)
+        }
+
+        fn mock_block_height(server: &mut ServerGuard, height: u64) {
+            server
+                .mock("POST", Matcher::Any)
+                .match_body(Matcher::Regex("getBlockHeight".to_string()))
+                .with_status(200)
+                .with_header("Content-Type", "application/json")
+                .with_body(format!(r#"{{"jsonrpc":"2.0","result":{height},"id":1}}"#))
+                .create();
+        }
+
+        /// Answers `getSignatureStatuses` with `bodies[n]` on the nth call, repeating the last one.
+        fn mock_statuses(server: &mut ServerGuard, bodies: &'static [&'static str]) -> Mock {
+            let calls = AtomicUsize::new(0);
+            server
+                .mock("POST", Matcher::Any)
+                .match_body(Matcher::Regex("getSignatureStatuses".to_string()))
+                .with_status(200)
+                .with_header("Content-Type", "application/json")
+                .with_body_from_request(move |_| {
+                    let call = calls.fetch_add(1, Ordering::SeqCst);
+                    bodies[call.min(bodies.len() - 1)].as_bytes().to_vec()
+                })
+                .create()
+        }
+
+        fn opts(poll_timeout_ms: u64) -> SenderSendOptions {
+            SenderSendOptions {
+                poll_timeout_ms,
+                poll_interval_ms: 50,
+                ..SenderSendOptions::default()
+            }
+        }
+
+        async fn confirm(helius: &Helius, poll_timeout_ms: u64) -> crate::error::Result<Signature> {
+            helius
+                .confirm_sender_transaction(
+                    Signature::default(),
+                    LAST_VALID_BLOCK_HEIGHT,
+                    Instant::now(),
+                    &opts(poll_timeout_ms),
+                    "Transaction",
+                )
+                .await
+        }
+
+        /// The transaction landed at or below the last valid height while the tip moved past
+        /// it: only a status read after the height read can see it.
+        #[tokio::test(flavor = "multi_thread")]
+        async fn a_landed_transaction_is_not_reported_as_expired() {
+            let (mut server, helius) = setup().await;
+            mock_block_height(&mut server, LAST_VALID_BLOCK_HEIGHT + 1);
+            let statuses = mock_statuses(&mut server, &[STATUS_CONFIRMED]);
+
+            let result = confirm(&helius, 5_000).await;
+
+            assert_eq!(result.ok(), Some(Signature::default()));
+            statuses.assert();
+        }
+
+        #[tokio::test(flavor = "multi_thread")]
+        async fn an_expired_transaction_that_failed_on_chain_reports_the_failure() {
+            let (mut server, helius) = setup().await;
+            mock_block_height(&mut server, LAST_VALID_BLOCK_HEIGHT + 1);
+            mock_statuses(&mut server, &[STATUS_FAILED]);
+
+            let result = confirm(&helius, 5_000).await;
+
+            assert!(
+                matches!(result, Err(HeliusError::TransactionError(_))),
+                "got {result:?}"
+            );
+        }
+
+        #[tokio::test(flavor = "multi_thread")]
+        async fn an_expired_transaction_that_never_landed_reports_the_expiry() {
+            let (mut server, helius) = setup().await;
+            mock_block_height(&mut server, LAST_VALID_BLOCK_HEIGHT + 1);
+            mock_statuses(&mut server, &[STATUS_UNKNOWN]);
+
+            let result = confirm(&helius, 5_000).await;
+
+            assert!(
+                matches!(&result, Err(HeliusError::Timeout { text, .. }) if text.contains("expired")),
+                "got {result:?}"
+            );
+        }
+
+        /// A 300ms poll reads at 0ms and 300ms, then the loop sleeps `poll_interval_ms` before
+        /// it sees the budget is spent. The transaction confirms during that sleep.
+        #[tokio::test(flavor = "multi_thread")]
+        async fn a_transaction_that_confirms_after_the_last_poll_is_not_reported_as_timed_out() {
+            let (mut server, helius) = setup().await;
+            mock_block_height(&mut server, LAST_VALID_BLOCK_HEIGHT);
+            mock_statuses(&mut server, &[STATUS_UNKNOWN, STATUS_UNKNOWN, STATUS_CONFIRMED]);
+
+            let result = confirm(&helius, 300).await;
+
+            assert_eq!(result.ok(), Some(Signature::default()));
+        }
     }
 }
