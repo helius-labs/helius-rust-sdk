@@ -33,7 +33,7 @@ use solana_sdk::{
     pubkey::Pubkey,
     signature::{Signature, Signer},
     signer::keypair::Keypair,
-    transaction::{Transaction, VersionedTransaction},
+    transaction::{Transaction, TransactionError, VersionedTransaction},
 };
 use solana_system_interface::instruction as system_instruction;
 use solana_transaction_status_client_types::TransactionConfirmationStatus;
@@ -881,6 +881,22 @@ impl Helius {
         Ok(None)
     }
 
+    /// Reads `sig`'s status once and reports whether it has settled: `Some(Ok(sig))` if it is
+    /// confirmed or finalized, `Some(Err(HeliusError::TransactionError))` if it landed but failed
+    /// on-chain, and `None` if it is still unconfirmed or the read itself failed (logged at
+    /// `debug`), leaving the caller's own outcome to stand
+    async fn settled_signature(&self, sig: Signature) -> Option<Result<Signature>> {
+        match self.confirmed_signature(sig).await {
+            Ok(Some(sig)) => Some(Ok(sig)),
+            Err(err @ HeliusError::TransactionError(_)) => Some(Err(err)),
+            Ok(None) => None,
+            Err(err) => {
+                log::debug!("Status read for {sig} failed, treating it as unconfirmed: {err}");
+                None
+            }
+        }
+    }
+
     /// Reads `sig`'s status once more before giving up on it with `give_up`
     ///
     /// A send loop decides the blockhash expired, or its deadline passed, on a status read taken
@@ -889,16 +905,7 @@ impl Helius {
     /// would execute it twice. A fresh read settles it: confirmed is a success, failed on-chain
     /// is that error, and anything else is `give_up`.
     async fn recheck_before_giving_up(&self, sig: Signature, give_up: HeliusError) -> Result<Signature> {
-        match self.confirmed_signature(sig).await {
-            Ok(Some(sig)) => Ok(sig),
-            Err(err @ HeliusError::TransactionError(_)) => Err(err),
-            // Still unconfirmed, or the read itself failed: the reason for giving up stands
-            Ok(None) => Err(give_up),
-            Err(err) => {
-                log::debug!("Status re-check for {sig} failed, keeping the original error: {err}");
-                Err(give_up)
-            }
-        }
+        self.settled_signature(sig).await.unwrap_or(Err(give_up))
     }
 
     /// Creates an optimized transaction based on the provided configuration
@@ -1207,6 +1214,16 @@ impl Helius {
                 // transaction, say) would otherwise be retried until the timeout and reported as a
                 // generic "timed out" with the real reason discarded.
                 Err(err) => {
+                    // Once an earlier attempt has landed, a resend fails preflight with
+                    // `AlreadyProcessed` because the bank's status cache already holds the
+                    // transaction, and every later resend fails the same way. Read its status now
+                    // instead of resending it until the blockhash expires or the deadline passes. If
+                    // it is not confirmed yet, or the read itself fails, retry as before.
+                    if matches!(err.get_transaction_error(), Some(TransactionError::AlreadyProcessed)) {
+                        if let Some(settled) = self.settled_signature(*transaction.get_signature()).await {
+                            return settled;
+                        }
+                    }
                     last_send_err = Some(HeliusError::from(err));
                     sleep(retry_delay).await;
                     continue;

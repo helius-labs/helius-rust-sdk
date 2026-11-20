@@ -335,14 +335,9 @@ async fn test_expired_blockhash_reports_an_on_chain_failure() {
     );
 }
 
-/// Once a transaction lands, resending it fails preflight as already processed. The loop retries
-/// that until the deadline and then reported the send error, although the transaction succeeded.
-#[tokio::test(flavor = "multi_thread")]
-async fn test_already_processed_resends_return_the_landed_transaction() {
-    let (mut server, helius) = setup_mock().await;
-    let tx = dummy_transaction();
-
-    mock_block_height(&mut server, 50);
+/// Mocks `sendTransaction` the way a node answers a resend of a transaction it already has: the
+/// preflight simulation finds it in the status cache and fails with `AlreadyProcessed`.
+fn mock_send_already_processed(server: &mut Server) -> mockito::Mock {
     server
         .mock("POST", Matcher::Any)
         .match_body(Matcher::Regex("sendTransaction".to_string()))
@@ -351,7 +346,31 @@ async fn test_already_processed_resends_return_the_landed_transaction() {
         .with_body(
             r#"{"jsonrpc":"2.0","error":{"code":-32002,"message":"Transaction simulation failed: This transaction has already been processed","data":{"err":"AlreadyProcessed","logs":[],"accounts":null,"unitsConsumed":0,"returnData":null}},"id":1}"#,
         )
-        .create();
+}
+
+/// Mocks `getSignatureStatuses` for a signature the node has no status for yet
+fn mock_unconfirmed_status(server: &mut Server) -> mockito::Mock {
+    server
+        .mock("POST", Matcher::Any)
+        .match_body(Matcher::Regex("getSignatureStatuses".to_string()))
+        .with_status(200)
+        .with_header("Content-Type", "application/json")
+        .with_body(r#"{"jsonrpc":"2.0","result":{"context":{"slot":1},"value":[null]},"id":1}"#)
+}
+
+/// A status read after an `AlreadyProcessed` send that does not find the transaction confirmed
+/// (another node behind a load balancer may lag, say) must not end the loop: it resends, and the
+/// read after the next `AlreadyProcessed` returns the landed transaction.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_already_processed_send_retries_until_a_status_read_confirms() {
+    let (mut server, helius) = setup_mock().await;
+    let tx = dummy_transaction();
+
+    mock_block_height(&mut server, 50);
+    let send = mock_send_already_processed(&mut server).expect(2).create();
+    // mockito serves the first matching mock that still expects hits, so the first status read
+    // finds nothing and every later one finds the transaction confirmed
+    let unconfirmed = mock_unconfirmed_status(&mut server).expect(1).create();
     mock_confirmed_status(&mut server);
 
     let result = helius
@@ -359,9 +378,85 @@ async fn test_already_processed_resends_return_the_landed_transaction() {
             &tx,
             RpcSendTransactionConfig::default(),
             100,
-            Some(Duration::from_secs(1)),
+            Some(Duration::from_secs(3)),
         )
         .await;
 
     assert_eq!(result.ok(), Some(tx.signatures[0]));
+    send.assert();
+    unconfirmed.assert();
+}
+
+/// While no status read finds the transaction, `AlreadyProcessed` is retried like any other send
+/// error until the deadline, and the send error is what the caller sees.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_already_processed_send_with_no_status_keeps_retrying() {
+    let (mut server, helius) = setup_mock().await;
+    let tx = dummy_transaction();
+
+    mock_block_height(&mut server, 50);
+    let send = mock_send_already_processed(&mut server).expect_at_least(2).create();
+    mock_unconfirmed_status(&mut server).create();
+
+    let result = helius
+        .send_and_confirm_transaction(
+            &tx,
+            RpcSendTransactionConfig::default(),
+            100,
+            Some(Duration::from_secs(2)),
+        )
+        .await;
+
+    assert!(matches!(result, Err(HeliusError::ClientError(_))), "got {result:?}");
+    send.assert();
+}
+
+/// An `AlreadyProcessed` send failure means the transaction is already in the status cache, so
+/// its status is read right away instead of resending it every 500 ms until the deadline.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_already_processed_send_returns_without_resending() {
+    let (mut server, helius) = setup_mock().await;
+    let tx = dummy_transaction();
+
+    mock_block_height(&mut server, 50);
+    let send = mock_send_already_processed(&mut server).expect(1).create();
+    mock_confirmed_status(&mut server);
+
+    let result = helius
+        .send_and_confirm_transaction(
+            &tx,
+            RpcSendTransactionConfig::default(),
+            100,
+            Some(Duration::from_secs(3)),
+        )
+        .await;
+
+    assert_eq!(result.ok(), Some(tx.signatures[0]));
+    send.assert();
+}
+
+/// The same read reports a transaction that landed but failed on-chain with its own error.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_already_processed_send_reports_the_on_chain_failure_without_resending() {
+    let (mut server, helius) = setup_mock().await;
+    let tx = dummy_transaction();
+
+    mock_block_height(&mut server, 50);
+    let send = mock_send_already_processed(&mut server).expect(1).create();
+    mock_failed_status(&mut server);
+
+    let result = helius
+        .send_and_confirm_transaction(
+            &tx,
+            RpcSendTransactionConfig::default(),
+            100,
+            Some(Duration::from_secs(3)),
+        )
+        .await;
+
+    assert!(
+        matches!(result, Err(HeliusError::TransactionError(_))),
+        "got {result:?}"
+    );
+    send.assert();
 }
