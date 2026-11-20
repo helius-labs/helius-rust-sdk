@@ -3,7 +3,7 @@
 Machine-readable guide for AI agents using the Helius Rust SDK to build on Solana.
 
 - Crate: `helius` (crates.io)
-- Version: 3.x (uses solana-sdk 4.x, solana-client 4.3.0)
+- Version: 4.x (uses solana-sdk 4.x, solana-client 4.3.0)
 - Runtime: Async (tokio 1.x)
 - Rust: 1.97.1+
 - License: MIT
@@ -17,7 +17,7 @@ Get an API key from https://dashboard.helius.dev, or sign up programmatically vi
 ```toml
 # Cargo.toml
 [dependencies]
-helius = "3.1"
+helius = "4.0"
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 solana-sdk = "4"
 ```
@@ -430,6 +430,10 @@ helius.rpc().get_program_accounts_v2(program_id, config)                 // Prog
 helius.rpc().get_all_program_accounts(program_id, config)                // Auto-paginating variant
 helius.rpc().get_token_accounts_by_owner_v2(owner, filter, config)       // Token accounts v2 (pagination_key)
 helius.rpc().get_all_token_accounts_by_owner(owner, filter, config)      // Auto-paginating variant
+helius.rpc().get_transfers_by_address(address, config)                   // Token and SOL transfers (pagination_token)
+helius.rpc().get_historical_account_info(address, query, config)         // Account at a past slot/transaction (beta, mainnet)
+helius.rpc().get_historical_token_accounts_by_owner(owner, query, config) // Token accounts at a past position (pagination_key)
+helius.rpc().get_all_historical_token_accounts_by_owner(owner, query, config) // Auto-paginating; set query.slot to pin pages
 helius.rpc().get_priority_fee_estimate(request)                          // Fee estimates
 ```
 

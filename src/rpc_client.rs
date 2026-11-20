@@ -36,7 +36,7 @@ use crate::types::{
     GetTransactionsForAddressResponse, GetTransfersByAddressConfig, GetTransfersByAddressRequest,
     GetTransfersByAddressResponse, GpaAccount, HistoricalAccountQuery, HistoricalAccountRequest,
     HistoricalKeyedAccount, SearchAssets, TokenAccountRecord, TokenAccountsList, TokenAccountsOwnerFilter,
-    TransactionSignatureList,
+    TransactionSignatureList, HISTORICAL_TOKEN_ACCOUNTS_MAX_LIMIT,
 };
 
 use bytes::Bytes;
@@ -655,12 +655,23 @@ impl RpcClient {
     ///
     /// Keep passing `value.pagination_key` back until it's `None`: a short or empty page can still
     /// have a cursor. Set `query.slot` so every page reads the same point in time.
+    ///
+    /// # Errors
+    /// `HeliusError::InvalidInput`, before any request, if `config.limit` is outside 1 to
+    /// [`HISTORICAL_TOKEN_ACCOUNTS_MAX_LIMIT`]
     pub async fn get_historical_token_accounts_by_owner(
         &self,
         owner: String,
         query: HistoricalAccountQuery,
         config: Option<GetHistoricalTokenAccountsByOwnerConfig>,
     ) -> Result<GetHistoricalTokenAccountsByOwnerResponse> {
+        if let Some(limit) = config.as_ref().and_then(|config| config.limit) {
+            if !(1..=HISTORICAL_TOKEN_ACCOUNTS_MAX_LIMIT).contains(&limit) {
+                return Err(HeliusError::InvalidInput(format!(
+                    "Invalid limit {limit}: getHistoricalTokenAccountsByOwner accepts 1 to {HISTORICAL_TOKEN_ACCOUNTS_MAX_LIMIT}"
+                )));
+            }
+        }
         let params: GetHistoricalTokenAccountsByOwnerRequest = HistoricalAccountRequest::new(owner, query, config);
         self.post_rpc_request("getHistoricalTokenAccountsByOwner", params).await
     }
@@ -668,7 +679,8 @@ impl RpcClient {
     /// Gets every token account a wallet owned at a past position by following
     /// `getHistoricalTokenAccountsByOwner` cursors (beta). `config.pagination_key` is ignored and
     /// `config.max_pages` caps the pages fetched. Set `query.slot` so every page reads the same point
-    /// in time.
+    /// in time. The method allows 10 requests per second, so keep `limit` high: a `429` ends the
+    /// whole collection with an error.
     pub async fn get_all_historical_token_accounts_by_owner(
         &self,
         owner: String,
