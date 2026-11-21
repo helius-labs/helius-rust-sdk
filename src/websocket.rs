@@ -148,7 +148,7 @@ fn handle_frame(
         // Servers answer a parse or invalid-request error with `"id": null`, so a non-numeric id
         // is an expected frame rather than grounds for a teardown.
         let Some(id) = id_value.as_u64() else {
-            let Some(reason) = json.get("error").map(&rpc_error) else {
+            let Some(reason) = json.get("error").map(rpc_error) else {
                 return Some(format!("unusable `id` field: {id_value}"));
             };
 
@@ -165,7 +165,7 @@ fn handle_frame(
             ));
         };
 
-        let err = json.get("error").map(&rpc_error);
+        let err = json.get("error").map(rpc_error);
 
         if let Some(response_sender) = other_requests.remove(&id) {
             match err {
