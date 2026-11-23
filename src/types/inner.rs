@@ -3339,9 +3339,6 @@ pub struct ResolvedBatchIdentity {
     /// SNS/ANS domain from the request, present when the input was a domain.
     #[serde(rename = "inputDomain", default, skip_serializing_if = "Option::is_none")]
     pub input_domain: Option<String>,
-    /// Never `true` on resolved entries; lets `is_unresolved()` narrow the enum.
-    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
-    pub unresolved: bool,
 }
 
 /// A batch entry whose domain input could not be resolved. The batch still
@@ -3362,11 +3359,33 @@ pub struct UnresolvedBatchIdentity {
 
 /// One entry in a batch identity response: resolved, or an SNS/ANS domain
 /// that could not be resolved.
-#[derive(Serialize, Deserialize, Debug, Clone)]
+///
+/// Entries with `"unresolved": true` deserialize as `Unresolved`; all others as
+/// `Resolved`.
+#[derive(Serialize, Debug, Clone)]
 #[serde(untagged)]
 pub enum BatchIdentityResult {
     Resolved(ResolvedBatchIdentity),
     Unresolved(UnresolvedBatchIdentity),
+}
+
+// Dispatch on the `unresolved` flag rather than `#[serde(untagged)]`, so a malformed
+// resolved entry reports the offending field instead of "did not match any variant".
+impl<'de> Deserialize<'de> for BatchIdentityResult {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> std::result::Result<Self, D::Error> {
+        use serde::de::Error;
+
+        let value = Value::deserialize(deserializer)?;
+        if value.get("unresolved").and_then(Value::as_bool) == Some(true) {
+            serde_json::from_value(value)
+                .map(Self::Unresolved)
+                .map_err(D::Error::custom)
+        } else {
+            serde_json::from_value(value)
+                .map(Self::Resolved)
+                .map_err(D::Error::custom)
+        }
+    }
 }
 
 impl BatchIdentityResult {

@@ -164,7 +164,7 @@ async fn test_get_batch_wallet_identity_mixed_domains() {
 
     assert!(!entries[0].is_unresolved());
     assert!(matches!(&entries[0], BatchIdentityResult::Resolved(entry)
-        if !entry.unresolved && entry.identity.name == "Toly" && entry.identity.address == "toly-wallet"
+        if entry.identity.name == "Toly" && entry.identity.address == "toly-wallet"
             && entry.input_domain.as_deref() == Some("toly.sol")));
 
     assert!(entries[1].is_unresolved());
@@ -174,4 +174,30 @@ async fn test_get_batch_wallet_identity_mixed_domains() {
 
     assert_eq!(serde_json::to_value(&entries).unwrap(), body);
     mock.assert_async().await;
+}
+
+#[test]
+fn test_batch_identity_result_dispatches_on_unresolved_flag() {
+    // The flag decides the variant, even if the API sends an address with it.
+    let entry: BatchIdentityResult = serde_json::from_value(serde_json::json!(
+        {"address":"some-wallet","type":"unknown","inputDomain":"stale.sol","unresolved":true}
+    ))
+    .unwrap();
+    assert!(matches!(&entry, BatchIdentityResult::Unresolved(e) if e.address.as_deref() == Some("some-wallet")));
+
+    // An explicit `false` is still a resolved entry.
+    let entry: BatchIdentityResult = serde_json::from_value(serde_json::json!(
+        {"address":"a","type":"wallet","name":"A","category":"Individual","tags":[],"unresolved":false}
+    ))
+    .unwrap();
+    assert!(!entry.is_unresolved());
+}
+
+#[test]
+fn test_batch_identity_result_reports_the_missing_field() {
+    let err = serde_json::from_value::<BatchIdentityResult>(serde_json::json!(
+        {"address":"a","type":"wallet","name":"A","tags":[]}
+    ))
+    .unwrap_err();
+    assert!(err.to_string().contains("category"), "unexpected error: {err}");
 }
