@@ -3330,6 +3330,71 @@ pub struct Identity {
     pub tags: Vec<String>,
 }
 
+/// A resolved entry in a batch identity lookup, with the queried domain when
+/// the input was a domain.
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct ResolvedBatchIdentity {
+    #[serde(flatten)]
+    pub identity: Identity,
+    /// SNS/ANS domain from the request, present when the input was a domain.
+    #[serde(rename = "inputDomain", default, skip_serializing_if = "Option::is_none")]
+    pub input_domain: Option<String>,
+}
+
+/// A batch entry whose domain input could not be resolved. The batch still
+/// succeeds and keeps request order.
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct UnresolvedBatchIdentity {
+    /// Always `None`; the API returns null for unresolved domains.
+    pub address: Option<String>,
+    /// Always `"unknown"`.
+    #[serde(rename = "type")]
+    pub entity_type: String,
+    /// SNS/ANS domain that could not be resolved.
+    #[serde(rename = "inputDomain")]
+    pub input_domain: String,
+    /// Always `true`; check `is_unresolved()` before reading an identity.
+    pub unresolved: bool,
+}
+
+/// One entry in a batch identity response: resolved, or an SNS/ANS domain
+/// that could not be resolved.
+///
+/// Entries with `"unresolved": true` deserialize as `Unresolved`; all others as
+/// `Resolved`.
+#[derive(Serialize, Debug, Clone)]
+#[serde(untagged)]
+pub enum BatchIdentityResult {
+    Resolved(ResolvedBatchIdentity),
+    Unresolved(UnresolvedBatchIdentity),
+}
+
+// Dispatch on the `unresolved` flag rather than `#[serde(untagged)]`, so a malformed
+// resolved entry reports the offending field instead of "did not match any variant".
+impl<'de> Deserialize<'de> for BatchIdentityResult {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> std::result::Result<Self, D::Error> {
+        use serde::de::Error;
+
+        let value = Value::deserialize(deserializer)?;
+        if value.get("unresolved").and_then(Value::as_bool) == Some(true) {
+            serde_json::from_value(value)
+                .map(Self::Unresolved)
+                .map_err(D::Error::custom)
+        } else {
+            serde_json::from_value(value)
+                .map(Self::Resolved)
+                .map_err(D::Error::custom)
+        }
+    }
+}
+
+impl BatchIdentityResult {
+    /// Whether this entry is an unresolved domain, mirroring the API's `unresolved` flag.
+    pub fn is_unresolved(&self) -> bool {
+        matches!(self, Self::Unresolved(_))
+    }
+}
+
 /// Request body for batch identity lookup
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct BatchIdentityRequest {

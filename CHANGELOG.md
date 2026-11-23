@@ -6,6 +6,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+### Changed
+- **Breaking: an unresolved domain no longer fails the whole batch identity lookup.** `get_batch_wallet_identity` now returns `Vec<BatchIdentityResult>`, in request order. `Resolved` holds a `ResolvedBatchIdentity` (the `Identity` plus the optional `inputDomain`). `Unresolved` holds an `UnresolvedBatchIdentity` with the domain that could not be resolved. Before, one unresolved domain made the whole response fail to deserialize. See `MIGRATION.md`. (#258)
+
 ### Fixed
 - **A transaction that already landed returns as soon as a resend reports it.** When a resend from `send_and_confirm_transaction` (and so `send_smart_transaction`) fails preflight with `AlreadyProcessed`, the SDK now reads the signature status right away. It returns the signature if the transaction is confirmed, or its error if it failed on-chain. Before, it kept resending every 500 ms until the blockhash expired or the timeout (60 s by default) passed, and only then read the status. (#250)
 

@@ -9,6 +9,16 @@ update your code. The most recent upgrade is listed first.
 
 ---
 
+## Unreleased: batch wallet identity
+
+`get_batch_wallet_identity` now returns `Vec<BatchIdentityResult>`.
+Each entry is a `ResolvedBatchIdentity` (the `Identity` plus optional
+`input_domain`) wrapped in `BatchIdentityResult::Resolved`, or an
+`UnresolvedBatchIdentity` (`address: None`, `type: "unknown"`, `unresolved: true`,
+and the `input_domain` that failed) wrapped in `BatchIdentityResult::Unresolved`.
+Match on the enum, or check `entry.is_unresolved()` before reading an identity.
+`Identity` and `get_wallet_identity` are unchanged.
+
 ## 2.x → 3.0
 
 3.0 is a correctness and resilience release. Only two changes can fail to compile, and both are

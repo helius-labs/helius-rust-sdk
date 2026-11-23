@@ -1,7 +1,7 @@
 use crate::error::Result;
 use crate::types::{
-    BalanceAtQuery, BalanceAtResponse, BalancesResponse, BatchIdentityRequest, FundingSource, HistoryResponse,
-    Identity, TransfersResponse,
+    BalanceAtQuery, BalanceAtResponse, BalancesResponse, BatchIdentityRequest, BatchIdentityResult, FundingSource,
+    HistoryResponse, Identity, TransfersResponse,
 };
 use crate::Helius;
 
@@ -68,15 +68,17 @@ impl Helius {
         self.rpc_client.handler.send(Method::GET, parsed_url, None::<&()>).await
     }
 
-    /// Retrieves identity information for multiple wallet addresses in a single request
+    /// Retrieves identity information for multiple wallet addresses or SNS/ANS domains in a single request
     ///
-    /// Performs a batch lookup of identity information for up to 100 wallet addresses.
+    /// Performs a batch lookup of identity information for up to 100 wallet addresses or domains.
     ///
     /// # Arguments
-    /// * `addresses` - A slice of Solana wallet addresses (1-100 addresses)
+    /// * `addresses` - A slice of Solana wallet addresses or SNS/ANS domains (1-100)
     ///
     /// # Returns
-    /// A `Result` wrapping a vector of `Identity` objects for addresses with known identity information
+    /// A `Result` wrapping resolved or unresolved identity entries, in request order.
+    /// A domain that can't be resolved comes back as `BatchIdentityResult::Unresolved`
+    /// with no `Identity`, so check `is_unresolved()` before reading one.
     ///
     /// # Errors
     /// Returns a `HeliusError` if:
@@ -88,22 +90,21 @@ impl Helius {
     /// # Example
     /// ```ignore
     /// use helius::Helius;
-    /// use helius::types::Cluster;
+    /// use helius::types::{BatchIdentityResult, Cluster};
     ///
     /// #[tokio::main]
     /// async fn main() {
     ///     let helius = Helius::new("your_api_key", Cluster::MainnetBeta).unwrap();
-    ///     let addresses = vec![
-    ///         "HXsKP7wrBWaQ8T2Vtjry3Nj3oUgwYcqq9vrHDM12G664".to_string(),
-    ///         "2ojv9BAiHUrvsm9gxDe7fJSzbNZSJcxZvf8dqmWGHG8S".to_string(),
-    ///     ];
-    ///     let identities = helius.get_batch_wallet_identity(&addresses).await.unwrap();
-    ///     for identity in identities {
-    ///         println!("Wallet: {} - {}", identity.address, identity.name);
+    ///     let addresses = vec!["toly.sol".to_string(), "nonexistent-xyz.sol".to_string()];
+    ///     for entry in helius.get_batch_wallet_identity(&addresses).await.unwrap() {
+    ///         match entry {
+    ///             BatchIdentityResult::Resolved(e) => println!("{}", e.identity.name),
+    ///             BatchIdentityResult::Unresolved(e) => println!("{} could not be resolved", e.input_domain),
+    ///         }
     ///     }
     /// }
     /// ```
-    pub async fn get_batch_wallet_identity(&self, addresses: &[String]) -> Result<Vec<Identity>> {
+    pub async fn get_batch_wallet_identity(&self, addresses: &[String]) -> Result<Vec<BatchIdentityResult>> {
         let api_key = self.config.require_api_key("batch wallet identity")?;
         let base_url = self.get_wallet_api_base_url();
         let url: String = format!("{}v1/wallet/batch-identity?api-key={}", base_url, api_key.as_str());
