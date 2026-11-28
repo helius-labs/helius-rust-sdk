@@ -3208,6 +3208,11 @@ pub struct GetTransfersByAddressConfig {
     /// Native SOL grouping mode
     #[serde(skip_serializing_if = "Option::is_none")]
     pub sol_mode: Option<GetTransfersByAddressSolMode>,
+    /// Only return transfers made by the transaction's top-level instructions.
+    /// Transfers made through CPIs (inner instructions), such as the SOL legs
+    /// of a swap, are excluded. Defaults to `false` on the server.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub top_level_instruction: Option<bool>,
     /// Combined filters for amount, block time, and slot
     #[serde(skip_serializing_if = "Option::is_none")]
     pub filters: Option<GetTransfersByAddressFilters>,
@@ -3303,6 +3308,8 @@ pub struct GetTransfersByAddressTransfer {
     pub confirmation_status: TransferConfirmationStatus,
     pub transaction_idx: u64,
     pub instruction_idx: u64,
+    /// `0` for a transfer made by a top-level instruction; `1` or more for a
+    /// transfer made through a CPI (inner instruction).
     pub inner_instruction_idx: u64,
 }
 

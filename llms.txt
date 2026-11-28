@@ -442,7 +442,20 @@ if let Some(token) = transfers.pagination_token {
         }),
     ).await?;
 }
+
+// Only transfers made by top-level instructions. Transfers made through CPIs
+// (inner instructions), such as the SOL legs of a swap, are left out.
+// Defaults to false on the server.
+let top_level = helius.rpc().get_transfers_by_address(
+    "wallet_address".to_string(),
+    Some(GetTransfersByAddressConfig {
+        top_level_instruction: Some(true),
+        ..Default::default()
+    }),
+).await?;
 ```
+
+In each `GetTransfersByAddressTransfer`, `inner_instruction_idx` is `0` for a transfer made by a top-level instruction and `1` or more for one made through a CPI (inner instruction).
 
 #### getHistoricalAccountInfo / getHistoricalTokenAccountsByOwner (Beta)
 

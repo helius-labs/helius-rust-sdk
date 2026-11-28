@@ -42,6 +42,7 @@ fn test_get_transfers_by_address_request_serialization() {
         direction: Some(GetTransfersByAddressDirection::Out),
         mint: Some("So11111111111111111111111111111111111111112".to_string()),
         sol_mode: Some(GetTransfersByAddressSolMode::Separate),
+        top_level_instruction: Some(true),
         filters: Some(GetTransfersByAddressFilters {
             amount: Some(TransferAmountFilter {
                 gte: Some(1),
@@ -81,6 +82,7 @@ fn test_get_transfers_by_address_request_serialization() {
                     "direction": "out",
                     "mint": "So11111111111111111111111111111111111111112",
                     "solMode": "separate",
+                    "topLevelInstruction": true,
                     "filters": {
                         "amount": { "gte": 1 },
                         "blockTime": { "gt": 1701234567 },
@@ -94,6 +96,96 @@ fn test_get_transfers_by_address_request_serialization() {
             ]
         })
     );
+}
+
+#[test]
+fn test_get_transfers_by_address_top_level_instruction_serialization() {
+    let params = |top_level_instruction: Option<bool>| {
+        let config = GetTransfersByAddressConfig {
+            limit: Some(10),
+            top_level_instruction,
+            ..Default::default()
+        };
+        serde_json::to_value(GetTransfersByAddressRequest::new(
+            "SomeAddress".to_string(),
+            Some(config),
+        ))
+        .unwrap()
+    };
+
+    assert_eq!(
+        params(Some(true)),
+        json!(["SomeAddress", { "topLevelInstruction": true, "limit": 10 }])
+    );
+    assert_eq!(
+        params(Some(false)),
+        json!(["SomeAddress", { "topLevelInstruction": false, "limit": 10 }])
+    );
+
+    // Unset: the key is left out, so the server default (`false`) applies.
+    let unset = params(None);
+    assert_eq!(unset, json!(["SomeAddress", { "limit": 10 }]));
+    assert!(unset[1].get("topLevelInstruction").is_none());
+}
+
+#[tokio::test]
+async fn test_get_transfers_by_address_top_level_instruction_request_body() {
+    let mut server = Server::new_with_opts_async(mockito::ServerOpts::default()).await;
+    let url = server.url();
+
+    let mock_response = json!({
+        "jsonrpc": "2.0",
+        "id": "helius-rust-sdk",
+        "result": {
+            "data": [
+                {
+                    "signature": "5h6xBEauJ3PK6SWCZ1PGjBvj8vDdWG3KpwATGy1ARAXFSDwt8GFXM7W5Ncn16wmqokgpiKRLuS83KUxyZyv2sUYv",
+                    "slot": 250000000,
+                    "blockTime": 1701234567,
+                    "type": "transfer",
+                    "fromUserAccount": "FromWallet",
+                    "toUserAccount": "ToWallet",
+                    "mint": "So11111111111111111111111111111111111111111",
+                    "amount": "1000000000",
+                    "decimals": 9,
+                    "uiAmount": "1",
+                    "confirmationStatus": "finalized",
+                    "transactionIdx": 2,
+                    "instructionIdx": 3,
+                    "innerInstructionIdx": 0
+                }
+            ],
+            "paginationToken": null
+        }
+    });
+
+    let mock = server
+        .mock("POST", "/?api-key=fake_api_key")
+        .match_body(mockito::Matcher::PartialJson(json!({
+            "method": "getTransfersByAddress",
+            "params": ["SomeAddress", { "topLevelInstruction": true }]
+        })))
+        .with_status(200)
+        .with_header("content-type", "application/json")
+        .with_body(mock_response.to_string())
+        .create();
+
+    let helius = test_helius(&url);
+    let config = GetTransfersByAddressConfig {
+        top_level_instruction: Some(true),
+        ..Default::default()
+    };
+
+    let result = helius
+        .rpc()
+        .get_transfers_by_address("SomeAddress".to_string(), Some(config))
+        .await
+        .expect("request with topLevelInstruction should succeed");
+
+    mock.assert();
+    assert_eq!(result.data.len(), 1);
+    assert_eq!(result.data[0].inner_instruction_idx, 0);
+    assert!(result.pagination_token.is_none());
 }
 
 #[test]

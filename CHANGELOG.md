@@ -6,6 +6,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+### Added
+- **`getTransfersByAddress` can leave out transfers made through CPIs.** `GetTransfersByAddressConfig::top_level_instruction` (`Option<bool>`, sent as `topLevelInstruction`) returns only transfers made by a transaction's top-level instructions when `Some(true)`. Transfers that programs make through CPIs (inner instructions), such as the SOL legs of a swap, are left out. Unset, the key is omitted and the server default (`false`) applies. `GetTransfersByAddressTransfer::inner_instruction_idx` is now documented: `0` means a top-level transfer, `1` or more a transfer made through a CPI. `examples/helius/get_transfers_by_address.rs` shows the option. **Breaking change (minor in scope):** code constructing `GetTransfersByAddressConfig` with a struct literal that enumerates every field must add the new one; literals ending in `..Default::default()` are unaffected.
+
 ### Changed
 - **Breaking: an unresolved domain no longer fails the whole batch identity lookup.** `get_batch_wallet_identity` now returns `Vec<BatchIdentityResult>`, in request order. `Resolved` holds a `ResolvedBatchIdentity` (the `Identity` plus the optional `inputDomain`). `Unresolved` holds an `UnresolvedBatchIdentity` with the domain that could not be resolved. Before, one unresolved domain made the whole response fail to deserialize. See `MIGRATION.md`. (#258)
 

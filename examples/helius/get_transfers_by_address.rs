@@ -43,5 +43,31 @@ async fn main() -> Result<()> {
         println!("Pagination token for next page: {}", token);
     }
 
+    // Only transfers made by top-level instructions. Transfers made through CPIs,
+    // such as the SOL legs of a swap, are left out, so every row has
+    // `inner_instruction_idx == 0`.
+    let top_level_config = GetTransfersByAddressConfig {
+        limit: Some(10),
+        top_level_instruction: Some(true),
+        ..Default::default()
+    };
+
+    let top_level = helius
+        .rpc()
+        .get_transfers_by_address(address.to_string(), Some(top_level_config))
+        .await?;
+
+    println!("Fetched {} top-level transfers", top_level.data.len());
+    for transfer in &top_level.data {
+        println!(
+            "{}: {} {} (instruction {}, inner instruction {})",
+            transfer.signature,
+            transfer.ui_amount,
+            transfer.mint,
+            transfer.instruction_idx,
+            transfer.inner_instruction_idx
+        );
+    }
+
     Ok(())
 }
